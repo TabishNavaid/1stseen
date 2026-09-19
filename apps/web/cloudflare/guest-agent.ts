@@ -1,23 +1,24 @@
 /**
  * Limits on the agent for signed-out visitors.
  *
- * A guest question passes two Workers Rate Limiting bindings before the route sees it: one keyed by the client address,
- * and one shared by every guest, which bounds what guests together can cost the agent service. Both windows are the
- * binding's 60 seconds. The bindings count per Cloudflare location and settle eventually, so a burst across locations
- * can briefly exceed a limit; they are a cost and abuse bound, not an exact quota.
+ * A guest question passes two limits before the route sees it: one keyed by the client address, and one shared by every
+ * guest, which bounds what guests together can cost the agent service. Both are sliding 60-second windows counted exactly
+ * by the GuestQuestionLimiter Durable Object (guest-limiter.ts): Workers Rate Limiting bindings, used before, counted per
+ * Cloudflare location and so late that on the production edge they refused almost nothing at these sizes.
  *
- * A deployment without the bindings refuses guest questions rather than running them unlimited. A refusal says which
+ * A deployment without the limiter refuses guest questions rather than running them unlimited. A refusal says which
  * limit was hit and what to do, rather than degrading the answer.
  */
 
 export const GUEST_AGENT_HEADER = "x-firstseen-guest-agent";
 export const GUEST_QUESTIONS_PER_ADDRESS = 5;
 export const GUEST_QUESTIONS_OVERALL = 10;
-// A const assertion, so the literal survives into the wrangler config, where a period must be 10 or 60.
+// The window both limits count over, and the Retry-After a refusal gives.
 export const GUEST_LIMIT_PERIOD_SECONDS = 60 as const;
 
-type RateLimit = { limit(options: { key: string }): Promise<{ success: boolean }> };
+export type RateLimit = { limit(options: { key: string }): Promise<{ success: boolean }> };
 
+/** The two limits. Production builds them from the Durable Object namespace (index.ts); a test binds them directly. */
 export type GuestAgentLimits = {
   GUEST_AGENT_ADDRESS_LIMIT?: RateLimit;
   GUEST_AGENT_OVERALL_LIMIT?: RateLimit;

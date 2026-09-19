@@ -229,13 +229,11 @@ Use the same token as step 3. Then deploy again:
 **Expected:** both secrets `present`, `PASS  CSP header present`, `PASS  HSTS header present`,
 `PASS  no fixture markers in the dashboard HTML`, and no `WARN … Not configured`.
 
-**Check the rate-limit namespaces before the first deploy.** `apps/web/vite.config.ts` binds the guest agent limits
-to Workers Rate Limiting namespace ids `18001` (per address) and `18002` (overall). They must be unused by any other
-Worker in the account; if either is taken, choose free ids in both places and redeploy.
+**The guest agent limits are a Durable Object** (`GUEST_QUESTION_LIMITER`, migration `v1-guest-question-limiter`),
+created by the first deploy; nothing needs reserving in the account first.
 
-**The guest edge cache and the guest agent limits have been measured only on local workerd** (
-`npm run measure:workerd` and `npm run measure:guest-limits`), whose Cache API and Rate Limiting bindings are
-simulated. They are verified against the real edge here and in the smoke test (step 8). Neither is done until:
+**Verify the guest edge cache and the guest agent limits on the real edge**: local workerd (`npm run measure:workerd`
+and `npm run measure:guest-limits`) simulates the Cache API. Neither is done until:
 - a repeated signed-out request to `/` returns `x-firstseen-cache: hit`, a signed-in request carries no
   `x-firstseen-cache` header, and the first signed-out request after a corpus write returns `miss`;
 - a sixth guest agent question from one address within a minute gets HTTP 429 with `Retry-After`, and a signed-in

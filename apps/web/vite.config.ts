@@ -1,16 +1,12 @@
 import vinext from "vinext";
 import { defineConfig } from "vite";
-import { GUEST_LIMIT_PERIOD_SECONDS, GUEST_QUESTIONS_OVERALL, GUEST_QUESTIONS_PER_ADDRESS } from "./cloudflare/guest-agent";
 
 const localBindingConfig = {
   main: "./cloudflare/index.ts",
   compatibility_flags: ["nodejs_compat"],
-  // Guest questions to the agent (cloudflare/guest-agent.ts). A namespace_id is an integer shared across this Cloudflare
-  // account, so these two must not collide with another Worker's.
-  ratelimits: [
-    { name: "GUEST_AGENT_ADDRESS_LIMIT", namespace_id: "18001", simple: { limit: GUEST_QUESTIONS_PER_ADDRESS, period: GUEST_LIMIT_PERIOD_SECONDS } },
-    { name: "GUEST_AGENT_OVERALL_LIMIT", namespace_id: "18002", simple: { limit: GUEST_QUESTIONS_OVERALL, period: GUEST_LIMIT_PERIOD_SECONDS } },
-  ],
+  // Guest questions to the agent are counted exactly by one Durable Object per key (cloudflare/guest-limiter.ts).
+  durable_objects: { bindings: [{ name: "GUEST_QUESTION_LIMITER", class_name: "GuestQuestionLimiter" }] },
+  migrations: [{ tag: "v1-guest-question-limiter", new_sqlite_classes: ["GuestQuestionLimiter"] }],
 };
 
 export default defineConfig(async () => {

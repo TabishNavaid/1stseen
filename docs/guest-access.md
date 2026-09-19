@@ -40,15 +40,16 @@ state names no actor.
 ## The agent for guests
 
 A signed-out question reaches the agent route only after the Worker entry (`apps/web/cloudflare/index.ts`) passes it
-through two Workers Rate Limiting bindings:
+through two limits, each a sliding 60-second window counted exactly by the `GuestQuestionLimiter` Durable Object
+(`apps/web/cloudflare/guest-limiter.ts`, binding `GUEST_QUESTION_LIMITER`), one object per key:
 
-| Binding | Key | Limit |
+| Limit | Key | Allows |
 | --- | --- | --- |
-| `GUEST_AGENT_ADDRESS_LIMIT` | the client address (`cf-connecting-ip`) | 5 questions a minute |
-| `GUEST_AGENT_OVERALL_LIMIT` | every guest together | 10 questions a minute |
+| per address | `address:<cf-connecting-ip>` | 5 questions a minute |
+| overall | `all-guests` | 10 questions a minute, every guest together |
 
 - **The entry vouches for a question.** It deletes any client-sent `x-firstseen-guest-agent` header and sets its own,
-  so only the entry can say a question passed. A deployment without the bindings refuses guest questions (503) instead
+  so only the entry can say a question passed. A deployment without the limiter refuses guest questions (503) instead
   of running them unlimited.
 - **A refusal is honest.** It is a 429 with `Retry-After: 60`, the scope that refused it, and a sentence saying so,
   which the agent panel shows with a link to create an account.
@@ -56,10 +57,12 @@ through two Workers Rate Limiting bindings:
   rejects a guest question that names one. Tool selection is the same deterministic selection, except that a guest
   never gets a readiness plan (the answer says a plan needs an account), and a watchlist question is refused as for any
   unscoped caller.
-- **The bindings are approximate.** They count per Cloudflare location and settle eventually, so they bound cost and
-  abuse, not an exact quota.
-- **Deploy note:** the two `namespace_id`s (18001, 18002) are account-wide integers and must not collide with another
-  Worker's.
+- **The limits are exact.** Each key is one Durable Object, which handles its questions one at a time and keeps its
+  count in its own storage, so the sixth question from an address in a minute is refused wherever it arrives from. Workers
+  Rate Limiting bindings, used before, count per Cloudflare location and late: on the production edge, one set to 3 a
+  minute allowed 13 calls from one address before its first refusal, and 22 guest questions from one address in two
+  minutes were all answered. The shared `all-guests` object lives near where it was first created, so a guest far from it
+  waits one extra round trip before the answer starts.
 
 ## The edge cache
 

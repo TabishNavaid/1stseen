@@ -2,7 +2,7 @@
 /**
  * Measure the guest agent limits in local workerd.
  *
- * Runs the built Worker under `wrangler dev`, whose Rate Limiting bindings are simulated locally, with the agent
+ * Runs the built Worker under `wrangler dev`, with the guest question limiter's Durable Object running locally, and the agent
  * service pointed at a local stub: the limits are enforced by the Worker entry before any question reaches the service,
  * so the stub keeps this measurement from writing agent audit rows. It sends signed-out questions and reports, for each,
  * the status, the refusal scope, and the time to the response headers.

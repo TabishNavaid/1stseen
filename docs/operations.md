@@ -221,8 +221,8 @@ check above reports p50 and p99 every six hours once `CLOUDFLARE_ANALYTICS_TOKEN
 | GiB-seconds | 360,000 | 0.5 GiB per busy instance-second. |
 
 Billing is for the time an instance is handling at least one request. 180,000 vCPU-seconds is about 180,000 one-second
-questions a month, roughly 6,000 a day or 4 a minute sustained. Guests share 10 questions a minute (counted per
-Cloudflare location, so a burst across locations can briefly pass it); sustained, that is about 432,000 one-second
+questions a month, roughly 6,000 a day or 4 a minute sustained. Guests share 10 questions a minute, counted exactly by one
+Durable Object (`docs/guest-access.md`); sustained, that is about 432,000 one-second
 questions a month, roughly $6 past the free tier. Every question, a guest's or a member's, also passes the agent API's
 per-token limit of 60 a minute, and one instance runs them, so the worst case is that instance busy all month: about
 2.6 million vCPU-seconds, roughly $58 in CPU and $2 in memory at list prices. `--max-instances=1` is the ceiling on that,

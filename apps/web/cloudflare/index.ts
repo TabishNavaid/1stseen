@@ -1,12 +1,26 @@
 /** Cloudflare Worker entry point: security headers, the guest agent limits, and the guest page cache. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
-import { GUEST_AGENT_HEADER, guestAgentAllowance, guestLimitResponse, type GuestAgentLimits } from "./guest-agent";
+import {
+  GUEST_AGENT_HEADER,
+  GUEST_LIMIT_PERIOD_SECONDS,
+  GUEST_QUESTIONS_OVERALL,
+  GUEST_QUESTIONS_PER_ADDRESS,
+  guestAgentAllowance,
+  guestLimitResponse,
+  type GuestAgentLimits,
+} from "./guest-agent";
+import { durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
 import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache";
 import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers";
 
+// Durable Object classes must be exported from the Worker's main module.
+export { GuestQuestionLimiter } from "./guest-limiter";
+
 interface Env extends GuestAgentLimits {
   ASSETS: Fetcher;
+  /** Counts guest questions exactly (guest-limiter.ts). */
+  GUEST_QUESTION_LIMITER?: DurableObjectNamespaceLike;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -121,7 +135,10 @@ const worker = {
     // Only this entry may tell the agent route that a signed-out question passed the guest limits.
     headers.delete(GUEST_AGENT_HEADER);
     if (request.method === "POST" && url.pathname === "/api/recruiting-agent" && !hasSessionCookie(request)) {
-      const decision = await guestAgentAllowance(request, env);
+      const limits = env.GUEST_QUESTION_LIMITER
+        ? durableGuestLimits(env.GUEST_QUESTION_LIMITER, GUEST_QUESTIONS_PER_ADDRESS, GUEST_QUESTIONS_OVERALL, GUEST_LIMIT_PERIOD_SECONDS)
+        : env;
+      const decision = await guestAgentAllowance(request, limits);
       if (!decision.allowed) return withSecurityHeaders(guestLimitResponse(decision), policy);
       headers.set(GUEST_AGENT_HEADER, "allowed");
     }
