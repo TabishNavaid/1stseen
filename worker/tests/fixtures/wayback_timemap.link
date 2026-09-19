@@ -1,0 +1,10 @@
+<https://careers.fixture.example/students>; rel="original",
+<https://web.archive.org/web/timemap/link/https://careers.fixture.example/students>; rel="self"; type="application/link-format",
+<https://web.archive.org/web/https://careers.fixture.example/students>; rel="timegate",
+<https://web.archive.org/web/20220801090000/https://careers.fixture.example/students>; rel="first memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20220910120000/https://careers.fixture.example/students>; rel="memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20220920120000/https://careers.fixture.example/students>; rel="memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20230901090000/https://careers.fixture.example/students>; rel="memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20230914100000/https://careers.fixture.example/students>; rel="memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20240918100000/https://careers.fixture.example/students>; rel="last memento"; datetime="Mon, 01 Aug 2022 09:00:00 GMT",
+<https://web.archive.org/web/20250101000000/https://careers.fixture.example/students>; rel="memento"; datetime="Wed, 01 Jan 2025 00:00:00 GMT"

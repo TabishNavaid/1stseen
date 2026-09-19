@@ -1,0 +1,45 @@
+# The build context is the repository root (see scripts/deploy-agent.sh), so this
+# excludes everything the image does not need. Smaller context, faster upload,
+# and no chance of a local .env or credential being copied into a layer.
+
+**/.env
+**/.env.*
+!**/.env.example
+
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
+
+worker/tests/
+worker/tests/fixtures/
+
+# Nothing outside worker/ is used by the image.
+apps/
+packages/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.next/
+**/.next/
+.vinext/
+**/.vinext/
+.wrangler/
+**/.wrangler/
+.bootstrap-logs/
+supabase/
+scripts/
+docs/
+prompts/
+.github/
+.git/
+
+**/.DS_Store
+*.md
+*.log
+package-lock.json

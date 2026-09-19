@@ -1,0 +1,95 @@
+name: Changed-evidence forecast regeneration
+
+on:
+  schedule:
+    # 02:52, 08:52, 14:52, 20:52 UTC: after current jobs and signal detection have
+    # both had their full timeout to finish.
+    - cron: "52 2,8,14,20 * * *"
+  workflow_dispatch:
+
+# Shared with every collection writer and not keyed by ref: one production database.
+# `forecasts` has no uniqueness on (role, input fingerprint), so two overlapping
+# regenerations would each insert the same new version. See current-jobs.yml.
+concurrency:
+  group: firstseen-collection
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Read-only, for the collection-health step's "last successful run" per workflow.
+  actions: read
+  # collection-health --alert and the ops-alert step open, update, and close alert issues.
+  issues: write
+
+env:
+  # Regeneration makes no source requests; these are set so every collection
+  # workflow runs with the same bounds if that ever changes.
+  MAX_SOURCE_BYTES: ${{ vars.MAX_SOURCE_BYTES || '10000000' }}
+  HTTP_MIN_HOST_INTERVAL_SECONDS: ${{ vars.HTTP_MIN_HOST_INTERVAL_SECONDS || '0.25' }}
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    # A full pass over the 3,451-role local corpus measured about 12 s once the
+    # evidence set is preloaded; the limit covers the readiness step and a slow runner.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e worker
+      - name: Regenerate only changed roles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m firstseen.cli regenerate-forecasts > forecast-regeneration-summary.json
+      # A role followed after its last regeneration would otherwise never receive
+      # milestones, because plans are written when a new forecast version lands.
+      # The planner is deterministic and the store upserts, so this is a no-op
+      # for roles that already have a current plan.
+      - name: Persist work-back plans for followed roles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m firstseen.cli plan-readiness > readiness-planning-summary.json
+      - name: Publish regeneration summary
+        if: ${{ always() }}
+        run: |
+          for summary in forecast-regeneration-summary.json readiness-planning-summary.json; do
+            if [ -f "$summary" ]; then
+              echo '```json' >> "$GITHUB_STEP_SUMMARY"
+              cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+      # Runs last and on failure too, so a collector that has silently stopped
+      # writing shows up here even when regeneration itself had nothing to do.
+      # Dependency-free script: no npm install.
+      - uses: actions/setup-node@v4
+        if: ${{ always() }}
+        with:
+          node-version: "22.14.0"
+      - name: Report collection health
+        if: ${{ always() }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/collection-health.mjs --alert
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: forecast-regeneration-${{ github.run_id }}
+          path: |
+            forecast-regeneration-summary.json
+            readiness-planning-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+      # Last, and on failure, timeout, or cancellation too: opens or updates this workflow's ops-alert issue, assigned
+      # to the owner, and the next success closes it (docs/operations.md). A step, not a job: no extra billed minutes.
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ job.status }}

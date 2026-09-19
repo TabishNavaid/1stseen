@@ -1,0 +1,13 @@
+{
+  "name": "@firstseen/shared",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+  },
+  "dependencies": { "zod": "^4.1.12" },
+  "devDependencies": { "typescript": "5.9.3" }
+}

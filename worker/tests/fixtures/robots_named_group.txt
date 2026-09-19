@@ -1,0 +1,13 @@
+# Fixture robots.txt for the collector's robots tests. Reserved .test domain; not a real site's file.
+Sitemap: https://careers.example.test/sitemap.xml
+
+User-agent: *
+Disallow: /
+
+User-agent: Googlebot
+User-agent: 1stSeenEvidenceBot/0.2
+Crawl-delay: 5
+Disallow: /private/
+Allow: /private/jobs/
+Disallow: /*.pdf$
+Disallow: /search?q=

@@ -1,0 +1,95 @@
+name: Historical recruiting enrichment
+
+on:
+  schedule:
+    # Sunday 04:07 UTC, inside the gap between forecast regeneration (02:52) and the
+    # next current-jobs run (06:17) even at the full timeout below.
+    - cron: "7 4 * * 0"
+  workflow_dispatch:
+    inputs:
+      company:
+        description: "Optional company name, domain, or UUID"
+        required: false
+        type: string
+
+# Shared with every collection writer and not keyed by ref: one production database.
+# See the note in current-jobs.yml and docs/github-actions-collection.md.
+concurrency:
+  group: firstseen-collection
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The ops-alert step opens, updates, and closes this workflow's alert issue.
+  issues: write
+
+env:
+  # config.py defaults to a 2 MB response cap, which rejects real ATS boards. The
+  # literal fallbacks mean an unset repository variable cannot restore the default.
+  MAX_SOURCE_BYTES: ${{ vars.MAX_SOURCE_BYTES || '10000000' }}
+  # Wayback CDX and replay requests all land on web.archive.org, so this run uses
+  # the slower courtesy interval rather than the 0.25 s default.
+  HTTP_MIN_HOST_INTERVAL_SECONDS: ${{ vars.COURTESY_HTTP_MIN_HOST_INTERVAL_SECONDS || '1.5' }}
+  # robots.txt enforcement (worker/src/firstseen/robots.py). Off until the owner turns it on; see docs/takedown.md.
+  ROBOTS_TXT_ENFORCED: ${{ vars.ROBOTS_TXT_ENFORCED || 'false' }}
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    # Measured on the local validation corpus: 6 Wayback sources plus enrichment took
+    # 1,663 s. The 8 configured Wayback sources project to about 38 minutes, which the
+    # previous 45-minute limit would have cut close.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e worker
+      - name: Enrich all Wayback sources
+        if: ${{ github.event_name == 'schedule' || inputs.company == '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LLM_DEFAULT_ROUTES: ${{ vars.LLM_DEFAULT_ROUTES }}
+          LLM_EXTRACT_ROUTES: ${{ vars.LLM_EXTRACT_ROUTES }}
+          LLM_API_BASE: ${{ vars.LLM_API_BASE || 'http://localhost:11434' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python -m firstseen.cli ingest --all --collection historical > historical-enrichment-summary.json
+      - name: Enrich one company's Wayback sources
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.company != '' }}
+        env:
+          TARGET_COMPANY: ${{ inputs.company }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          LLM_DEFAULT_ROUTES: ${{ vars.LLM_DEFAULT_ROUTES }}
+          LLM_EXTRACT_ROUTES: ${{ vars.LLM_EXTRACT_ROUTES }}
+          LLM_API_BASE: ${{ vars.LLM_API_BASE || 'http://localhost:11434' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python -m firstseen.cli ingest --company "$TARGET_COMPANY" --collection historical > historical-enrichment-summary.json
+      - name: Publish enrichment summary
+        if: ${{ always() }}
+        run: |
+          if [ -f historical-enrichment-summary.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat historical-enrichment-summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: historical-enrichment-${{ github.run_id }}
+          path: historical-enrichment-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+      # Last, and on failure, timeout, or cancellation too: opens or updates this workflow's ops-alert issue, assigned
+      # to the owner, and the next success closes it (docs/operations.md). A step, not a job: no extra billed minutes.
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ job.status }}

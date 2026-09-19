@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://careers.example.test/cycle.xml</loc></sitemap>
+  <sitemap><loc>https://careers.example.test/jobs.xml</loc></sitemap>
+  <sitemap><loc>https://careers.example.test/broken.xml</loc></sitemap>
+</sitemapindex>

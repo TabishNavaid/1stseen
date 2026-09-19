@@ -1,0 +1,91 @@
+name: Corpus backup and restore proof
+
+# The collected evidence cannot be recollected: an opening event's availability is when 1stSeen learned it, and a page
+# that has changed or gone cannot be read again. Supabase Free keeps no backups, so this takes one every week, proves it
+# restores, and keeps the last two as artifacts (docs/operations.md, "Backup and restore").
+on:
+  schedule:
+    # Mondays 05:41 UTC, between collection runs.
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+# Reads only, inside one exported snapshot, so it does not join the collection group.
+concurrency:
+  group: firstseen-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The ops-alert step opens, updates, and closes this workflow's alert issue.
+  issues: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # The rig's 79,868 corpus rows dumped in 7 s and hashed in 3 s; the restore proof took 11 s more.
+    timeout-minutes: 30
+    services:
+      # A throwaway Postgres 17 for the restore proof. It never holds anything but the scratch copy. It must ship pgvector:
+      # migration 202608140001 creates the `vector` extension, which postgres:17-alpine cannot install.
+      restore:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: restore-proof-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # Hosted Supabase's Postgres certificate chains to Supabase's own CA. The first step writes that root certificate
+      # here from the SUPABASE_DB_CA_CERT_PEM variable; the Node client and pg_dump both verify against it.
+      SUPABASE_DB_CA_CERT: /tmp/firstseen-supabase-ca.crt
+      # pg_dump and pg_restore must be at least the server's major version; the runner's client may be older. The
+      # container inherits the PG* variables the script sets (PGSSLMODE=verify-full among them), sees the certificate at
+      # /supabase-ca.crt, where its own PGSSLROOTCERT points, and never sees an argument holding a password.
+      BACKUP_PG_TOOLS: docker run --rm -i --network host -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE -e PGSSLMODE -e PGSSLROOTCERT=/supabase-ca.crt -e PGAPPNAME -v /tmp/firstseen-supabase-ca.crt:/supabase-ca.crt:ro postgres:17-alpine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Write Supabase's CA certificate
+        env:
+          # A public CA certificate, not a secret: a repository variable (docs/operations.md, "Backup and restore").
+          CA_PEM: ${{ vars.SUPABASE_DB_CA_CERT_PEM }}
+        run: |
+          if [ -z "$CA_PEM" ]; then
+            echo "::error::Set the repository variable SUPABASE_DB_CA_CERT_PEM to Supabase's root certificate (docs/operations.md)"
+            exit 1
+          fi
+          printf '%s\n' "$CA_PEM" > "$SUPABASE_DB_CA_CERT"
+          grep -q -- '-----BEGIN CERTIFICATE-----' "$SUPABASE_DB_CA_CERT"
+      - name: Dump the corpus
+        env:
+          # The session pooler URL: GitHub's runners have no IPv6 route to a direct connection.
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/backup-corpus.mjs dump backup
+      - name: Prove it restores
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:restore-proof-only@127.0.0.1:5432/postgres
+        run: node scripts/backup-corpus.mjs prove-restore backup
+      - name: Publish the manifest
+        if: ${{ always() }}
+        run: |
+          if [ -f backup/manifest.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat backup/manifest.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # Two weeks of weekly backups: about 44 MB each today, within a private repository's 500 MB artifact storage.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: corpus-backup-${{ github.run_id }}
+          path: backup/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ job.status }}

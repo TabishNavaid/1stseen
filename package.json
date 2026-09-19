@@ -1,0 +1,39 @@
+{
+  "name": "firstseen",
+  "version": "0.2.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "npm --workspace @firstseen/web run dev",
+    "build": "npm --workspace @firstseen/shared run typecheck && npm --workspace @firstseen/web run build",
+    "start": "npm --workspace @firstseen/web run start",
+    "lint": "npm --workspace @firstseen/web run lint",
+    "typecheck": "npm --workspace @firstseen/shared run typecheck && npm --workspace @firstseen/web run typecheck",
+    "test:shared": "npm --workspace @firstseen/shared test",
+    "test:worker": ".venv/bin/python -m unittest discover -s worker/tests -v",
+    "test:web": "npm run build && node --experimental-strip-types --test apps/web/tests/*.test.mjs",
+    "test:integration": "node --experimental-strip-types --test apps/web/tests/integration/*.test.mjs",
+    "verify:supabase": "node scripts/verify-supabase.mjs",
+    "metrics:corpus": "node scripts/corpus-metrics.mjs",
+    "health:collection": "node scripts/collection-health.mjs",
+    "measure:render": "node scripts/measure-render.mjs",
+    "measure:workerd": "node scripts/measure-workerd-cpu.mjs",
+    "deploy:web": "bash scripts/deploy-web.sh",
+    "preflight": "node scripts/preflight.mjs",
+    "test": "npm run test:shared && npm run test:worker && npm run test:web",
+    "check": "npm run lint && npm run typecheck && npm test && .venv/bin/ruff check worker/src worker/tests && .venv/bin/mypy worker/src && .venv/bin/python -m firstseen.cli dry-run",
+    "measure:guest-limits": "node scripts/measure-guest-agent-limits.mjs"
+  },
+  "devDependencies": {
+    "lucide-react": "^1.31.0",
+    "pg": "^8.23.0",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}

@@ -1,0 +1,62 @@
+{
+  "kind": "Listing",
+  "data": {
+    "children": [
+      {
+        "kind": "t3",
+        "data": {
+          "id": "fixture_open",
+          "title": "Google SWE intern is live",
+          "selftext": "Applications just opened today for the software engineer internship.",
+          "permalink": "/r/csMajors/comments/fixture_open/google_swe_intern_is_live/",
+          "subreddit": "csMajors",
+          "created_utc": 1786698000
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "id": "fixture_closed",
+          "title": "Google data science intern applications closed",
+          "selftext": "The portal says applications are closed.",
+          "permalink": "/r/csMajors/comments/fixture_closed/google_data_science_closed/",
+          "subreddit": "csMajors",
+          "created_utc": 1786698060
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "id": "fixture_future",
+          "title": "Google internship timing",
+          "selftext": "A recruiter said applications open next month for the SWE intern program.",
+          "permalink": "/r/csMajors/comments/fixture_future/google_internship_timing/",
+          "subreddit": "csMajors",
+          "created_utc": 1786698120
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "id": "fixture_noise",
+          "title": "Google office lunch discussion",
+          "selftext": "Which cafe is open next month?",
+          "permalink": "/r/csMajors/comments/fixture_noise/google_lunch/",
+          "subreddit": "csMajors",
+          "created_utc": 1786698180
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "id": "fixture_other_company",
+          "title": "Example Corp internship applications opened",
+          "selftext": "This is unrelated to the target company.",
+          "permalink": "/r/csMajors/comments/fixture_other_company/example_corp/",
+          "subreddit": "csMajors",
+          "created_utc": 1786698240
+        }
+      }
+    ]
+  }
+}

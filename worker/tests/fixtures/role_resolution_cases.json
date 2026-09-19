@@ -1,0 +1,2943 @@
+{
+ "resolution": [
+  {
+   "id": "exact_swe",
+   "title": "Software Engineer Intern",
+   "company": "Fixture Robotics, Inc.",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "engineering_internship",
+   "title": "Software Engineering Internship",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "swe_alias",
+   "title": "SWE Intern",
+   "company": "Fixture Robotics LLC",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "year_prefix",
+   "title": "2027 Software Engineer Internship",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "university_prefix",
+   "title": "University Software Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "difficult_developer_alias",
+   "title": "Developer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_summer"
+  },
+  {
+   "id": "security_specialization",
+   "title": "Software Engineer Intern - Security",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer security engineering internship focused on application security and threat detection.",
+   "expected": "swe_security"
+  },
+  {
+   "id": "europe_program",
+   "title": "Software Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "London, UK",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_london"
+  },
+  {
+   "id": "winter_program",
+   "title": "Winter 2028 Software Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Winter internship building production software with engineer mentorship and code reviews.",
+   "expected": "swe_winter"
+  },
+  {
+   "id": "data_science_alias",
+   "title": "Data Science Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship developing statistical models, experiments, and analytics in Python.",
+   "expected": "data_science"
+  },
+  {
+   "id": "data_scientist_alias",
+   "title": "Data Scientist Internship",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship developing statistical models, experiments, and analytics in Python.",
+   "expected": "data_science"
+  },
+  {
+   "id": "hardware_program",
+   "title": "Hardware Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer hardware internship designing electrical systems and validating circuit boards.",
+   "expected": "hardware"
+  },
+  {
+   "id": "full_time_false_friend",
+   "title": "Software Engineer",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "employment_type": "Full-time",
+   "description": "Full-time production software engineering role for experienced candidates.",
+   "expected": "software_full_time"
+  },
+  {
+   "id": "manager_false_friend",
+   "title": "Software Engineering Manager",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "employment_type": "Full-time",
+   "description": "Full-time manager leading production software engineers and hiring teams.",
+   "expected": null
+  },
+  {
+   "id": "data_engineering_false_friend",
+   "title": "Data Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building data pipelines and warehouse infrastructure.",
+   "expected": null
+  },
+  {
+   "id": "apm_level_false_friend",
+   "title": "Product Manager Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship supporting product strategy and customer research.",
+   "expected": null
+  },
+  {
+   "id": "different_company",
+   "title": "Software Engineer Intern",
+   "company": "Other Robotics",
+   "location": "United States",
+   "description": "Summer internship building production software with engineer mentorship and code reviews.",
+   "expected": null
+  },
+  {
+   "id": "mechanical_false_friend",
+   "title": "Mechanical Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship designing mechanical assemblies and testing structures.",
+   "expected": null
+  },
+  {
+   "id": "infrastructure_specialization",
+   "title": "Software Engineer Intern - Infrastructure",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Summer internship building cloud platform infrastructure and distributed systems.",
+   "expected": null
+  },
+  {
+   "id": "fall_program_false_friend",
+   "title": "Fall Software Engineer Intern",
+   "company": "Fixture Robotics",
+   "location": "United States",
+   "description": "Fall internship building production software with engineer mentorship and code reviews.",
+   "expected": null
+  }
+ ],
+ "scope": [
+  {
+   "id": "director_field_marketing_with_company_name",
+   "titles": [
+    "Director Americas Field Marketing At Databricks"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Databricks' own title repeats the company name; the agent once answered intern questions with it."
+  },
+  {
+   "id": "figma_winter_swe_intern_general",
+   "titles": [
+    "Software Engineer Intern Winter",
+    "Software Engineer Intern (Winter 2027)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Rig titles. Figma's two winter internships share this title and differ only by specialization; both must classify identically and stay two roles."
+  },
+  {
+   "id": "figma_winter_swe_intern_infrastructure_split",
+   "titles": [
+    "Software Engineer Intern Winter",
+    "Software Engineer Intern (Winter 2027)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "The infrastructure-specialized split. Its titles carry no specialization, so classification cannot and must not merge or relabel it."
+  },
+  {
+   "id": "cohere_bdr_dubai",
+   "titles": [
+    "Business Development Representative"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_early_career",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig title. One of Cohere's four location splits (dubai); all four classify alike and stay four roles."
+  },
+  {
+   "id": "cohere_bdr_germany",
+   "titles": [
+    "Business Development Representative"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_early_career",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig title. One of Cohere's four location splits (germany); all four classify alike and stay four roles."
+  },
+  {
+   "id": "cohere_bdr_korea",
+   "titles": [
+    "Business Development Representative"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_early_career",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig title. One of Cohere's four location splits (korea); all four classify alike and stay four roles."
+  },
+  {
+   "id": "cohere_bdr_toronto",
+   "titles": [
+    "Business Development Representative"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_early_career",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig title. One of Cohere's four location splits (toronto); all four classify alike and stay four roles."
+  },
+  {
+   "id": "product_marketing_manager_intern",
+   "titles": [
+    "Product Marketing Manager Intern"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Adversarial pair with product_manager_intern: marketing, not product management."
+  },
+  {
+   "id": "product_manager_intern",
+   "titles": [
+    "Product Manager Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "brand_designer_intern",
+   "titles": [
+    "Brand Designer Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "design_or_advocacy_boundary",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Adversarial pair with product_designer_intern: abstains rather than guessing either way."
+  },
+  {
+   "id": "product_designer_intern",
+   "titles": [
+    "Product Designer Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "design",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "apm_new_grad",
+   "titles": [
+    "Associate Product Manager - New Grad"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "apm_program_title",
+   "titles": [
+    "Associate Product Manager - Vault CRM Suite"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "new_grad"
+   },
+   "note": "An APM title names the entry-level program itself."
+  },
+  {
+   "id": "recruiter_contract_mislabeled_internship",
+   "titles": [
+    "Recruiter Contract"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "contract_or_temporary",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig role stored with track internship from its description."
+  },
+  {
+   "id": "head_of_recruiting_mislabeled_internship",
+   "titles": [
+    "Head Of Recruiting"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig role stored with track internship from its description."
+  },
+  {
+   "id": "early_careers_interns_specialist",
+   "titles": [
+    "Early Careers Interns Specialist"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Runs the internship program; is not in it."
+  },
+  {
+   "id": "account_development_representative_intern",
+   "titles": [
+    "Account Development Representative Intern, Atlanta"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "roblox_senior_title_phd_early_career",
+   "titles": [
+    "[2026] Senior Machine Learning Engineer (Systems), Embodied AI/NPCs, ML Platform - PhD Early Career"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "seniority_conflict",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Research-observed Roblox title: an early-career program with Senior in the title."
+  },
+  {
+   "id": "hrt_algorithm_development_internship",
+   "titles": [
+    "Algorithm Development (Quant Research & Trading) Internship – Summer 2027"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "quantitative",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "five_rings_quant_trader_intern",
+   "titles": [
+    "Summer Intern 2027 - Quantitative Trader"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "quantitative",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "flow_traders_graduate_trader",
+   "titles": [
+    "Graduate Trader"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "quantitative",
+    "early_career_type": "graduate_program"
+   }
+  },
+  {
+   "id": "old_mission_graduate_program",
+   "titles": [
+    "Quantitative Researcher (Ph.D.) - 2027 Graduate Program - (August Start)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "quantitative",
+    "early_career_type": "graduate_program"
+   }
+  },
+  {
+   "id": "cohere_ml_intern_co_op",
+   "titles": [
+    "Machine Learning Intern/Co-op (Winter 2026)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "machine_learning",
+    "early_career_type": "co_op"
+   }
+  },
+  {
+   "id": "waymo_summer_intern_software_engineering",
+   "titles": [
+    "2027 Summer Intern, MS, Software Engineering, Behavior Test"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "anduril_early_career_mechanical",
+   "titles": [
+    "2026 Early Career Mechanical Engineer"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "mechanical_engineering",
+    "early_career_type": "new_grad"
+   },
+   "note": "Scope widened 2026-09-16: mechanical engineering is a listed discipline."
+  },
+  {
+   "id": "anduril_early_career_software",
+   "titles": [
+    "2026 Early Career Software Engineer"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "neuralink_biomedical_intern",
+   "titles": [
+    "Biomedical Engineer Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "biomedical_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16: biomedical engineering is a listed discipline."
+  },
+  {
+   "id": "neuralink_digital_ic_design_intern",
+   "titles": [
+    "Digital IC Design Engineer Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "shield_ai_electrical_co_op",
+   "titles": [
+    "Electrical Engineering Spring Co-op (January 2027) (R4475)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "co_op"
+   }
+  },
+  {
+   "id": "applied_intuition_build_release_new_grad",
+   "titles": [
+    "Build & Release Engineer - New Grad (December 2026)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "infrastructure",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "akuna_platform_engineer_intern",
+   "titles": [
+    "Platform Engineer Intern, Summer 2027"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "infrastructure",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "pdt_systems_engineering_intern",
+   "titles": [
+    "Summer 2027 Systems Engineering Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "infrastructure",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "security_engineering_intern",
+   "titles": [
+    "Security Engineering Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "security",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "notion_data_science_intern",
+   "titles": [
+    "Data Science Intern Winter"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "data",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "lyft_data_analyst_intern",
+   "titles": [
+    "Data Analyst Intern (Summer 2027)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "data",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "research_intern_without_discipline",
+   "titles": [
+    "Research Intern (Winter 2026)"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "discipline_unknown",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Title states no discipline and nothing else is known: reviewable, never guessed."
+  },
+  {
+   "id": "research_intern_with_ml_department",
+   "titles": [
+    "Research Intern"
+   ],
+   "categories": [
+    {
+     "department": "Machine Learning Research"
+    }
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "machine_learning",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "bare_intern_in_sales_department",
+   "titles": [
+    "Intern"
+   ],
+   "categories": [
+    {
+     "department": "Sales"
+    }
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "smartrecruiters_internship_level",
+   "titles": [
+    "Software Developer"
+   ],
+   "categories": [
+    {
+     "experience_level": "internship",
+     "function": "Information Technology"
+    }
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "software_title_with_university_department",
+   "titles": [
+    "Software Engineer"
+   ],
+   "categories": [
+    {
+     "department": "University Recruiting"
+    }
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "ashby_contract_employment",
+   "titles": [
+    "Software Engineer Intern"
+   ],
+   "employment_types": [
+    "Contract"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "contract_or_temporary",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "riot_contract_research_intern",
+   "titles": [
+    "Research Intern, PhD or Master's (Contract)"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "contract_or_temporary",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "spacex_apprentice",
+   "titles": [
+    "Apprentice Controls Technician"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "robotics",
+    "early_career_type": "apprenticeship"
+   },
+   "note": "Scope widened 2026-09-16: technical apprenticeships are early-career, and a controls technician is technical work."
+  },
+  {
+   "id": "celonis_ai_consulting_intern",
+   "titles": [
+    "AI & Management Consulting Intern (Value Engineering - UKI Market)"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "software_intern_named_after_tax_product",
+   "titles": [
+    "Software Engineer Intern, Stripe Tax"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "A function word as a product name does not outweigh the engineering role noun."
+  },
+  {
+   "id": "product_manager_intern_marketing_platform",
+   "titles": [
+    "Product Manager Intern, Marketing Platform"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "function_and_discipline_conflict",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "marketing_data_analyst_intern",
+   "titles": [
+    "Marketing Data Analyst Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "function_and_discipline_conflict",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "staff_tpm_with_company_name",
+   "titles": [
+    "Staff Technical Program Manager Duolingo English Test"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "new_grad_and_intern_in_one_title",
+   "titles": [
+    "Software Engineer - New Grad & Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "early_career_type_conflict",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "developer_advocate_intern",
+   "titles": [
+    "Developer Advocate Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "design_or_advocacy_boundary",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "bosch_werkstudent_softwareentwicklung",
+   "titles": [
+    "Werkstudent Softwareentwicklung (w/m/div.)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "game_design_intern",
+   "titles": [
+    "Game Design Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "design_or_advocacy_boundary",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "recent_graduate_trading_assistant",
+   "titles": [
+    "Recent Graduate - Trading Assistant (NYC)"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Rig title (Five Rings). The posting is manual order entry and trade reconciliation, trading operations rather than quantitative work; confirmed against the posting text in the 2026-09-16 sweep."
+  },
+  {
+   "id": "palantir_deployment_strategist_internship",
+   "titles": [
+    "Deployment Strategist, Internship"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "drw_leadership_rotation_intern",
+   "titles": [
+    "Leadership Rotation Network Intern"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "discipline_unknown",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "graduate_student_researcher_robotics",
+   "titles": [
+    "Graduate Student Researcher, Robotics"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "robotics",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "it_support_technician_intern",
+   "titles": [
+    "IT Support Technician Intern"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "plain_software_engineer",
+   "titles": [
+    "Software Engineer"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_early_career",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "senior_software_engineer",
+   "titles": [
+    "Senior Software Engineer"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "databricks_intern_early_careers",
+   "titles": [
+    "Intern Early Careers"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "discipline_unknown",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "databricks_genai_research_scientist_intern",
+   "titles": [
+    "Phd Genai Research Scientist Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "machine_learning",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "swe_intern_machine_learning_specialty",
+   "titles": [
+    "Software Engineering Intern (Machine Learning)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "machine_learning",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "embedded_software_new_grad",
+   "titles": [
+    "Embedded Software Engineer - New Grad (2027)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "notion_merged_intern_and_full_time_aliases",
+   "titles": [
+    "Software Engineer, AI Platform San Francisco, California; New York, New York",
+    "Software Engineer, AI Workflows San Francisco, California; New York, New York",
+    "Software Engineer Intern (Winter 2027) San Francisco, California; New York, New York"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "alias_conflict",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig role: the resolver merged an internship posting with full-time postings. Aliases must agree."
+  },
+  {
+   "id": "stripe_location_variants_agree",
+   "titles": [
+    "Software Engineer, New Grad",
+    "Software Engineer, New Grad - Frontend"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "databricks_navigation_label",
+   "titles": [
+    "Internships & Early Careers"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig role created from a careers-page link, not a posting."
+  },
+  {
+   "id": "notion_navigation_label",
+   "titles": [
+    "Internship Tracker"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "bare_internship_title_is_not_navigation",
+   "titles": [
+    "Internship"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "discipline_unknown",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "polish_sales_administration_internship",
+   "titles": [
+    "Płatny Staż w Administracji Sprzedaży (k/m)"
+   ],
+   "employment_types": [
+    "Intern"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Rig title; the internship comes from SmartRecruiters' employment type."
+  },
+  {
+   "id": "german_controlling_praktikum",
+   "titles": [
+    "Praktikum im Bereich Controlling"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "working_student_software_testing",
+   "titles": [
+    "Working Student in Software Testing"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "automation_tester_intern",
+   "titles": [
+    "[SX/EIT] Automation Tester Intern (Selenium)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "non_technical_program_manager_early_career",
+   "titles": [
+    "Notino Experience Program Manager - EMEA & APAC, Early Career"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   }
+  },
+  {
+   "id": "technical_program_manager_intern",
+   "titles": [
+    "Technical Program Manager Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "bosch_junior_managers_program",
+   "titles": [
+    "Junior Managers Program (Trainee) - Unsolicited Application"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "graduate_program"
+   }
+  },
+  {
+   "id": "bosch_sustainability_internship",
+   "titles": [
+    "Mandatory Internship in Sustainability"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "optiver_story_link",
+   "titles": [
+    "Nick’s experience as a 2x trading intern at Optiver"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "First company expansion: a careers-page story became a canonical role."
+  },
+  {
+   "id": "optiver_internship_experience_story",
+   "titles": [
+    "CompSci major to Trading intern: Sean’s internship experience"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig title. A careers-page story under /join-us/stories/ that classified as an in-scope quantitative internship; found while scoping page sources to recruiting paths."
+  },
+  {
+   "id": "optiver_journey_story",
+   "titles": [
+    "Chinmay’s journey as a tech intern at Optiver"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Rig story link from the same section."
+  },
+  {
+   "id": "neuralink_manufacturing_intern_robot_hardware",
+   "titles": [
+    "Manufacturing Intern, Surgery & Robot Hardware"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16: manufacturing and hardware are both listed now, so the title is no longer a conflict; the named hardware wins over the bare manufacturing topic."
+  },
+  {
+   "id": "verkada_product_design_mechanical_co_op",
+   "titles": [
+    "Product Design Mechanical Engineer (Winter Co-op)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "mechanical_engineering",
+    "early_career_type": "co_op"
+   },
+   "note": "Scope widened 2026-09-16: a mechanical engineer who does product design is mechanical engineering, which is now listed."
+  },
+  {
+   "id": "waymo_quantitative_ux_researcher",
+   "titles": [
+    "2027 Summer Intern, MS/PhD, Quantitative UX Researcher, Growth/International Expansion"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "function_and_discipline_conflict",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "A UX researcher, not quantitative finance; beside a growth team name it abstains."
+  },
+  {
+   "id": "lyft_french_software_intern",
+   "titles": [
+    "Développeur Logiciels Stagiaire, Backend (L/T)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "drw_it_intern",
+   "titles": [
+    "IT Intern"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "bosch_software_test_engineer_intern",
+   "titles": [
+    "[BD] Software Test Engineer Intern (6-month Internship)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "shield_ai_international_employment_type",
+   "titles": [
+    "Manager, Autonomy Applications Engineering (R5188)"
+   ],
+   "employment_types": [
+    "International"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Second company expansion: Shield AI's Lever employment type \"International\" matched \"intern\" and put this manager in scope."
+  },
+  {
+   "id": "shield_ai_international_employment_staff",
+   "titles": [
+    "Staff Engineer, Software Test (R5836)"
+   ],
+   "employment_types": [
+    "International"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "The same employment type sent 38 Shield AI roles to the review queue as seniority conflicts."
+  },
+  {
+   "id": "intern_employment_type_still_speaks",
+   "titles": [
+    "Software Engineer"
+   ],
+   "employment_types": [
+    "Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   }
+  },
+  {
+   "id": "datadog_apm_product_abbreviation",
+   "titles": [
+    "Manager I, Engineering - APM Serverless"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Second company expansion: APM is Datadog's Application Performance Monitoring, not an associate product manager program."
+  },
+  {
+   "id": "datadog_apm_monitoring_staff",
+   "titles": [
+    "Staff GenAI Engineer, Application Performance Monitoring (APM)"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "senior_role",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "apm_abbreviation_program",
+   "titles": [
+    "APM Program 2027"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "new_grad"
+   },
+   "note": "The abbreviation still names the program when no other role noun is present."
+  },
+  {
+   "id": "hrt_intern_spotlight_story",
+   "titles": [
+    "Intern Spotlight: 2023 HRT AI Labs Summer Projects"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   },
+   "note": "Second company expansion: an archived careers-page story counted two cycles as a machine learning internship."
+  },
+  {
+   "id": "belvedere_internship_faq_label",
+   "titles": [
+    "INTERNSHIP FREQUENTLY ASKED QUESTIONS"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "not_a_role",
+    "discipline": null,
+    "early_career_type": null
+   }
+  },
+  {
+   "id": "junior_software_engineer",
+   "titles": [
+    "Junior Software Engineer"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "new_grad"
+   },
+   "note": "Scope widened 2026-09-16. A Junior title is early-career."
+  },
+  {
+   "id": "junior_account_executive",
+   "titles": [
+    "Junior Account Executive"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Scope widened 2026-09-16. Junior makes it early-career; the function still rules it out."
+  },
+  {
+   "id": "mechanical_engineering_intern_summer",
+   "titles": [
+    "Mechanical Engineering Intern (Summer 2027)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "mechanical_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. Mechanical engineering is listed."
+  },
+  {
+   "id": "propulsion_engineer_new_grad",
+   "titles": [
+    "Propulsion Engineer, New Grad"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "aerospace_engineering",
+    "early_career_type": "new_grad"
+   },
+   "note": "Scope widened 2026-09-16. Propulsion is aerospace engineering."
+  },
+  {
+   "id": "manufacturing_engineering_co_op",
+   "titles": [
+    "Manufacturing Engineering Co-op"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "manufacturing_engineering",
+    "early_career_type": "co_op"
+   },
+   "note": "Scope widened 2026-09-16. Manufacturing and process engineering is listed."
+  },
+  {
+   "id": "manufacturing_process_supply_chain",
+   "titles": [
+    "Manufacturing Process Intern, Supply Chain"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "function_and_discipline_conflict",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. Manufacturing beside a supply-chain function word abstains, like product management beside marketing."
+  },
+  {
+   "id": "materials_science_intern",
+   "titles": [
+    "Materials Science Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "materials_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. Materials is listed."
+  },
+  {
+   "id": "chemical_engineering_intern",
+   "titles": [
+    "Chemical Engineering Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "chemical_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. Chemical engineering is listed."
+  },
+  {
+   "id": "civil_engineer_new_grad",
+   "titles": [
+    "Civil Engineer - New Grad"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "civil_engineering",
+    "early_career_type": "new_grad"
+   },
+   "note": "Scope widened 2026-09-16. Civil engineering is listed."
+  },
+  {
+   "id": "software_engineering_apprenticeship",
+   "titles": [
+    "Software Engineering Apprenticeship"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "apprenticeship"
+   },
+   "note": "Scope widened 2026-09-16. A technical apprenticeship is early-career."
+  },
+  {
+   "id": "marketing_apprenticeship",
+   "titles": [
+    "Marketing Apprenticeship"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "apprenticeship"
+   },
+   "note": "Scope widened 2026-09-16. A non-technical apprenticeship falls out on discipline."
+  },
+  {
+   "id": "software_quality_engineer_intern",
+   "titles": [
+    "Software Quality Engineer Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "software_engineering",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. A software quality engineer is software engineering, not manufacturing quality."
+  },
+  {
+   "id": "hardware_test_engineer_intern",
+   "titles": [
+    "Test Engineer Intern, Avionics"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "internship"
+   },
+   "note": "Scope widened 2026-09-16. Hardware test is engineering; avionics was already a hardware rule."
+  },
+  {
+   "id": "palantir_privacy_civil_liberties_engineer",
+   "titles": [
+    "Privacy & Civil Liberties Engineer - New Grad"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "discipline_unknown",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Rig title. Found in the 2026-09-16 rerun: civil liberties is not civil engineering, and the title names no listed discipline."
+  },
+  {
+   "id": "ux_test_engineer_new_grad",
+   "titles": [
+    "UX Test Engineer - New Grad"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "design",
+    "early_career_type": "new_grad"
+   },
+   "note": "Rig title. Found in the 2026-09-16 rerun: a UX test engineer is not hardware test engineering."
+  },
+  {
+   "id": "associate_product_manager_intern",
+   "titles": [
+    "Associate Product Manager Intern"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "product_management",
+    "early_career_type": "internship"
+   },
+   "note": "Rig title. Found in the 2026-09-16 PM boundary check: an APM title with an intern marker is an internship, not a type conflict."
+  },
+  {
+   "id": "bosch_operations_engineering_estagio",
+   "titles": [
+    "Estágio Curricular em Engenharia e Gestão de Operações (f/m/div.)"
+   ],
+   "expected": {
+    "status": "ambiguous",
+    "reason": "function_and_discipline_conflict",
+    "discipline": null,
+    "early_career_type": "internship"
+   },
+   "note": "Rig title. Found in the 2026-09-16 false-negative sweep. An industrial-engineering internship beside an operations function word goes to review instead of out."
+  },
+  {
+   "id": "bosch_product_compliance_engineer_intern",
+   "titles": [
+    "Extracurricular Internship: Product Compliance Engineer (f/m/div.)"
+   ],
+   "expected": {
+    "status": "in_scope",
+    "reason": "in_scope",
+    "discipline": "hardware",
+    "early_career_type": "internship"
+   },
+   "note": "Rig title. Found in the 2026-09-16 false-negative sweep. Product compliance engineering certifies hardware; the compliance function word does not outweigh the engineer."
+  },
+  {
+   "id": "hrt_trading_support_engineer_grads",
+   "titles": [
+    "Electronic Trading Support Engineer - 2026/2027 Grads"
+   ],
+   "expected": {
+    "status": "out_of_scope",
+    "reason": "non_technical_function",
+    "discipline": null,
+    "early_career_type": "new_grad"
+   },
+   "note": "Rig title. Found in the 2026-09-16 false-negative sweep. '2026/2027 Grads' is new-grad evidence; support engineering stays out on function."
+  }
+ ],
+ "identity_merges": [
+  {
+   "id": "split_a92e4f00",
+   "company": "Jumptrading",
+   "merged_as": "AI Research Engineer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus AI Research Engineer (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus AI Research Engineer (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_1f6881fa",
+   "company": "Hudson River Trading",
+   "merged_as": "Algorithm Development Quant Research Trading Phd Intern Summer",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Algorithm Development (Quant Research & Trading) Internship – Summer 2027",
+      "Algorithm Development (Quant Research & Trading) PhD Internship – Summer 2027"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Algorithm Developer (Quant Research & Trading) – 2027 Grads"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Algorithm Developer (Quant Research & Trading) – 2027 PhDs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_7b0d2d32",
+   "company": "Jumptrading",
+   "merged_as": "Campus AI Researcher, PhD/Postdoc (Intern)",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus AI Researcher, PhD/Postdoc (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus AI Researcher, PhD/Postdoc (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_4712aae1",
+   "company": "Jumptrading",
+   "merged_as": "Campus Crypto Researcher (Intern)",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus Crypto Researcher (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus Crypto Researcher (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_4c61fb81",
+   "company": "Jumptrading",
+   "merged_as": "Campus ML Research Engineer (Intern)",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus ML Research Engineer (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus ML Research Engineer (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_a6adad9d",
+   "company": "Verkada",
+   "merged_as": "Dec Grads Sales Development Representative Aae Salt Lake City",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Sales Development Representative (AAE), Bay Area",
+      "Sales Development Representative (AAE), New York City",
+      "Sales Development Representative (AAE), Phoenix",
+      "Sales Development Representative (AAE), Salt Lake City",
+      "Sales Development Representative (AAE), Tampa"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Dec 2026 Grads: Sales Development Representative (AAE), Salt Lake City",
+      "Dec 2026 Grads: Sales Development Representative (AAE), Tampa"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_81518239",
+   "company": "Hudson River Trading",
+   "merged_as": "Design Verification (DV) Engineer - 2027 Grads",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Design Verification (DV) Engineer - 2027 Grads"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Design Verification (DV) Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_adb1c63e",
+   "company": "Neuralink",
+   "merged_as": "Digital Ic Design Engineer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Digital IC Design Engineer Intern"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Digital IC Design Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_88b389a4",
+   "company": "Applied Intuition",
+   "merged_as": "Embedded Software Engineer New Grad Sunnyvale Sunnyvale Apply",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Embedded Software Engineer - New Grad (2027) Sunnyvale Sunnyvale Apply",
+      "Embedded Test Engineer - New Grad (December 2026) Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "C++ Embedded Software Engineer - Drone Stack Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_e2bd0874",
+   "company": "Canonical",
+   "merged_as": "Enterprise Customer Success Manager French Speaker",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Enterprise Customer Success Manager",
+      "Enterprise Customer Success Manager (French speaker)",
+      "Enterprise Customer Success Manager (Japanese speaker)"
+     ]
+    },
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Customer Success Manager"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_70703887",
+   "company": "Verkada",
+   "merged_as": "Enterprise Development Representative",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Enterprise Development Representative",
+      "Enterprise Development Representative - German Speaking",
+      "Enterprise Development Representative, LATAM",
+      "Enterprise Sales Development Representative"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Enterprise Development Representative (December 2026 Grads)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_394298d9",
+   "company": "Five Rings",
+   "merged_as": "Experienced Lateral Trading Assistant",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Experienced/Lateral - Trading Assistant"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Recent Graduate - Trading Assistant (NYC)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_77672ff2",
+   "company": "Neuralink",
+   "merged_as": "Firmware Engineer Intern Robotics And Surgery Engineering",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Firmware Engineer Intern, Robotics and Surgery Engineering"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Firmware Engineer, Robotics and Surgery Engineering"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_9e0a779d",
+   "company": "Ramp",
+   "merged_as": "Grad Customer Experience Associate",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Customer Experience Associate",
+      "Customer Experience Associate (Evening Shift)"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "University Grad | Customer Experience Associate"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_7ce802a5",
+   "company": "Canonical",
+   "merged_as": "Graduate Hr Generalist Apac",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate HR Generalist - APAC",
+      "Graduate HR Generalist - Americas"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "HR Generalist"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_1aee68b4",
+   "company": "Imc",
+   "merged_as": "Graduate Software Engineer (2026)",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Software Engineer",
+      "Graduate Software Engineer (2026)",
+      "Graduate Software Engineer (2027)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Software Engineer, Early Career"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_2557aba2",
+   "company": "Imc",
+   "merged_as": "Graduate Software Engineer (2026) Graduate Technology Amsterdam",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Software Engineer (2026) Graduate Technology Amsterdam",
+      "Graduate Software Engineer (2027) Graduate Technology Amsterdam"
+     ]
+    },
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineer Intern Intern Technology Amsterdam"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_aa29d177",
+   "company": "Squarepoint Capital",
+   "merged_as": "Intern Quant Researcher",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Intern Quant Researcher"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Quant Researcher"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_1befa194",
+   "company": "Canonical",
+   "merged_as": "Junior Linux Kernel Engineer Ubuntu",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Linux Kernel Engineer - Ubuntu"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Linux Kernel Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_37b907f6",
+   "company": "Old Mission",
+   "merged_as": "Junior Quantitative Researcher Ph D",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Quantitative Researcher (Ph.D.)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Quantitative Researcher (Experienced - Ph.D.)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_50a75cfd",
+   "company": "Hudson River Trading",
+   "merged_as": "Junior Trading Systems Engineer",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Trading Systems Engineer"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Trading Systems Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_039c242f",
+   "company": "Coinbase",
+   "merged_as": "Machine Learning Engineer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Machine Learning Engineer Intern"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Machine Learning Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_42278d7b",
+   "company": "Imc",
+   "merged_as": "Machine Learning Research Intern Summer Chicago",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Machine Learning Research Intern - Summer 2027 - Chicago",
+      "Machine Learning Research Intern - Summer 2027 - Sydney"
+     ]
+    },
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Machine Learning Researcher - Chicago"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_f31bbd34",
+   "company": "Neuralink",
+   "merged_as": "Neuroengineer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Neuroengineer Intern"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Neuroengineer, Next Gen"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_b23641d8",
+   "company": "Point72 Asset Management",
+   "merged_as": "Point72 Academy Investment Analyst Program For Upcoming Graduates Jp Bcf",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Point72 Academy Investment Analyst Program for Upcoming Graduates (2027 – JP)",
+      "Point72 Academy Investment Analyst Program for Upcoming Graduates (2027 – JP) (BCF)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Point72 Academy 2026 Investment Analyst Program for Experienced Professionals – Japan",
+      "Point72 Academy 2026 Investment Analyst Program for Experienced Professionals – Japan (BCF)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_974b99db",
+   "company": "Canonical",
+   "merged_as": "Product Manager",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Manager, Product Manager",
+      "Product Manager",
+      "Product Manager - AI",
+      "Product Manager - Cloud",
+      "Product Manager - Data",
+      "Product Manager - Ubuntu",
+      "Technical Product Manager"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Product Manager"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_87cf43b7",
+   "company": "Canonical",
+   "merged_as": "Public Cloud Project Manager",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Enterprise Project Manager",
+      "Public Cloud Project Manager"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Project Manager"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_d39ae5f0",
+   "company": "Imc",
+   "merged_as": "Quant Performance Engineer Intern - Summer 2027",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Quant Performance Engineer Intern - Summer 2027"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Quant Performance Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_b245647b",
+   "company": "Tower Research Capital",
+   "merged_as": "Quantitative Developer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Quantitative Developer Intern"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Quantitative Developer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_291b52ed",
+   "company": "Jumptrading",
+   "merged_as": "Quantitative Researcher Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus Quantitative Researcher (Intern)",
+      "Campus Quantitative Researcher (M1/M2 Intern)",
+      "Campus Quantitative Researcher, PhD (Intern)",
+      "Campus Quantitative Researcher, UG/MS (Intern)",
+      "Campus Quantitative Trader (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus Quantitative Researcher (Full-Time)",
+      "Campus Quantitative Trader (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_011a02e3",
+   "company": "Applied Intuition",
+   "merged_as": "Research Intern - Reinforcement Learning, Robotics",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - Reinforcement Learning, Robotics Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Research Scientist - Reinforcement Learning, Robotics Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_4fd36bcf",
+   "company": "Applied Intuition",
+   "merged_as": "Research Intern - Reinforcement Learning, Self-Driving",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - Reinforcement Learning, Self-Driving Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Research Engineer - Reinforcement Learning, Self-Driving Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_8cb8a22c",
+   "company": "Applied Intuition",
+   "merged_as": "Research Intern - Robotic Hardware, Simulation and Data",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - Robotic Hardware, Simulation and Data Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Research Engineer - Robotic Hardware, Simulation and Data Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_a3a3dc0b",
+   "company": "Applied Intuition",
+   "merged_as": "Research Intern - World-Action Foundation Model, Robotics",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - World-Action Foundation Model, Robotics Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Research Scientist - World-Action Foundation Model, Robotics Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_b3165938",
+   "company": "Applied Intuition",
+   "merged_as": "Research Scientist 3d Vision And Generation Self Driving Sunnyvale Sunnyvale Apply",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Research Engineer - 3D Vision and Generation, Self-Driving Sunnyvale Sunnyvale Apply",
+      "Research Scientist - 3D Vision and Generation, Self-Driving Sunnyvale Sunnyvale Apply"
+     ]
+    },
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - 3D Vision and Generation, Self-Driving Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_0fd05991",
+   "company": "Canonical",
+   "merged_as": "Sales Development Representative Dutch Speaker",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Business Development Representative",
+      "Representante de Desarrollo de Ventas",
+      "Représentant du Développement des Ventes",
+      "Sales Development Representative",
+      "Sales Development Representative (Arabic Speaker)",
+      "Sales Development Representative (Dutch Speaker)",
+      "Sales Development Representative (German Speaker)",
+      "Sales Development Representative (Italian Speaker)",
+      "Sales Development Representative (Portuguese Speaker)",
+      "Sales Development Representative (Spanish & Portuguese Speaker)",
+      "インサイドセールス (リモート)/ Sales Development Representative (Remote)"
+     ]
+    },
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Sales Development Representative",
+      "Graduate Sales Development Representative (UK)",
+      "Graduate Sales Development Representative - Canada (Remote)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_f0c4d44a",
+   "company": "Notion",
+   "merged_as": "Software Engineer Developer Platform San Francisco California New York New York",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Software Engineer, AI Platform San Francisco, California; New York, New York",
+      "Software Engineer, AI Workflows San Francisco, California; New York, New York",
+      "Software Engineer, Collections Experience San Francisco, California; New York, New York",
+      "Software Engineer, Developer Platform San Francisco, California; New York, New York"
+     ]
+    },
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineer Intern (Winter 2027) San Francisco, California; New York, New York"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_ffc48d0e",
+   "company": "Hudson River Trading",
+   "merged_as": "Software Engineer Intern C++ Or Python Summer",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineering Internship (C++ or Python) – Summer 2027"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Software Engineer (C++ or Python) – 2027 Grads"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_06b60238",
+   "company": "Neuralink",
+   "merged_as": "Software Engineer Intern, Implant",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineer Intern, Implant"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Software Engineer, Implant"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_b8968d12",
+   "company": "Neuralink",
+   "merged_as": "Software Engineer Intern, Robotics",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineer Intern, Robotics"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Software Engineer, Robotics"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_53eede4d",
+   "company": "Jumptrading",
+   "merged_as": "Systems Engineer Intern",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Campus Systems Engineer (Intern)"
+     ]
+    },
+    {
+     "stated_types": [],
+     "titles": [
+      "Campus Systems Engineer (Full-Time)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_06fc4949",
+   "company": "Canonical",
+   "merged_as": "Talent Scientist Graduate Lead",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Talent Scientist",
+      "Talent Scientist - Graduate Lead"
+     ]
+    },
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Talent Scientist"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "split_48f25cc0",
+   "company": "Canonical",
+   "merged_as": "Ubuntu Engineering Manager",
+   "outcome": "split",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Ubuntu Engineering Lead",
+      "Ubuntu Engineering Manager",
+      "Ubuntu Package Management - Engineering Manager",
+      "Ubuntu Software Engineer"
+     ]
+    },
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Junior Ubuntu Software Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_63b3cc12",
+   "company": "Optiver",
+   "merged_as": "Fpga Engineer Intern Summer Austin",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "FPGA Engineer Intern (Summer 2027 - Austin)",
+      "FPGA Engineer Intern (Summer 2027 - Chicago)",
+      "Software Engineer Intern (Summer 2027 - Austin)",
+      "Software Engineer Intern (Summer 2027 - Chicago)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_a49deab2",
+   "company": "Celonis",
+   "merged_as": "Intern Deployment Engineer Data AI",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Intern Deployment Engineer - Data & AI",
+      "Intern Technology Consultant - Data & AI"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_a46b7b8d",
+   "company": "Verkada",
+   "merged_as": "Lead Embedded Linux Engineer Intercom",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Embedded Software Engineer - Access Control",
+      "Embedded Software Engineer, Access Control",
+      "Lead Embedded Linux Engineer - Intercom"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_8d57d9b3",
+   "company": "Applied Intuition",
+   "merged_as": "Mechanical Engineer New Grad Sunnyvale Sunnyvale Apply",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Mechanical Engineer - New Grad Sunnyvale Sunnyvale Apply",
+      "Scenario Engineer - New Grad (2027) Sunnyvale Sunnyvale Apply",
+      "UX Test Engineer - New Grad (December 2026) Sunnyvale Sunnyvale Apply"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_90af0985",
+   "company": "Imc",
+   "merged_as": "Quant Performance Engineer Graduate Technology Chicago",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "graduate_program"
+     ],
+     "titles": [
+      "Graduate Hardware Engineer Graduate Technology Chicago",
+      "Quant Performance Engineer Graduate Technology Chicago"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_2b57773d",
+   "company": "DRW",
+   "merged_as": "Quantitative Researcher",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Quantitative Researcher",
+      "Quantitative Researcher Futures"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_d8efb86b",
+   "company": "Tower Research Capital",
+   "merged_as": "Quantitative Trader Researcher",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Quantitative Trader / Researcher - APAC",
+      "Quantitative Trader / Researcher - EMEA",
+      "Quantitative Trader/Researcher - 2027"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_610082a1",
+   "company": "DRW",
+   "merged_as": "Quantitative Trading Analyst Gd1",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Quantitative Trading Analyst",
+      "Quantitative Trading Analyst - GD1"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_52052f07",
+   "company": "Neuralink",
+   "merged_as": "R D Materials Engineer Intern",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Biomedical Engineer Intern",
+      "R&D Materials Engineer Intern"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_3f29af46",
+   "company": "Applied Intuition",
+   "merged_as": "Research Intern Reinforcement Learning Robotics",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Research Intern - Reinforcement Learning, Robotics",
+      "Research Intern - Reinforcement Learning, Self-Driving"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_052d5161",
+   "company": "Verkada",
+   "merged_as": "Security Software Engineering Intern",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Backend Software Engineering Intern 2027",
+      "Embedded Software Engineering Intern 2027",
+      "Frontend Software Engineering Intern 2027",
+      "Mobile Software Engineering Intern 2027",
+      "Security Software Engineering Intern 2027"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_729d4d9c",
+   "company": "Verkada",
+   "merged_as": "Senior Software Engineer Computer Vision",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Senior Software Engineer - Computer Vision",
+      "Software Engineer - Computer Vision"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_49250ff3",
+   "company": "Verkada",
+   "merged_as": "Senior Software Engineer Data Platform",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Senior Software Engineer, Data Platform",
+      "Software Engineer - Data Platform"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_6694945b",
+   "company": "Roblox",
+   "merged_as": "Software Engineer Creator Business",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [],
+     "titles": [
+      "Senior Software Engineer - Creator Business",
+      "Software Engineer, Creator Business",
+      "Software Engineer, Creator Studio"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_aa83a911",
+   "company": "Applied Intuition",
+   "merged_as": "Software Engineer New Grad December",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "new_grad"
+     ],
+     "titles": [
+      "Forward Deployed Engineer - New Grad (December 2026)",
+      "Software Engineer - New Grad (December 2026)"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_156277c7",
+   "company": "Shield AI",
+   "merged_as": "Summer Advanced Manufacturing Engineering Intern",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Summer 2027 - Advanced Manufacturing Engineering Intern",
+      "Summer 2027 - Electrical Engineering Intern"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_2950ca22",
+   "company": "Waymo",
+   "merged_as": "Summer Intern Bs Syseng Software Engineer",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "2027 Summer Intern, BS, SysEng Software Engineer",
+      "2027 Summer Intern, BS, SysEng Software Engineer Mountain View, California",
+      "2027 Summer Intern, BS/MS, Software Engineer",
+      "2027 Summer Intern, MS/PhD, Software Engineer",
+      "2027 Summer Intern, PhD, Quantitative Software Engineer"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_8fe5a595",
+   "company": "Roblox",
+   "merged_as": "Summer Product Management Intern",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "[Summer 2027] Product Design Intern",
+      "[Summer 2027] Product Management Intern"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "kept_df72cfab",
+   "company": "DV Trading",
+   "merged_as": "Trading Intern Summer Dv Commodities",
+   "outcome": "kept",
+   "groups": [
+    {
+     "stated_types": [
+      "internship"
+     ],
+     "titles": [
+      "Software Engineer Intern - Summer 2027 (DV Commodities)",
+      "Trading Intern - Summer 2027 (DV Commodities)"
+     ]
+    }
+   ]
+  }
+ ]
+}

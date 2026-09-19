@@ -1,0 +1,38 @@
+name: Production health
+
+# Is each deployed service answering, and is scheduled work still happening? A failing check opens or updates the one
+# "Production health" ops-alert issue, assigned to the owner; an all-clear closes it (scripts/ops-health.mjs,
+# docs/operations.md). This is the watchdog for the other workflows, so it runs on its own schedule.
+on:
+  schedule:
+    # Every six hours, off the collection minutes.
+    - cron: "29 3,9,15,21 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: firstseen-ops-health
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Each scheduled workflow's last successful run.
+  actions: read
+  issues: write
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      # Dependency-free: the runner's preinstalled Node, no npm install.
+      - name: Check production
+        env:
+          FIRSTSEEN_WEB_URL: ${{ vars.FIRSTSEEN_WEB_URL }}
+          FIRSTSEEN_AGENT_API_URL: ${{ vars.FIRSTSEEN_AGENT_API_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/ops-health.mjs --alert

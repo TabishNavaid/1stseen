@@ -1,0 +1,163 @@
+# GitHub Actions collection deployment
+
+1stSeen uses separate, low-cost GitHub Actions workflows for current jobs, recruiting-page changes,
+historical enrichment, changed-evidence forecast regeneration, and manual backtesting. The four collection
+workflows share one concurrency group, so scheduled and manually dispatched runs queue instead of writing
+the same database concurrently.
+
+## Schedules and timeouts
+
+GitHub schedules use UTC, run only from the default branch, and can start late when runners are busy.
+
+| Workflow | Schedule (UTC) | Timeout | Purpose |
+| --- | --- | --- | --- |
+| `current-jobs.yml` | 00:17, 06:17, 12:17, 18:17 | 45 min | Current ATS, career-page, feed, and sitemap job observations, then enrichment |
+| `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
+| `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | 25 min | Only roles affected by changed persisted evidence, then readiness plans and the health report |
+| `historical-enrichment.yml` | Sunday 04:07 | 90 min | Wayback captures and archived recruiting observations, then enrichment |
+| `backtest.yml` | 3rd of the month 05:23, and by hand | 45 min | Leak-free rolling-origin evaluation (60-day cutoff when scheduled), then the scored-case history |
+| `backup-corpus.yml` | Monday 05:41 | 30 min | Corpus backup, restore proof, 14-day artifact ([`operations.md`](operations.md)) |
+| `ops-health.yml` | 03:29, 09:29, 15:29, 21:29 | 5 min | Web, agent API, database, schedule freshness, and Worker errors ([`operations.md`](operations.md)) |
+
+Timeouts come from measured durations on the local validation corpus: 37 current sources plus enrichment
+took 487 s (97 configured sources project to about 17 minutes), 6 Wayback sources took 1,663 s (8 project to
+about 38 minutes), a preloaded regeneration pass over 3,451 roles took about 12 s, and a 4,574-target
+backtest took 7.4 s. Signal collection has never run against a real corpus, so its 45 minutes is an
+estimate to revisit after the first production run.
+
+Every workflow also supports `workflow_dispatch`. Current jobs, signals, and historical enrichment accept an
+optional company name, domain, or UUID for bounded development runs.
+
+## Concurrency
+
+All four collection workflows use `group: firstseen-collection` with `cancel-in-progress: false`.
+
+- **Not keyed by ref.** The group used to be `firstseen-collection-${{ github.ref }}`, which put a run
+  dispatched from a feature branch in a different group from the scheduled runs on `main`. Both write the
+  same production database, so they could run at the same time.
+- **What an overlap would have written.** `forecasts` has no uniqueness on role and input fingerprint, so two
+  overlapping regenerations each insert the same new version. Concurrent ingestion of one source collides on
+  the `raw_job_observations` identity index, and concurrent enrichment collides on
+  `canonical_roles (company_id, recurrence_key)`. Those two fail one side's work as an audited error rather
+  than duplicating rows.
+- **Pending runs are replaced, not queued.** GitHub keeps one pending run per group and cancels an older
+  pending run when a newer one queues. With four workflows in one group, a schedule that fires while two others
+  are waiting silently drops a run. The schedules are therefore staggered so that each workflow's full timeout
+  ends at least 15 minutes before the next scheduled start (the smallest gap is 30 minutes).
+  `worker/tests/test_collection_workflows.py` enforces this, so a timeout or cron change that reintroduces
+  overlap fails CI.
+- **Local CLI runs are outside this group.** `scripts/bootstrap-companies.sh` or a manual `firstseen ingest`
+  against production does not queue behind Actions. Disable the schedules, or wait for a quiet window, before
+  running either against the hosted project.
+- `backtest.yml` uses its own group, `firstseen-backtest`. It writes only `backtest_runs` and
+  `backtest_cases`. In the collection group, a scheduled run arriving while it waited would cancel it.
+
+## Collection bounds
+
+Set at workflow level, from repository variables with literal fallbacks, so an unset variable cannot
+silently restore the `config.py` defaults (a 2 MB response cap, which rejects real ATS boards):
+
+| Variable | Fallback | Used by |
+| --- | --- | --- |
+| `MAX_SOURCE_BYTES` | `10000000` (the maximum `config.py` accepts) | all five workflows |
+| `HTTP_MIN_HOST_INTERVAL_SECONDS` | `0.25` | current jobs, forecast regeneration, backtest |
+| `COURTESY_HTTP_MIN_HOST_INTERVAL_SECONDS` | `1.5` | historical enrichment, career-page signals; exported to the worker as `HTTP_MIN_HOST_INTERVAL_SECONDS` |
+| `ROBOTS_TXT_ENFORCED` | `false` | current jobs, historical enrichment, career-page signals: honour robots.txt before every request (`docs/takedown.md`). Set the same value on the Worker so `/data-sources` states it. |
+
+Forecast regeneration and backtesting make no source requests; they carry the same bounds for parity. A
+value outside the `config.py` limits makes `Settings` raise at import, so the run fails loudly.
+
+## Required repository secrets
+
+**Settings → Secrets and variables → Actions → Repository secrets**:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Optional model extraction secrets are `LLM_API_KEY`, `GEMINI_API_KEY`, and `GROQ_API_KEY`. Optional approved
+Reddit collection uses `REDDIT_CLIENT_ID` and `REDDIT_CLIENT_SECRET`. Never store a credential as a
+repository variable or in a workflow file.
+
+## Repository variables
+
+All optional; the fallbacks above apply when unset.
+
+- `MAX_SOURCE_BYTES`, `HTTP_MIN_HOST_INTERVAL_SECONDS`, `COURTESY_HTTP_MIN_HOST_INTERVAL_SECONDS`
+- `ROBOTS_TXT_ENFORCED` (off until the owner accepts the coverage it costs; `docs/takedown.md` has the measurement)
+- `LLM_DEFAULT_ROUTES`, `LLM_EXTRACT_ROUTES`, and `LLM_API_BASE`
+- `REDDIT_API_ENABLED`, `REDDIT_USER_AGENT`, `REDDIT_COMMUNITIES`, `REDDIT_SEARCH_LIMIT`, and
+  `REDDIT_LLM_EXTRACTION_ENABLED`
+
+Apply every migration in `supabase/migrations`, currently through
+`202608140025_replay_paging_filters.sql`, before enabling schedules.
+The service-role key is required because collection, forecast versions, audit rows, and checkpoint cursors
+are automation-owned records unavailable to authenticated browser clients.
+
+## Enrichment inside collection
+
+`current-jobs.yml` and `historical-enrichment.yml` both run `ingest`, which finishes by deriving
+canonical-role matches and historical opening events from the evidence just persisted. Enrichment is
+idempotent, so a re-run duplicates neither role matches nor opening events, and a company that fails
+enrichment is audited without discarding the records other companies produced.
+`forecast-regeneration.yml` then picks up the affected roles and writes readiness plans for the users
+following them.
+
+## Idempotency and partial failure
+
+Current ingestion compares the retrieved document hash with `sources.last_content_hash`. Unchanged pages skip
+normalization, advance existing job `last_seen_at`, and record an unchanged `source_fetches` row. Signal
+ingestion compares normalized meaningful state in `signal_source_states`; it emits and versions a forecast
+only when a new signal identity is persisted.
+
+Forecast regeneration reads changed `source_fetches`, new historical events, and new signals after the last
+clean `collection_checkpoints` cursor. It skips roles whose newly computed forecast input fingerprint matches
+the latest stored version. The cursor advances only when every affected role succeeds. On a partial failure,
+successful forecast versions remain committed, the old cursor remains, and the next run safely retries the
+range; already-saved roles then skip by input fingerprint.
+
+Every source and role is audited independently in `agent_tool_calls`. A partial run exits successfully so one
+unavailable source does not discard other sources' work. A run fails only when all non-empty scoped sources
+or roles fail. Each workflow publishes its bounded JSON summary as a short-lived artifact and step summary;
+credentials, raw pages, prompts, and unrestricted evidence are never included.
+
+## Cancellation and timeouts mid-run
+
+A cancelled or timed-out job is killed without running `finish_agent_run`, so its `agent_runs` row stays
+`running`. What survives:
+
+| Workflow | Committed before the cut | Not done | Recovery |
+| --- | --- | --- | --- |
+| Current jobs / historical enrichment | Every source that finished, including its content hash | Later sources in the pass, and the whole enrichment step, which runs after collection | The next completed `ingest` (or `firstseen enrich --all`) enriches every unmatched observation, because enrichment reads the system of record rather than this run's results |
+| Career-page signals | Signals from finished sources (unique on identity) | Forecast versioning for a source cut between signal insert and recompute | Regeneration picks up signals newer than its cursor |
+| Forecast regeneration | Forecast versions already inserted | Remaining roles; the cursor does not advance | Next run retries the range; saved roles skip by fingerprint |
+| Backtest | Nothing; the run is persisted only at the end | The whole run | Dispatch again |
+
+The one failure mode this cannot recover from is a pass that always times out at the same point: sources are
+processed in a fixed order, so the tail would never be collected and enrichment would never run. The
+collection health report lists runs left `running`, which is how this shows up.
+
+## Collection health
+
+`forecast-regeneration.yml` ends with `node scripts/collection-health.mjs`, which runs even when regeneration
+fails and appends to the job summary:
+
+- rows added per table in the last 24 hours, next to each table's total
+- each workflow's last successful Actions run (the job has `actions: read`) and each pipeline's last
+  completed pass in `agent_runs`
+- sources whose last 3 attempts all failed (`COLLECTION_HEALTH_FAILURE_STREAK` changes the threshold)
+- runs still `running` three hours after starting
+
+Problems are also raised as `::warning::` annotations. The step never fails the job for a warning; it exits
+non-zero only when the database cannot be read. Run it locally with `npm run health:collection`.
+
+## Cost and keep-alive
+
+- **Actions minutes.** Public repositories run standard GitHub-hosted runners free. A private repository on
+  GitHub Free has 2,000 minutes a month, and this schedule needs roughly 4,000: current jobs about
+  2,400 (4 runs a day at about 20 minutes including setup), signals up to 1,400, regeneration about 360,
+  historical about 170, plus CI. A private repository needs a lower cadence or a paid plan.
+- **Supabase free-tier pausing.** A free project pauses after 7 days without activity. Collection writes to
+  the database every 6 hours, well inside that window.
+- **GitHub schedule disabling.** In a public repository GitHub disables scheduled workflows after 60 days
+  with no repository activity. Collection itself makes no commits, so a repository left alone for two months
+  stops collecting, and a week after that Supabase pauses. Re-enable from the Actions tab.

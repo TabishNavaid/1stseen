@@ -1,0 +1,346 @@
+@import "tailwindcss";
+
+/*
+ * 1stSeen design tokens.
+ *
+ * Every color, text size, spacing decision, radius, and shadow a surface uses is named here, so a class says
+ * what a thing is (text-ink-subtle, evidence-bounded) instead of repeating a hex value in every element.
+ *
+ * Contrast is WCAG 2.1 AA and is checked by apps/web/tests/design-tokens.test.mjs, which reads this file:
+ * - ink, ink-muted, ink-subtle, and accent-ink reach 4.5:1 on every surface; every *-ink reaches 4.5:1 on its
+ *   own *-surface and on surface; the navigation inks reach 4.5:1 on the navigation surfaces.
+ * - line-strong, focus, every *-line and *-mark, and every confidence tone reach 3:1 on surface.
+ * - line is decorative: it divides regions that also differ by spacing or heading and carries no meaning.
+ *
+ * Evidence classes, calendar date kinds, and sources are semantic, not decorative. Color is
+ * never their only signal: each utility below also sets a border style, and the product pairs it with a label.
+ * exact is solid, bounded dashed, observed_by dotted; confirmed is solid, predicted dashed, preparation dotted.
+ */
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@theme {
+  /* Surfaces */
+  --color-canvas: #f3f1eb;
+  --color-surface: #fffefa;
+  --color-surface-sunken: #f4f4f0;
+  --color-surface-hover: #f6f6f1;
+  --color-surface-selected: #eaf1ec;
+  --color-scrim: rgb(16 33 27 / 0.32);
+
+  /* Text */
+  --color-ink: #18221f;
+  --color-ink-muted: #52605a;
+  --color-ink-subtle: #5f6b65;
+  --color-ink-inverse: #ffffff;
+
+  /* Lines */
+  --color-line: #d9ddd7;
+  --color-line-strong: #7c8781;
+
+  /* Brand and interaction */
+  --color-accent: #183f35;
+  --color-accent-hover: #102f28;
+  --color-accent-ink: #235b4b;
+  --color-accent-soft: #dcebe4;
+  --color-focus: #2e7764;
+
+  /* Workspace navigation, a dark surface */
+  --color-nav: #162720;
+  --color-nav-hover: #20372f;
+  --color-nav-active: #29453b;
+  --color-nav-line: #31483f;
+  --color-nav-ink: #dce4df;
+  --color-nav-muted: #afbeb8;
+  --color-nav-subtle: #8fa39b;
+  --color-nav-accent: #72b59e;
+
+  /* Status */
+  --color-success-ink: #1f5c4a;
+  --color-success-surface: #e9f4ee;
+  --color-success-line: #3f8a70;
+  --color-warning-ink: #7a4d17;
+  --color-warning-surface: #fbf3e6;
+  --color-warning-line: #b0762f;
+  --color-danger-ink: #8a2f2f;
+  --color-danger-surface: #f9ecec;
+  --color-danger-line: #b35c5c;
+  --color-info-ink: #44525f;
+  --color-info-surface: #eef2f5;
+  --color-info-line: #6f7f8e;
+
+  /* Evidence classes: the date precision of an opening event */
+  --color-evidence-exact-ink: #1f5c4a;
+  --color-evidence-exact-surface: #e9f4ee;
+  --color-evidence-exact-line: #3f8a70;
+  --color-evidence-bounded-ink: #7a4d17;
+  --color-evidence-bounded-surface: #fbf3e6;
+  --color-evidence-bounded-line: #b0762f;
+  --color-evidence-observed-ink: #44525f;
+  --color-evidence-observed-surface: #eef2f5;
+  --color-evidence-observed-line: #6f7f8e;
+
+  /* Forecast basis: which evidence a forecast's window mainly rests on */
+  --color-basis-own-ink: #1d4e6b;
+  --color-basis-own-surface: #ebf3f8;
+  --color-basis-own-line: #4a82a6;
+  --color-basis-borrowed-ink: #5b3b74;
+  --color-basis-borrowed-surface: #f4eff8;
+  --color-basis-borrowed-line: #8b6aa7;
+
+  /* Calendar date kinds */
+  --color-date-confirmed-ink: #1f5c4a;
+  --color-date-confirmed-surface: #e9f4ee;
+  --color-date-confirmed-line: #3f8a70;
+  --color-date-confirmed-mark: #2d7964;
+  --color-date-predicted-ink: #3f5f54;
+  --color-date-predicted-surface: #f4f7f3;
+  --color-date-predicted-line: #5d8f7d;
+  --color-date-predicted-mark: #5d8f7d;
+  --color-date-preparation-ink: #7a4d17;
+  --color-date-preparation-surface: #fbf3e6;
+  --color-date-preparation-line: #b0762f;
+  --color-date-preparation-mark: #b0762f;
+
+  /* Sources */
+  --color-source-official-ink: #205847;
+  --color-source-official-surface: #edf6f1;
+  --color-source-official-line: #5b9a82;
+  --color-source-archive-ink: #4f5a54;
+  --color-source-archive-surface: #f1f2ee;
+  --color-source-archive-line: #879089;
+  --color-source-signal-ink: #7a4e1d;
+  --color-source-signal-surface: #fbf5e9;
+  --color-source-signal-line: #b3844a;
+  --color-source-community-ink: #6f5845;
+  --color-source-community-surface: #f7f2ed;
+  --color-source-community-line: #9c8570;
+
+  /* Confidence: forecasting.py's number, always described in words beside its ring */
+  --color-confidence-strong: #246d59;
+  --color-confidence-moderate: #9a6120;
+  --color-confidence-limited: #8a4a3b;
+  --color-confidence-track: #e1e5df;
+
+  /* Type scale: Tailwind's xs (12px) and up stay; two smaller steps for dense evidence tables */
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 1rem;
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1.25rem;
+  --tracking-label: 0.12em;
+  --tracking-title: -0.025em;
+
+  /* Spacing: Tailwind's 0.25rem scale stays; these name layout decisions */
+  --spacing-control: 2.25rem;
+  --spacing-control-sm: 2rem;
+  --spacing-touch: 2.75rem;
+  --spacing-gutter: 1rem;
+  --spacing-gutter-wide: 1.5rem;
+
+  /* Radii */
+  --radius-control: 0.375rem;
+  --radius-panel: 0;
+  --radius-overlay: 0.5rem;
+  --radius-chip: 9999px;
+
+  /* Elevation */
+  --shadow-raised: 0 1px 2px rgb(16 33 27 / 0.06);
+  --shadow-popover: 0 1px 2px rgb(16 33 27 / 0.08), 0 8px 24px rgb(16 33 27 / 0.12);
+  --shadow-dialog: 0 24px 64px rgb(16 33 27 / 0.24);
+
+  --animate-skeleton: skeleton 1.4s ease-in-out infinite;
+
+  @keyframes skeleton {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+}
+
+/* Token classes: the patterns every surface repeats, named once. */
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility icon {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@utility panel {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  background-color: var(--color-surface);
+}
+
+/* Sets no color, so a label pairs it with one (label-caps text-ink-subtle) without two utilities competing. */
+@utility label-caps {
+  font-size: var(--text-micro);
+  line-height: var(--text-micro--line-height);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Sets no horizontal padding, so each control adds its own (px-3, or pl-3 pr-8 beside an icon). */
+@utility control {
+  height: var(--spacing-control);
+  width: 100%;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-control);
+  background-color: var(--color-surface);
+  font-size: var(--text-xs);
+  color: var(--color-ink);
+  &::placeholder {
+    color: var(--color-ink-subtle);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 1px;
+  }
+  &[aria-invalid="true"] {
+    border-color: var(--color-danger-line);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    background-color: var(--color-surface-sunken);
+    color: var(--color-ink-subtle);
+  }
+  /* A phone gets 44px targets: the same control, taller. */
+  @media (width < 40rem) {
+    height: var(--spacing-touch);
+  }
+}
+
+@utility link-accent {
+  font-weight: 600;
+  color: var(--color-accent-ink);
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+@utility skeleton {
+  border-radius: var(--radius-control);
+  background-color: var(--color-confidence-track);
+  animation: var(--animate-skeleton);
+}
+
+@utility evidence-exact {
+  border-style: solid;
+  border-color: var(--color-evidence-exact-line);
+  background-color: var(--color-evidence-exact-surface);
+  color: var(--color-evidence-exact-ink);
+}
+
+@utility evidence-bounded {
+  border-style: dashed;
+  border-color: var(--color-evidence-bounded-line);
+  background-color: var(--color-evidence-bounded-surface);
+  color: var(--color-evidence-bounded-ink);
+}
+
+@utility evidence-observed {
+  border-style: dotted;
+  border-color: var(--color-evidence-observed-line);
+  background-color: var(--color-evidence-observed-surface);
+  color: var(--color-evidence-observed-ink);
+}
+
+/* A forecast's basis is a kind of evidence, like a date's precision: always a labelled chip with its own icon. */
+@utility basis-own {
+  border-style: solid;
+  border-color: var(--color-basis-own-line);
+  background-color: var(--color-basis-own-surface);
+  color: var(--color-basis-own-ink);
+}
+
+@utility basis-borrowed {
+  border-style: solid;
+  border-color: var(--color-basis-borrowed-line);
+  background-color: var(--color-basis-borrowed-surface);
+  color: var(--color-basis-borrowed-ink);
+}
+
+@utility date-confirmed {
+  border-style: solid;
+  border-color: var(--color-date-confirmed-line);
+  background-color: var(--color-date-confirmed-surface);
+  color: var(--color-date-confirmed-ink);
+}
+
+@utility date-predicted {
+  border-style: dashed;
+  border-color: var(--color-date-predicted-line);
+  background-color: var(--color-date-predicted-surface);
+  color: var(--color-date-predicted-ink);
+}
+
+@utility date-preparation {
+  border-style: dotted;
+  border-color: var(--color-date-preparation-line);
+  background-color: var(--color-date-preparation-surface);
+  color: var(--color-date-preparation-ink);
+}
+
+@utility source-official {
+  border-color: var(--color-source-official-line);
+  background-color: var(--color-source-official-surface);
+  color: var(--color-source-official-ink);
+}
+
+@utility source-archive {
+  border-color: var(--color-source-archive-line);
+  background-color: var(--color-source-archive-surface);
+  color: var(--color-source-archive-ink);
+}
+
+@utility source-signal {
+  border-color: var(--color-source-signal-line);
+  background-color: var(--color-source-signal-surface);
+  color: var(--color-source-signal-ink);
+}
+
+@utility source-community {
+  border-color: var(--color-source-community-line);
+  background-color: var(--color-source-community-surface);
+  color: var(--color-source-community-ink);
+}
+
+* { box-sizing: border-box; }
+html { background: var(--color-canvas); scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    linear-gradient(rgb(24 34 31 / 0.025) 1px, transparent 1px),
+    var(--color-canvas);
+  background-size: 100% 64px;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+::selection { background: #c9ded3; color: #102b24; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: #bfc6c0; background-clip: padding-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

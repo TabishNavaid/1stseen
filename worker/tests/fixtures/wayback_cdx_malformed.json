@@ -1,0 +1,6 @@
+[
+  ["timestamp", "original", "statuscode", "digest", "mimetype", "redirect", "length"],
+  ["not-a-timestamp", "https://careers.fixture.example/students", "200", "BAD", "text/html", "-", "100"],
+  ["20250101120000", "https://careers.fixture.example/students", "not-a-status", "BAD2", "text/html", "-", "100"],
+  ["20250102120000", "", "200", "BAD3", "text/html", "-", "100"]
+]

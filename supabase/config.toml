@@ -1,0 +1,83 @@
+# Local development stack for 1stSeen. docs/local-development.md explains each choice.
+project_id = "firstseen-local"
+
+# Ports 5542x instead of the CLI defaults (5432x). The defaults are the ones another
+# local Supabase project is most likely already holding.
+[api]
+enabled = true
+port = 55421
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+# Same row cap as a hosted project, so pagination bugs reproduce locally.
+max_rows = 1000
+
+[db]
+port = 55422
+shadow_port = 55420
+major_version = 17
+
+# Off. The local rig runs in real mode (Supabase is configured), and seed.sql holds
+# reserved `.example` fixtures that would render there as if they were collected
+# evidence. Demo mode uses apps/web/lib/demo-data.ts and needs no seed.
+[db.seed]
+enabled = false
+sql_paths = ["./seed.sql"]
+
+[db.pooler]
+enabled = false
+
+# Off by default to keep the stack to the services 1stSeen uses (Studio adds two
+# images and a second Node process). Set `enabled = true` for a local table browser.
+[studio]
+enabled = false
+port = 55423
+
+# Captures every auth email (confirmation, password reset) so the sign-up flow can be
+# exercised end to end without SMTP. Web UI at http://127.0.0.1:55424.
+[local_smtp]
+enabled = true
+port = 55424
+
+# Not used by 1stSeen. Disabled to keep the stack small.
+[realtime]
+enabled = false
+
+[storage]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**", "http://127.0.0.1:3000/**"]
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 8
+
+# Mirrors the hosted setting in docs/hosted-supabase-setup.md: sign-up requires a
+# confirmed email.
+# Local rig only. The CLI default allows 2 auth emails an hour, which stops the sign-up, resend,
+# and reset integration tests within minutes. Hosted projects keep Supabase's own limits.
+[auth.rate_limit]
+email_sent = 100
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+double_confirm_changes = true
+
+# Email links carry the one-time token in the URL fragment (never sent to a server, so never in
+# a request log). /auth/confirm and /auth/reset read it and post it to the verification routes.
+# Hosted projects need the same templates pasted into Authentication -> Emails (docs/deployment.md).
+[auth.email.template.confirmation]
+subject = "Confirm your 1stSeen account"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Reset your 1stSeen password"
+content_path = "./supabase/templates/recovery.html"

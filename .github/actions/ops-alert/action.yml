@@ -1,0 +1,17 @@
+name: Report to the ops alert issue
+description: >
+  Opens or updates the ops-alert issue for this workflow when the job did not succeed, and closes it when it did
+  (scripts/ops-alert.mjs, docs/operations.md). Use as the last step of a job, with `if: always()`, and give the job
+  `issues: write`. Needs the repository checked out; uses the runner's preinstalled Node.
+inputs:
+  status:
+    description: The job's status. Pass job.status from the calling workflow.
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        JOB_STATUS: ${{ inputs.status }}
+      run: node scripts/ops-alert.mjs --status "$JOB_STATUS"

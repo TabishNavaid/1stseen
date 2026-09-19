@@ -1,0 +1,12 @@
+# Fixture robots.txt: no group names the collector, so the * groups apply, merged.
+Disallow: /rules-before-any-user-agent-belong-to-no-group
+
+User-agent: OtherBot
+Disallow: /
+
+User-agent: *
+Disallow: /jobs/archive
+Allow: /jobs/archive/2026
+
+User-agent: *
+Disallow: /internal

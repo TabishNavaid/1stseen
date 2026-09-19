@@ -1,0 +1,4 @@
+{"jobs":[
+{"id":101,"departments":[{"id":4401,"name":"Software Engineering","child_ids":[],"parent_id":4400}],"title":"Software Engineering Intern","absolute_url":"https://boards.example.test/jobs/101","location":{"name":"New York, NY"},"first_published":"2024-09-12T14:30:00-04:00","updated_at":"2026-08-10T10:00:00Z","content":"<p>Build reliable systems with our platform team.</p>"},
+{"id":102,"title":"Data Science Intern","absolute_url":"https://boards.example.test/jobs/102","location":{"name":"New York, NY"},"updated_at":"2026-08-10T10:00:00Z","content":"<p>Applied statistics and experimentation.</p>"}
+]}

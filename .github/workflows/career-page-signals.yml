@@ -1,0 +1,107 @@
+name: Career page change detection
+
+on:
+  schedule:
+    # 01:37, 07:37, 13:37, 19:37 UTC: 80 minutes after current jobs, so a full-length
+    # current-jobs run has finished before this one queues.
+    - cron: "37 1,7,13,19 * * *"
+  workflow_dispatch:
+    inputs:
+      company:
+        description: "Optional company name, domain, or UUID"
+        required: false
+        type: string
+
+# Shared with every collection writer and not keyed by ref: one production database.
+# See the note in current-jobs.yml and docs/github-actions-collection.md.
+concurrency:
+  group: firstseen-collection
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The ops-alert step opens, updates, and closes this workflow's alert issue.
+  issues: write
+
+env:
+  # config.py defaults to a 2 MB response cap, which rejects real ATS boards. The
+  # literal fallbacks mean an unset repository variable cannot restore the default.
+  MAX_SOURCE_BYTES: ${{ vars.MAX_SOURCE_BYTES || '10000000' }}
+  # Page, sitemap, and feed detection walks many URLs on the same company origins,
+  # so it uses the slower courtesy interval rather than the 0.25 s default.
+  HTTP_MIN_HOST_INTERVAL_SECONDS: ${{ vars.COURTESY_HTTP_MIN_HOST_INTERVAL_SECONDS || '1.5' }}
+  # robots.txt enforcement (worker/src/firstseen/robots.py). Off until the owner turns it on; see docs/takedown.md.
+  ROBOTS_TXT_ENFORCED: ${{ vars.ROBOTS_TXT_ENFORCED || 'false' }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    # Measured on the local rig (85 page/sitemap/feed sources, 1.5 s pacing):
+    # 142-148 s for a pass with no changes, 348 s for a pass whose signals reached 417
+    # roles. 45 minutes stays until a production run reports its own time.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e worker
+      - name: Detect changes across configured sources
+        if: ${{ github.event_name == 'schedule' || inputs.company == '' }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REDDIT_API_ENABLED: ${{ vars.REDDIT_API_ENABLED || 'false' }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: ${{ vars.REDDIT_USER_AGENT }}
+          REDDIT_COMMUNITIES: ${{ vars.REDDIT_COMMUNITIES }}
+          REDDIT_SEARCH_LIMIT: ${{ vars.REDDIT_SEARCH_LIMIT || '25' }}
+          REDDIT_LLM_EXTRACTION_ENABLED: ${{ vars.REDDIT_LLM_EXTRACTION_ENABLED || 'false' }}
+          LLM_EXTRACT_ROUTES: ${{ vars.LLM_EXTRACT_ROUTES }}
+          LLM_API_BASE: ${{ vars.LLM_API_BASE || 'http://localhost:11434' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python -m firstseen.cli signals --all > career-page-signals-summary.json
+      - name: Detect changes for one company
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.company != '' }}
+        env:
+          TARGET_COMPANY: ${{ inputs.company }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REDDIT_API_ENABLED: ${{ vars.REDDIT_API_ENABLED || 'false' }}
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: ${{ vars.REDDIT_USER_AGENT }}
+          REDDIT_COMMUNITIES: ${{ vars.REDDIT_COMMUNITIES }}
+          REDDIT_SEARCH_LIMIT: ${{ vars.REDDIT_SEARCH_LIMIT || '25' }}
+          REDDIT_LLM_EXTRACTION_ENABLED: ${{ vars.REDDIT_LLM_EXTRACTION_ENABLED || 'false' }}
+          LLM_EXTRACT_ROUTES: ${{ vars.LLM_EXTRACT_ROUTES }}
+          LLM_API_BASE: ${{ vars.LLM_API_BASE || 'http://localhost:11434' }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python -m firstseen.cli signals --company "$TARGET_COMPANY" > career-page-signals-summary.json
+      - name: Publish change summary
+        if: ${{ always() }}
+        run: |
+          if [ -f career-page-signals-summary.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat career-page-signals-summary.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: career-page-signals-${{ github.run_id }}
+          path: career-page-signals-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+      # Last, and on failure, timeout, or cancellation too: opens or updates this workflow's ops-alert issue, assigned
+      # to the owner, and the next success closes it (docs/operations.md). A step, not a job: no extra billed minutes.
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ job.status }}

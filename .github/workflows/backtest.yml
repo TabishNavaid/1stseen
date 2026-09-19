@@ -1,0 +1,95 @@
+name: Leak-free forecast backtest
+
+on:
+  # Monthly, so the evaluable-case count is re-measured as collection accumulates evidence (docs/operations.md). The
+  # 3rd at 05:23 UTC avoids the collection schedule's busiest hours; a backtest shares no concurrency group with it.
+  schedule:
+    - cron: "23 5 3 * *"
+  workflow_dispatch:
+    inputs:
+      cutoff_days:
+        description: "Days before actual opening used as forecast cutoff"
+        required: true
+        default: "60"
+        type: string
+      from_year:
+        description: "Optional first target year"
+        required: false
+        type: string
+      to_year:
+        description: "Optional final target year"
+        required: false
+        type: string
+
+# Backtests only write backtest_runs/backtest_cases, so they do not join the
+# collection group, where a queued scheduled run could cancel a pending manual
+# backtest. Not keyed by ref: two concurrent runs would evaluate the same database.
+concurrency:
+  group: firstseen-backtest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # The ops-alert step opens, updates, and closes this workflow's alert issue.
+  issues: write
+
+env:
+  # Backtesting makes no source requests; the bounds are set for parity with the
+  # collection workflows.
+  MAX_SOURCE_BYTES: ${{ vars.MAX_SOURCE_BYTES || '10000000' }}
+  HTTP_MIN_HOST_INTERVAL_SECONDS: ${{ vars.HTTP_MIN_HOST_INTERVAL_SECONDS || '0.25' }}
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    # 4,574 targets over the local corpus took 7.4 s.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e worker
+      - name: Run rolling-origin backtest
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # A scheduled run has no inputs: it uses the CLI's default cutoff, 60 days.
+          CUTOFF_DAYS: ${{ inputs.cutoff_days || '60' }}
+          FROM_YEAR: ${{ inputs.from_year }}
+          TO_YEAR: ${{ inputs.to_year }}
+        run: |
+          args=(backtest --cutoff-days "$CUTOFF_DAYS")
+          if [ -n "$FROM_YEAR" ]; then args+=(--from-year "$FROM_YEAR"); fi
+          if [ -n "$TO_YEAR" ]; then args+=(--to-year "$TO_YEAR"); fi
+          python -m firstseen.cli "${args[@]}" > backtest-result.json
+      - name: Publish backtest summary
+        if: ${{ always() }}
+        run: |
+          if [ -f backtest-result.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat backtest-result.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      # How many held-out openings each persisted run could score, oldest first, so the count can be watched leaving
+      # zero. Dependency-free: the runner's preinstalled Node, no npm install.
+      - name: Report evaluable cases, run by run
+        if: ${{ always() }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backtest-history.mjs
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: backtest-${{ github.run_id }}
+          path: backtest-result.json
+          if-no-files-found: ignore
+          retention-days: 30
+      # Last, and on failure, timeout, or cancellation too: opens or updates this workflow's ops-alert issue, assigned
+      # to the owner, and the next success closes it (docs/operations.md). A step, not a job: no extra billed minutes.
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ job.status }}

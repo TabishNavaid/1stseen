@@ -1,0 +1,11 @@
+[
+  ["timestamp", "original", "statuscode", "digest", "mimetype", "redirect", "length"],
+  ["20220801090000", "https://careers.fixture.example/students", "200", "DIGEST-A", "text/html", "-", "800"],
+  ["20220910120000", "https://careers.fixture.example/students", "200", "DIGEST-B", "text/html", "-", "1200"],
+  ["20220910120000", "https://careers.fixture.example/students", "200", "DIGEST-B", "text/html", "-", "1200"],
+  ["20220920120000", "https://careers.fixture.example/students", "200", "DIGEST-C", "text/html", "-", "1220"],
+  ["20230901090000", "https://careers.fixture.example/students", "200", "DIGEST-D", "text/html", "-", "900"],
+  ["20230912100000", "https://careers.fixture.example/jobs/swe-intern", "302", "DIGEST-E", "text/html", "https://jobs.fixture.example/software-engineering-intern", "0"],
+  ["20230914100000", "https://jobs.fixture.example/software-engineering-intern", "200", "DIGEST-F", "text/html", "-", "1100"],
+  ["20240918100000", "https://careers.fixture.example/students", "200", "DIGEST-G", "text/html", "-", "1250"]
+]
