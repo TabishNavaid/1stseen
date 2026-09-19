@@ -1,8 +1,8 @@
 /**
  * Integration test: every number the product displays matches a direct query.
  *
- * Renders the landing section, dashboard summary and list totals, facets, cards, methodology, Forecast Replay, and the
- * five most confident role pages through the built Worker, and recomputes each claim with independent SQL rather than
+ * Renders the roles view's tiles and list totals, facets, cards, the first run's payoff, methodology, Forecast Replay, and
+ * the five most confident role pages through the built Worker, and recomputes each claim with independent SQL rather than
  * the product's own functions. It exists because a 12-row list's length was once shown as the total of 181 confirmed
  * openings, a capped read showed 60 of 114 contributions, and a declined role kept showing a window its evidence no
  * longer supported. Needs the local rig and `npm run build`.
@@ -43,38 +43,38 @@ test("every number the product displays matches a direct query", async () => {
     // Current forecast: the latest version, unless the role was declined after it (migration 202608140043).
     const latest = `select distinct on (f.canonical_role_id) f.* from public.forecasts f join public.canonical_roles cr on cr.id = f.canonical_role_id where cr.forecast_refused_at is null or f.forecasted_at > cr.forecast_refused_at order by f.canonical_role_id, f.forecasted_at desc, f.id`;
 
-    // ---------------------------------------------------------------- dashboard
-    const dash = await page("/");
+    // ---------------------------------------------------------------- roles view
+    const dash = await page("/roles");
     const roles = await one(`select count(*)::int n from public.canonical_roles r where ${inScope}`);
     const withForecast = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id where ${inScope}`);
     const companies = await one(`select count(distinct r.company_id)::int n from public.canonical_roles r where ${inScope}`);
     const outside = await one(`select count(*)::int n from public.canonical_roles r where r.active and r.scope_status is distinct from 'in_scope'`);
     const opened = await one(`select count(*)::int n from public.historical_opening_events e join public.canonical_roles r on r.id = e.canonical_role_id where ${inScope} and e.date_precision = 'exact' and e.opened_on >= current_date - 45`);
     const soon = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id where ${inScope} and l.window_start <= current_date + 30 and l.window_end >= current_date`);
-    check("/ landing", "companies", num(dash, /career pages of ([\d,]+) companies/), companies.n);
-    check("/ landing", "roles tracked", num(dash, /([\d,]+) early-career technical roles tracked/), roles.n);
-    check("/ landing", "with a forecast", num(dash, /· ([\d,]+) with a forecast today/), withForecast.n);
-    check("/ summary", "likely in 30 days", num(dash, /Likely in 30 days ([\d,]+) of/), soon.n);
-    check("/ summary", "of N forecasts", num(dash, /Likely in 30 days [\d,]+ of ([\d,]+) forecast/), withForecast.n);
-    check("/ summary", "confirmed openings, last 45 days", num(dash, /Confirmed openings ([\d,]+) exact source dates/), opened.n);
-    check("/ timeline", "most recent of", num(dash, /The \d+ most recent of ([\d,]+)/), opened.n);
-    check("/ list", "all in-scope roles", num(dash, /All ([\d,]+) in-scope roles:/), roles.n);
-    check("/ list", "with a forecast", num(dash, /in-scope roles: ([\d,]+) with a forecast/), withForecast.n);
-    check("/ list", "without a forecast", num(dash, /listed first, and ([\d,]+) without/), roles.n - withForecast.n);
-    check("/ list", "outside or not yet in scope", num(dash, /([\d,]+) collected roles outside/), outside.n);
+    void companies;
+    // A tile is drawn only when its number is not zero (lib/dashboard-tiles.ts), so an absent tile claims zero.
+    const tile = (re, label) => num(dash, re) ?? (dash.includes(label) ? null : 0);
+    check("/roles tiles", "likely in 30 days", tile(/Likely in 30 days ([\d,]+) of/, "Likely in 30 days"), soon.n);
+    if (dash.includes("Likely in 30 days")) check("/roles tiles", "of N forecasts", num(dash, /Likely in 30 days [\d,]+ of ([\d,]+) forecast/), withForecast.n);
+    check("/roles tiles", "confirmed openings, last 45 days", tile(/Confirmed openings ([\d,]+) exact source dates/, "Confirmed openings"), opened.n);
+    check("/roles timeline", "most recent of", num(dash, /The \d+ most recent of ([\d,]+)/), opened.n);
+    check("/roles list", "all in-scope roles", num(dash, /All ([\d,]+) in-scope roles:/), roles.n);
+    check("/roles list", "with a forecast", num(dash, /in-scope roles: ([\d,]+) with a forecast/), withForecast.n);
+    check("/roles list", "without a forecast", num(dash, /listed first, and ([\d,]+) without/), roles.n - withForecast.n);
+    check("/roles list", "outside or not yet in scope", num(dash, /([\d,]+) collected roles outside/), outside.n);
 
     // Facets: each value's count, against a direct group-by.
     const facets = await all(`select r.discipline::text v, count(*)::int n from public.canonical_roles r where ${inScope} group by 1`);
     for (const { v, n } of facets) {
       const label = v.replace(/_/g, " ");
       const shown = num(dash, new RegExp(`${label.charAt(0).toUpperCase()}${label.slice(1)} \\((\\d+)\\)`, "i"));
-      if (shown !== null) check("/ facets", `discipline ${v}`, shown, n);
+      if (shown !== null) check("/roles facets", `discipline ${v}`, shown, n);
     }
     const programs = await all(`select r.early_career_type::text v, count(*)::int n from public.canonical_roles r where ${inScope} group by 1`);
     for (const { v, n } of programs) {
       const labels = { internship: "Internship", co_op: "Co-op", new_grad: "New grad", graduate_program: "Graduate program", apprenticeship: "Apprenticeship" };
       const shown = labels[v] ? num(dash, new RegExp(`${labels[v]} \\((\\d+)\\)`)) : null;
-      if (shown !== null) check("/ facets", `program ${v}`, shown, n);
+      if (shown !== null) check("/roles facets", `program ${v}`, shown, n);
     }
 
     // Each listed card: "N cycles behind it · a exact, b observed by" against the latest forecast and current events.
@@ -82,8 +82,16 @@ test("every number the product displays matches a direct query", async () => {
     const incoherent = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id
       left join (select canonical_role_id, count(*) n from public.historical_opening_events group by 1) e on e.canonical_role_id = l.canonical_role_id
       where ${inScope} and l.history_count > coalesce(e.n, 0)`);
-    check("/ cards", "forecasts claiming more cycles than the role has openings", 0, incoherent.n);
-    results.push({ surface: "/ cards", claim: `cards read`, shown: cards.length, truth: "-", ok: cards.length > 0 });
+    check("/roles cards", "forecasts claiming more cycles than the role has openings", 0, incoherent.n);
+    results.push({ surface: "/roles cards", claim: `cards read`, shown: cards.length, truth: "-", ok: cards.length > 0 });
+
+    // ---------------------------------------------------------------- the first run's payoff, for a guest
+    const payoff = await page("/welcome?step=ready&for=internship&field=software_engineering");
+    const fits = `${inScope} and r.discipline = 'software_engineering' and r.early_career_type = 'internship'`;
+    const fitting = await one(`select count(*)::int n from public.canonical_roles r where ${fits}`);
+    const fittingForecasts = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id where ${fits}`);
+    check("/welcome payoff", "programs to watch", num(payoff, /Here are ([\d,]+) programs? to watch/), fitting.n);
+    check("/welcome payoff", "with a predicted window", num(payoff, /([\d,]+) (?:has|have) a predicted window/), fittingForecasts.n);
 
     // ---------------------------------------------------------------- methodology
     const meth = await page("/methodology");

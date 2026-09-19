@@ -283,6 +283,13 @@ function toOptions(rows: FilterOptionRow[]): DashboardFilterOptions {
   return options;
 }
 
+/** The dashboard's filter facets alone (the first run's company search reads them), paged like a table. */
+export async function loadDashboardFilterOptions(reader: PublicReader = createPublicReader()): Promise<DashboardFilterOptions> {
+  // One row per facet value; the company and location facets grow with the corpus.
+  const rows = await fetchAll<FilterOptionRow>(() => reader.rpc("dashboard_filter_options"), "dashboard_filter_options", ["facet", "value"]);
+  return toOptions(rows);
+}
+
 /**
  * Load one page of the dashboard. Returns `unconfigured` rather than fixtures when the service-role credentials are
  * absent, so a deployment can never silently present development data as live intelligence.

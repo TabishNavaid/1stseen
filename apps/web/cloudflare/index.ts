@@ -10,6 +10,7 @@ import {
   guestLimitResponse,
   type GuestAgentLimits,
 } from "./guest-agent";
+import { frontDoorRedirect } from "./front-door";
 import { durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
 import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache";
 import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers";
@@ -126,6 +127,12 @@ const worker = {
         },
       }, allowedWidths);
       return withSecurityHeaders(image, policy);
+    }
+
+    // A signed-in visit to the front page goes to the roles view before anything streams (front-door.ts).
+    const signedInHome = frontDoorRedirect(request);
+    if (signedInHome) {
+      return withSecurityHeaders(new Response(null, { status: 307, headers: { location: signedInHome, "cache-control": "no-store" } }), policy);
     }
 
     // vinext takes the script nonce from the request's CSP header. Setting it here

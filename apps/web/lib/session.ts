@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { hasSupabaseConfig } from "@/lib/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,8 +12,11 @@ export type Session = { userId: string; email: string | null } | null;
  * User-owned surfaces (watchlist, readiness milestones, calendar, digests) are
  * only ever rendered from records owned by this identity. A missing session is
  * a real signed-out state, never a reason to substitute fixture user data.
+ *
+ * Memoized per render with React's `cache`, so the header and the page share one Supabase Auth call; outside a render
+ * (a route handler) every call reads afresh.
  */
-export async function currentSession(): Promise<Session> {
+export const currentSession = cache(async function currentSession(): Promise<Session> {
   if (!hasSupabaseConfig()) return null;
   try {
     const supabase = await createClient();
@@ -23,4 +27,4 @@ export async function currentSession(): Promise<Session> {
     // A malformed or expired cookie is a signed-out session, not a render failure.
     return null;
   }
-}
+});

@@ -123,6 +123,33 @@ function Accuracy({ data }: { data: MethodologyData | null }) {
   );
 }
 
+/**
+ * The evidence model in three rules, the way the front page used to put it. The front page now says only that every date
+ * links to where it was seen; the rules, and the sections below, are where the detail lives.
+ */
+function EvidenceRules() {
+  return (
+    <section aria-labelledby="rules-title" className="border-b border-line py-6">
+      <h2 id="rules-title" className="label-caps text-ink-subtle">Why the evidence model matters</h2>
+      <ol className="mt-3 grid gap-3 md:grid-cols-3">
+        <li className="rounded-card border border-line bg-surface p-4">
+          <p className="text-sm font-semibold text-ink"><span className="tabular text-ink-subtle">1.</span> Dates keep their precision</p>
+          <p className="mt-2 flex flex-wrap gap-1.5"><PrecisionChip variant="plain" precision="exact" /><PrecisionChip variant="plain" precision="bounded" /><PrecisionChip variant="plain" precision="observed_by" /></p>
+          <p className="mt-2 text-caption leading-5 text-ink-muted">A board&apos;s own publication date, a window between two archive captures, and a date something was merely seen by are stored apart and never promoted into one another. <a href="#evidence" className="link-accent focus-ring">More</a></p>
+        </li>
+        <li className="rounded-card border border-line bg-surface p-4">
+          <p className="text-sm font-semibold text-ink"><span className="tabular text-ink-subtle">2.</span> Numbers come from statistics</p>
+          <p className="mt-2 text-caption leading-5 text-ink-muted">A fixed statistical model weighs past openings by their precision and produces the window and the confidence score. <a href="#forecast" className="link-accent focus-ring">More</a></p>
+        </li>
+        <li className="rounded-card border border-line bg-surface p-4">
+          <p className="text-sm font-semibold text-ink"><span className="tabular text-ink-subtle">3.</span> Replays refuse hindsight</p>
+          <p className="mt-2 text-caption leading-5 text-ink-muted">A backtest may use only facts 1stSeen had recorded before its cutoff, so it never scores what it could not have known at the time. <a href="#replay" className="link-accent focus-ring">More</a></p>
+        </li>
+      </ol>
+    </section>
+  );
+}
+
 /** Where the footer's disclosure points: the evidence model, the forecast, the confidence score, and the honest backtest position. */
 export default async function MethodologyPage() {
   const data = await loadMethodologyData();
@@ -141,6 +168,7 @@ export default async function MethodologyPage() {
       }
       updated="2026-09-17"
       contents={CONTENTS}
+      summary={<EvidenceRules />}
     >
       <DocumentSection id="accuracy" title="Where accuracy stands">
         <Accuracy data={data} />

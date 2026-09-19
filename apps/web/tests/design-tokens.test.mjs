@@ -83,3 +83,8 @@ test("the three evidence classes and the three date kinds never rely on color al
     assert.match(block, new RegExp(`border-style:\\s*${style};`), `${name} must set border-style ${style}`);
   }
 });
+
+test("the warm accent is legible: its text on its own surface and the page, ink on its fill, and its line on a panel", () => {
+  expectContrast([["warm-ink", "warm-soft"], ["warm-ink", "surface"], ["warm-ink", "canvas"], ["ink", "warm"]], 4.5);
+  expectContrast([["warm-line", "surface"], ["warm-line", "warm-soft"]], 3);
+});

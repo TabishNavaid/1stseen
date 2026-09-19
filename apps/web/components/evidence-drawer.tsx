@@ -10,20 +10,23 @@ import { Button } from "@/components/ui/button";
 import { useOffCanvas } from "@/components/ui/off-canvas";
 import { locationLabel } from "@/lib/presentation";
 
-export function EvidenceDrawer({ role, basis = null, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; open: boolean; onClose: () => void }) {
-  // Below xl the detail slides over the list, so it needs keyboard handling; at xl it is a docked column.
-  const panelRef = useOffCanvas<HTMLElement>(open, onClose, "(width < 80rem)");
+/**
+ * A forecast's evidence, behind a click: the drawer slides over the list at every width, so the list stays clean and
+ * the detail (the interval, why this confidence, the signal, the work-back plan, and the evidence) is one tap away.
+ */
+export function EvidenceDrawer({ role, basis = null, programType, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; programType?: string; open: boolean; onClose: () => void }) {
+  const panelRef = useOffCanvas<HTMLElement>(open, onClose, "all");
   return (
     <>
-      {open && <div className="fixed inset-0 z-40 bg-scrim xl:hidden" onClick={onClose} aria-hidden="true" />}
-      <aside ref={panelRef} className={`${open ? "translate-x-0 transition-transform" : "invisible translate-x-full transition-[transform,visibility]"} fixed inset-y-0 right-0 z-50 w-full max-w-[520px] overflow-y-auto border-l border-line-strong bg-surface shadow-dialog xl:visible xl:static xl:z-auto xl:block xl:max-h-[calc(100vh-88px)] xl:w-auto xl:max-w-none xl:translate-x-0 xl:shadow-none`} aria-label={`${role.role} forecast detail`}>
+      {open && <div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden="true" />}
+      <aside ref={panelRef} className={`${open ? "translate-x-0 transition-transform" : "invisible translate-x-full transition-[transform,visibility]"} fixed inset-y-0 right-0 z-50 w-full max-w-[520px] overflow-y-auto border-l border-line-strong bg-surface shadow-dialog sm:rounded-l-card`} aria-label={`${role.role} forecast detail`}>
         <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-5 py-4 backdrop-blur">
-          <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface-sunken text-sm font-bold text-accent-ink">{role.companyMark}</div><div className="min-w-0 flex-1"><p className="text-caption font-semibold text-ink-subtle">{role.company} · {role.track}</p><h2 className="mt-1 text-lg font-semibold tracking-title">{role.role}</h2><p className="mt-1 text-micro text-ink-subtle">{locationLabel(role.location)}</p></div><Button variant="ghost" size="icon" onClick={onClose} className="xl:hidden" aria-label="Close details"><Icon name="x" size={17} /></Button></div>
+          <div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-line bg-surface-sunken text-sm font-bold text-accent-ink">{role.companyMark}</div><div className="min-w-0 flex-1"><p className="text-caption font-semibold text-ink-subtle">{role.company} · {programType ?? role.track}</p><h2 className="mt-1 text-lg font-semibold tracking-title">{role.role}</h2><p className="mt-1 text-micro text-ink-subtle">{locationLabel(role.location)}</p></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Close details"><Icon name="x" size={17} /></Button></div>
         </header>
 
         <div className="space-y-7 p-5">
-          <Link href={`/roles/${role.id}`} className="flex items-center justify-between border border-line bg-surface-selected px-3 py-2.5 text-xs font-semibold text-accent-ink hover:bg-surface-selected">Open full role intelligence <Icon name="arrow-up-right" size={14} /></Link>
-          <section className="border border-line bg-surface-sunken p-4">
+          <Link href={`/roles/${role.id}`} className="focus-ring flex min-h-touch items-center justify-between rounded-control border border-line bg-surface-selected px-4 py-2.5 text-xs font-semibold text-accent-ink hover:border-accent">Open the full role page <Icon name="arrow-up-right" size={14} /></Link>
+          <section className="rounded-card border border-line bg-surface-sunken p-4">
             <div className="flex items-center justify-between gap-4"><div><p className="label-caps text-ink-subtle">Predicted opening interval</p><p className="mt-2 text-xl font-semibold tracking-[-0.035em] tabular">{role.window}</p><p className="mt-1 text-caption text-ink-subtle">Expected opening falls inside this statistical interval.</p></div><ConfidenceIndicator value={role.confidence} /></div>
             {basis && <div className="mt-4 flex flex-wrap items-center gap-2"><ForecastBasisChip basis={basis} /><span className="text-micro text-ink-subtle">{BASIS[basis.kind].meaning}</span></div>}
             <div className="mt-5 grid grid-cols-4 gap-1" aria-label="Historical opening cycles compared with forecast">

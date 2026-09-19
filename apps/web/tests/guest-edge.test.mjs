@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { frontDoorRedirect } from "../cloudflare/front-door.ts";
 import { GUEST_QUESTIONS_OVERALL, GUEST_QUESTIONS_PER_ADDRESS, guestAgentAllowance, guestLimitResponse } from "../cloudflare/guest-agent.ts";
 import {
   CACHE_STATUS_HEADER,
@@ -82,8 +83,9 @@ test("public functions are listed and never take a user", () => {
   }
 });
 
-test("only a signed-out, whole-document GET of the dashboard, a role page, or the methodology page is cacheable", () => {
+test("only a signed-out, whole-document GET of the landing page, the roles view, a role page, or the methodology page is cacheable", () => {
   assert.equal(guestCachePath(page("/")), "/");
+  assert.equal(guestCachePath(page("/roles")), "/roles");
   assert.equal(guestCachePath(page(ROLE)), ROLE);
   // It reads the latest backtest and today's forecast counts, and both advance the public data version.
   assert.equal(guestCachePath(page("/methodology")), "/methodology");
@@ -94,21 +96,30 @@ test("only a signed-out, whole-document GET of the dashboard, a role page, or th
   assert.equal(guestCachePath(page("/?_rsc=abc")), null);
   assert.equal(guestCachePath(page("/", { headers: { accept: "application/json" } })), null);
   assert.equal(guestCachePath(page("/", { method: "HEAD" })), null);
+  assert.equal(guestCachePath(page("/roles", { headers: { cookie: "sb-abc-auth-token=token" } })), null);
   for (const path of ["/calendar", "/replay", "/welcome", "/settings", "/roles/not-a-uuid", "/api/health"]) {
     assert.equal(guestCachePath(page(path)), null, path);
   }
   assert.equal(hasSessionCookie(page("/", { headers: { cookie: "sb-x-code-verifier=1; other=2" } })), false);
 });
 
-test("the dashboard key is canonical, so a random query string cannot force a render", () => {
-  const a = guestCachePath(page("/?utm_source=x&discipline=data&discipline=quantitative&type=internship"));
-  const b = guestCachePath(page("/?type=internship&zz=9&discipline=quantitative&discipline=data"));
+test("the roles view key is canonical, so a random query string cannot force a render", () => {
+  const a = guestCachePath(page("/roles?utm_source=x&discipline=data&discipline=quantitative&type=internship"));
+  const b = guestCachePath(page("/roles?type=internship&zz=9&discipline=quantitative&discipline=data"));
   assert.equal(a, b);
   assert.doesNotMatch(a, /utm_source|zz=/);
-  assert.equal(guestCachePath(page("/?nonsense=1")), "/");
-  assert.equal(guestCachePath(page("/?page=2")), "/?page=2", "page 2 is never served page 1");
-  assert.notEqual(guestCachePath(page("/?discipline=data&page=3")), guestCachePath(page("/?discipline=data")));
-  assert.equal(guestCachePath(page("/?discipline=data&discipline=data")), "/?discipline=data");
+  assert.equal(guestCachePath(page("/roles?nonsense=1")), "/roles");
+  assert.equal(guestCachePath(page("/roles?page=2")), "/roles?page=2", "page 2 is never served page 1");
+  assert.notEqual(guestCachePath(page("/roles?discipline=data&page=3")), guestCachePath(page("/roles?discipline=data")));
+  assert.equal(guestCachePath(page("/roles?discipline=data&discipline=data")), "/roles?discipline=data");
+});
+
+test("the landing page is one key whatever its query, and an old dashboard link on it is rendered, never stored", () => {
+  // The landing page takes no query, so marketing parameters cannot force a render.
+  assert.equal(guestCachePath(page("/?utm_source=x&ref=y")), "/");
+  // An old link to a filtered dashboard redirects to the roles view; a redirect is rendered each time and never stored.
+  assert.equal(guestCachePath(page("/?discipline=data")), null);
+  assert.equal(guestCachePath(page("/?page=2")), null);
 });
 
 test("a hit serves the stored page with the request's own nonce in every place", async () => {
@@ -213,4 +224,14 @@ test("guest questions fail closed without the limits and say which limit refused
   assert.equal(overallBody.limit, GUEST_QUESTIONS_OVERALL);
 
   assert.deepEqual(await guestAgentAllowance(request, { GUEST_AGENT_ADDRESS_LIMIT: allow, GUEST_AGENT_OVERALL_LIMIT: allow }), { allowed: true });
+});
+
+test("a signed-in visit to the front page is sent to the roles view before anything renders", () => {
+  const signedIn = { cookie: "sb-abc-auth-token=token" };
+  assert.equal(frontDoorRedirect(page("/", { headers: signedIn })), "/roles");
+  assert.equal(frontDoorRedirect(page("/?discipline=data&utm_source=x", { headers: signedIn })), "/roles?discipline=data", "an old dashboard link keeps its filters");
+  assert.equal(frontDoorRedirect(page("/")), null, "a guest gets the landing page");
+  assert.equal(frontDoorRedirect(page("/", { headers: { ...signedIn, rsc: "1" } })), null, "a client navigation follows the page's own redirect");
+  assert.equal(frontDoorRedirect(page("/roles", { headers: signedIn })), null);
+  assert.equal(frontDoorRedirect(page("/", { headers: signedIn, method: "POST" })), null);
 });

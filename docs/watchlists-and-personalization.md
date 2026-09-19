@@ -22,25 +22,39 @@ service role to cross user boundaries.
 
 ## The first run
 
-A new account lands on `/welcome`, and the dashboard offers it to any signed-in account that has neither
-finished nor skipped it and follows nothing. It asks four questions, each optional: the kind of role (seven tracks that
-together cover the seventeen disciplines of docs/role-scope.md exactly once), graduation year, target season, and up to
-three places. `apps/web/lib/onboarding.ts` turns the answers into arguments for `onboarding_seed_roles` (migration
-202608140030), which reads the dashboard's in-scope facts:
+The first run lives at `/welcome` and is open to everyone, signed in or not. The landing page's "Get started" opens
+it; a confirmed sign-up lands on it; the roles view offers it to any signed-in account that has neither finished nor
+skipped it and follows nothing. It is one question per screen, every question optional, with "Skip, just browse" on
+every screen:
 
-- A graduation year two or more years out asks for internships and co-ops, next year for those and graduate
-  programs, and this year or earlier for graduate programs. No answer asks for every type.
-- A stated season or place leaves out roles that state a different one. Roles that state none stay, ranked after
-  the matches, because most roles state neither.
-- Roles with a current forecast (two or more cycles and a window that has not ended) come first, then matched places
-  and seasons, then confidence and cycles for current forecasts only. Low-confidence forecasts are not left out. At
-  most two roles per company, and eight in all.
+1. What are you looking for: Internship, New grad (every full-time early-career type: new grad, graduate program,
+   rotational, apprenticeship), or Co-op.
+2. Which fields: ten chips, each exactly one discipline of docs/role-scope.md (SWE, ML/AI, Data, Infra, Security,
+   Hardware, Robotics, Quant, PM, Design). None means every field.
+3. Any companies you are watching: a search over every company with an in-scope role, and the six with the most
+   in-scope roles as suggestions ("most programs tracked").
+4. The payoff, `/welcome?step=ready&…` with the answers in the URL: "Here are N programs to watch".
 
-Nothing is saved until the user reviews the proposal. Finishing (`POST /api/onboarding`) writes
-`recruiting_preferences` and one `canonical_role` follow per chosen in-scope role with the user's own client, so RLS
-applies to every write. It then asks the worker for a readiness plan for the first chosen role with a current forecast
-and lands on that role, stating whether the plan was built, not configured, unreachable, or refused. Skipping stores
-`onboarding_skipped_at`. Settings runs the questions again; that proposes roles to add and removes none.
+`apps/web/lib/onboarding.ts` turns the answers into the roles view's own filters (program types and disciplines), and
+`lib/onboarding-data.ts` reads the payoff through the public reader: N is `dashboard_role_summary` for those filters,
+so it is exactly what the roles view shows for them, and the list is `dashboard_role_page` in its default order
+(forecasts first, soonest window first) at two roles per company, six in all, with the picked companies' matching roles
+first. Companies reorder the list; they never hide every other company. Low-confidence forecasts and roles without a
+forecast are not left out.
+
+A guest's answers stay in the browser's local storage (`lib/guest-onboarding.ts`, key `firstseen:onboarding`); nothing
+about a guest reaches the server. They personalize what the guest browses through the URL ("Keep browsing as guest"
+opens the roles view filtered to them, and the landing page and the roles view offer them back). Choosing "Save these
+and get alerts" marks them to carry over and opens sign-up; the first signed-in visit to `/welcome` then saves them
+without asking again and clears the mark. Another device, or cleared storage, simply has no answers.
+
+Saving (`POST /api/onboarding`, the same call a signed-in visitor's "Watch these" makes) writes
+`recruiting_preferences.target_disciplines` and one `canonical_role` follow per listed in-scope role, plus one `company`
+follow per picked company, with the user's own client, so RLS applies to every write. The program type has no column:
+the follows carry it. Answers an earlier version of the first run stored (graduation year, season, places) are left as
+they are and still shown in settings. It then asks the worker for a readiness plan for the first chosen role with a
+current forecast and lands on that role, stating whether the plan was built, not configured, unreachable, or refused.
+Skipping stores `onboarding_skipped_at`. Settings runs the questions again; that proposes roles to add and removes none.
 
 `target_disciplines` is kept apart from `target_role_families`: role families are the older vocabulary that
 `followed-timeline-ranking-v1` reads, and the first run does not write them.

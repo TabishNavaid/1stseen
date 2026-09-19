@@ -10,10 +10,6 @@ import { Input, Select } from "@/components/ui/input";
 import { Dialog, Popover, Tooltip } from "@/components/ui/overlay";
 import { Chip, EmptyState, LoadingRegion, Skeleton } from "@/components/ui/status";
 import { DateRangeField, Tabs } from "@/components/ui/tabs";
-import { SeedReview } from "@/components/onboarding/seed-review";
-import { WelcomeQuestions } from "@/components/onboarding/welcome-questions";
-import { graduationYears, programTypeSummary, type OnboardingAnswers } from "@/lib/onboarding";
-import type { SeedResult } from "@/lib/onboarding-data";
 
 // Interface examples only. None of this is recruiting data, and the page renders only in development.
 const EXAMPLE_OPTIONS = [
@@ -22,43 +18,6 @@ const EXAMPLE_OPTIONS = [
   { value: "example-c", label: "Example Company C", description: "No role in scope" },
   { value: "example-d", label: "Exemplar Labs", description: "7 roles in scope" },
 ];
-
-// The first-run screens with interface examples, so their keyboard order, labels, and narrow layout can be checked
-// without an account. Example companies only; the real screens read onboarding_seed_roles.
-const EXAMPLE_ANSWERS: OnboardingAnswers = { tracks: ["software"], graduationYear: 2028, season: "summer", places: ["Example City"] };
-const exampleRole = (index: number, overrides: Partial<SeedResult["roles"][number]>): SeedResult["roles"][number] => ({
-  id: `00000000-0000-4000-8000-00000000000${index}`,
-  companyId: `example-${index}`,
-  company: "Example Company A",
-  title: "Software Engineer Intern",
-  discipline: "software_engineering",
-  programType: "internship",
-  season: "summer",
-  location: "unspecified",
-  currentForecast: false,
-  windowStart: null,
-  windowEnd: null,
-  basis: null,
-  confidence: null,
-  cycles: null,
-  exactEvents: 0,
-  boundedEvents: 0,
-  observedEvents: 0,
-  listedNow: false,
-  isFollowed: false,
-  seasonMatched: false,
-  locationMatched: false,
-  ...overrides,
-});
-const EXAMPLE_SEEDS: SeedResult = {
-  matchingRoles: 24,
-  matchingCurrentForecasts: 1,
-  roles: [
-    exampleRole(1, { currentForecast: true, windowStart: "2027-05-01", windowEnd: "2027-08-15", confidence: 58, cycles: 3, exactEvents: 2, boundedEvents: 1, seasonMatched: true }),
-    exampleRole(2, { company: "Exemplar Labs", title: "Platform Engineer Intern", discipline: "infrastructure", exactEvents: 1, observedEvents: 1, location: "example city", locationMatched: true }),
-    exampleRole(3, { company: "Example Company B", title: "Security Engineering Co-op", discipline: "security", programType: "co_op", season: "unknown", isFollowed: true }),
-  ],
-};
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -177,18 +136,6 @@ export function DesignSystemGallery() {
             />
           </div>
         </div>
-      </Section>
-
-      <Section title="First run: the four questions">
-        <WelcomeQuestions answers={EXAMPLE_ANSWERS} years={graduationYears(new Date())} rerun={false} />
-      </Section>
-
-      <Section title="First run: the proposed watchlist">
-        <SeedReview answers={EXAMPLE_ANSWERS} seeds={EXAMPLE_SEEDS} programTypes={programTypeSummary(EXAMPLE_ANSWERS.graduationYear, new Date())} />
-      </Section>
-
-      <Section title="First run: no role fits">
-        <SeedReview answers={EXAMPLE_ANSWERS} seeds={{ roles: [], matchingRoles: 0, matchingCurrentForecasts: 0 }} programTypes={programTypeSummary(EXAMPLE_ANSWERS.graduationYear, new Date())} />
       </Section>
 
       <Section title="Evidence classes and date kinds">

@@ -46,9 +46,9 @@ export function FollowButton({
     return (
       <a
         href={`/signin?mode=sign_up&return_to=${encodeURIComponent(`/roles/${roleId}`)}`}
-        className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch"
+        className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-chip bg-accent px-4 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch"
       >
-        <Icon name="bell" size={13} /><span className="sm:hidden">Sign up to watch</span><span className="hidden sm:inline">Create an account to watch</span>
+        <Icon name="bell" size={13} /><span className="sm:hidden">Watch</span><span className="hidden sm:inline">Watch this role</span>
       </a>
     );
   }

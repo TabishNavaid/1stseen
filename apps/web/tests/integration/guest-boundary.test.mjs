@@ -117,8 +117,9 @@ test("guest mode's boundary against the local rig", async (t) => {
 
     await t.test("a guest page reads only allowlisted relations and columns, with no user", async () => {
       const pages = [
-        "/", "/?watched=1", "/?discipline=quantitative&sort=confidence&page=2", `/roles/${forecastable}`, `/roles/${insufficient}`,
-        "/replay", "/calendar", "/digests", "/settings", "/welcome", "/signin", "/auth/forgot", "/design-system", "/methodology",
+        "/", "/roles", "/roles?watched=1", "/roles?discipline=quantitative&sort=confidence&page=2", "/?discipline=data",
+        `/roles/${forecastable}`, `/roles/${insufficient}`, "/replay", "/calendar", "/digests", "/settings", "/welcome",
+        "/welcome?step=ready&for=internship&field=software_engineering&field=data", "/signin", "/auth/forgot", "/design-system", "/methodology",
       ];
       let total = 0;
       for (const path of pages) {
@@ -128,8 +129,12 @@ test("guest mode's boundary against the local rig", async (t) => {
         total += calls.length;
       }
       const home = await guest("/");
-      assert.match(home.text, /Know when an internship or new-grad program is likely to open/, "the landing section renders for a guest");
-      assert.ok(home.calls.some((call) => call.path === "/rest/v1/rpc/public_agent_activity"));
+      assert.match(home.text, /Know when internships open,/, "the landing page renders for a guest");
+      assert.ok(home.calls.some((call) => call.path === "/rest/v1/rpc/dashboard_role_page"), "its preview and forecasts are read through the public reader");
+      const roles = await guest("/roles");
+      assert.ok(roles.calls.some((call) => call.path === "/rest/v1/rpc/public_agent_activity"));
+      const payoff = await guest("/welcome?step=ready&for=internship&field=software_engineering");
+      assert.match(payoff.text, /programs? to watch|Nothing fits all of that yet/, "a guest reaches the first run's payoff without an account");
       t.diagnostic(`${pages.length} guest pages made ${total} Supabase requests, all inside the allowlist`);
     });
 

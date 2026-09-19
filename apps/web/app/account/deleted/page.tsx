@@ -56,7 +56,7 @@ export default async function AccountDeletedPage({
         </p>
       )}
       <div className="mt-8 flex flex-wrap items-center gap-4">
-        <Link href="/" className="focus-ring inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover max-sm:h-touch">
+        <Link href="/roles" className="focus-ring inline-flex h-10 items-center gap-2 rounded-chip bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-hover max-sm:h-touch">
           <Icon name="arrow-right" size={15} />Browse forecasts without an account
         </Link>
         <Link href={sitePage("privacy").href} className="link-accent focus-ring inline-flex min-h-touch items-center text-sm">How 1stSeen handles data</Link>

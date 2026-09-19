@@ -14,6 +14,7 @@ export function DocumentPage({
   updated,
   contents,
   draft = false,
+  summary,
   children,
 }: {
   eyebrow?: string;
@@ -24,6 +25,8 @@ export function DocumentPage({
   /** When the text last changed in substance, as an ISO date. Shown so a reader can tell whether it moved since they read it. */
   updated?: string;
   contents?: ReadonlyArray<{ id: string; title: string }>;
+  /** A short summary shown under the header, before the contents. */
+  summary?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -37,10 +40,11 @@ export function DocumentPage({
             </p>
           )}
           {eyebrow && <p className="label-caps text-accent-ink">{eyebrow}</p>}
-          <h1 id="document-title" className="mt-2 text-2xl font-semibold tracking-title md:text-3xl">{title}</h1>
+          <h1 id="document-title" className="heading-display mt-2 text-3xl leading-tight md:text-4xl">{title}</h1>
           <div className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted">{lede}</div>
           {updated && <p className="mt-3 text-caption text-ink-subtle">Last updated <time dateTime={updated}>{formatDateWith(updated, { month: "long", day: "numeric", year: "numeric" })}</time></p>}
         </header>
+        {summary}
         {contents && contents.length > 1 && (
           <nav aria-label="On this page" className="border-b border-line py-4">
             <p className="label-caps text-ink-subtle">On this page</p>

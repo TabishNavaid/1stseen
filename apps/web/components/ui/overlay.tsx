@@ -19,12 +19,22 @@ export function Popover({
   children,
   align = "start",
   className,
+  leading,
+  chevron = true,
+  buttonClassName,
+  panelClassName,
 }: {
   label: string;
   summary?: ReactNode;
   children: ReactNode;
   align?: "start" | "end";
   className?: string;
+  /** Drawn before the label, such as a lock on a navigation item a guest cannot use yet. */
+  leading?: ReactNode;
+  chevron?: boolean;
+  /** Replaces the filter-button look, for a popover opened from navigation. */
+  buttonClassName?: string;
+  panelClassName?: string;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -73,11 +83,12 @@ export function Popover({
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((current) => !current)}
-        className="focus-ring inline-flex h-control items-center gap-1.5 rounded-control border border-line-strong bg-surface px-3 text-xs font-semibold text-ink hover:bg-surface-hover max-sm:h-touch"
+        className={buttonClassName ?? "focus-ring inline-flex h-control items-center gap-1.5 rounded-control border border-line-strong bg-surface px-3 text-xs font-semibold text-ink hover:bg-surface-hover max-sm:h-touch"}
       >
+        {leading}
         {label}
         {summary && <span className="font-normal text-ink-subtle">{summary}</span>}
-        <Icon name="chevron-down" size={12} />
+        {chevron && <Icon name="chevron-down" size={12} />}
       </button>
       <div
         ref={panelRef}
@@ -89,6 +100,7 @@ export function Popover({
         className={cn(
           "absolute top-full z-40 mt-1 min-w-56 rounded-overlay border border-line-strong bg-surface p-3 text-ink shadow-popover focus:outline-none",
           align === "end" ? "right-0" : "left-0",
+          panelClassName,
         )}
       >
         {children}

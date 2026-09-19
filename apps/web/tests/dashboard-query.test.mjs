@@ -54,7 +54,7 @@ function role(overrides) {
 
 test("the default view applies no filter and sorts by forecast window", () => {
   assert.deepEqual(parseDashboardFilters({}), defaultDashboardFilters);
-  assert.equal(dashboardHref(defaultDashboardFilters), "/");
+  assert.equal(dashboardHref(defaultDashboardFilters), "/roles", "the roles view lives at /roles; the front page is the landing page");
 });
 
 test("every filter round-trips through the URL, and malformed values are dropped", () => {

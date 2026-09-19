@@ -1,131 +1,133 @@
 /**
- * The first run: four questions, the answers' meaning, and the URL they travel in.
+ * The first run: three questions, what each answer asks the dashboard's read path for, and the URL they travel in.
  *
- * Pure and shared by the pages, the API route, and the tests. The seeding itself is `onboarding_seed_roles`
- * (migration 202608140030), so this file only decides what each answer asks that function for.
+ * Anyone can answer them, signed in or not. A guest's answers stay in the browser (lib/guest-onboarding.ts) and
+ * personalize their view through the URL; they carry into an account when the guest signs up. Nothing here reads data:
+ * the payoff is `dashboard_role_summary` and `dashboard_role_page` for the filters these answers make, through the public
+ * reader, so a first run can never propose a role the dashboard would not list.
+ *
+ * Pure and shared by the pages, the API route, and the tests.
  */
 
-export const TRACK_VALUES = ["software", "machine_learning", "data", "quantitative", "hardware", "engineering", "product"] as const;
-export type TrackValue = (typeof TRACK_VALUES)[number];
+// Relative with its extension, so Node's test runner loads this file directly; Vite resolves it either way.
+import { dashboardHref, defaultDashboardFilters, type DashboardFilters, type Discipline, type ProgramType } from "./dashboard-query.ts";
+import type { PictogramName } from "@/components/ui/pictogram-names";
 
-/** The track question: seven plain choices that together cover the seventeen disciplines of docs/role-scope.md exactly once. */
-export const TRACKS: ReadonlyArray<{ value: TrackValue; label: string; includes: string; disciplines: readonly string[] }> = [
-  { value: "software", label: "Software engineering", includes: "Backend, frontend, mobile, infrastructure, and security", disciplines: ["software_engineering", "infrastructure", "security"] },
-  { value: "machine_learning", label: "Machine learning and AI", includes: "ML engineering, applied science, and research", disciplines: ["machine_learning"] },
-  { value: "data", label: "Data", includes: "Data engineering, data science, and analytics", disciplines: ["data"] },
-  { value: "quantitative", label: "Quantitative", includes: "Quant research, trading, and development", disciplines: ["quantitative"] },
-  { value: "hardware", label: "Hardware and robotics", includes: "Electrical, embedded, FPGA, controls, and autonomy", disciplines: ["hardware", "robotics"] },
-  {
-    value: "engineering",
-    label: "Mechanical, aerospace, and other engineering",
-    includes: "Mechanical, aerospace, manufacturing and process, materials, chemical, civil, and biomedical",
-    disciplines: ["mechanical_engineering", "aerospace_engineering", "manufacturing_engineering", "materials_engineering", "chemical_engineering", "civil_engineering", "biomedical_engineering"],
-  },
-  { value: "product", label: "Product and design", includes: "Product and program management, UX and product design", disciplines: ["product_management", "design"] },
+export type LookingFor = "internship" | "new_grad" | "co_op";
+
+/** Question one. "New grad" covers every full-time early-career program type, as the scope does (docs/role-scope.md). */
+export const LOOKING_FOR: ReadonlyArray<{ value: LookingFor; label: string; hint: string; pictogram: PictogramName; types: readonly ProgramType[] }> = [
+  { value: "internship", label: "Internship", hint: "A summer or term placement while you study", pictogram: "backpack", types: ["internship"] },
+  { value: "new_grad", label: "New grad", hint: "Full-time roles and programs after you graduate", pictogram: "graduation-cap", types: ["new_grad", "graduate_program", "rotational", "apprenticeship"] },
+  { value: "co_op", label: "Co-op", hint: "Paid work terms that alternate with school", pictogram: "repeat", types: ["co_op"] },
 ];
 
-export const SEASON_VALUES = ["summer", "fall", "winter", "spring"] as const;
-export type OnboardingSeason = (typeof SEASON_VALUES)[number];
-export const SEASON_LABELS: Record<OnboardingSeason, string> = { summer: "Summer", fall: "Fall", winter: "Winter", spring: "Spring" };
+export const LOOKING_FOR_VALUES: readonly LookingFor[] = LOOKING_FOR.map((option) => option.value);
 
-export const MAX_PLACES = 3;
-export const MAX_PLACE_LENGTH = 80;
+/** Question two: ten fields, each exactly one scope discipline. */
+export const FIELDS: ReadonlyArray<{ value: Discipline; label: string; name: string; pictogram: PictogramName }> = [
+  { value: "software_engineering", label: "SWE", name: "Software engineering", pictogram: "code-xml" },
+  { value: "machine_learning", label: "ML/AI", name: "Machine learning and AI", pictogram: "brain-circuit" },
+  { value: "data", label: "Data", name: "Data engineering and science", pictogram: "chart-column" },
+  { value: "infrastructure", label: "Infra", name: "Infrastructure and SRE", pictogram: "server" },
+  { value: "security", label: "Security", name: "Security", pictogram: "shield" },
+  { value: "hardware", label: "Hardware", name: "Hardware and embedded", pictogram: "cpu" },
+  { value: "robotics", label: "Robotics", name: "Robotics and controls", pictogram: "bot" },
+  { value: "quantitative", label: "Quant", name: "Quant research, trading, and development", pictogram: "chart-line" },
+  { value: "product_management", label: "PM", name: "Product management", pictogram: "square-kanban" },
+  { value: "design", label: "Design", name: "Design and UX research", pictogram: "palette" },
+];
+
+export type FieldValue = Discipline;
+export const FIELD_VALUES: readonly Discipline[] = FIELDS.map((field) => field.value);
+
+/** Question three: at most this many companies. */
+export const MAX_COMPANIES = 10;
+/** A first run follows at most this many roles. */
 export const MAX_SEED_FOLLOWS = 12;
+/** How many roles the payoff lists: the ones that are followed when the answers are saved. */
+export const PAYOFF_ROLES = 6;
+/** How many of the most-tracked companies step three suggests. */
+export const POPULAR_COMPANIES = 6;
+
+export const ONBOARDING_STEPS = 4;
 
 export type OnboardingAnswers = {
-  tracks: TrackValue[];
-  graduationYear: number | null;
-  season: OnboardingSeason | null;
-  places: string[];
+  lookingFor: LookingFor | null;
+  fields: FieldValue[];
+  companies: string[];
 };
 
-export const emptyAnswers: OnboardingAnswers = { tracks: [], graduationYear: null, season: null, places: [] };
+export const emptyAnswers: OnboardingAnswers = { lookingFor: null, fields: [], companies: [] };
 
 type Params = Record<string, string | string[] | undefined>;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const all = (value: string | string[] | undefined) => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
 const first = (value: string | string[] | undefined) => all(value)[0];
 
-/** The graduation years offered: last year through five years out, plus a stored answer outside that range. */
-export function graduationYears(today: Date, stored: number | null = null): number[] {
-  const year = today.getUTCFullYear();
-  const years = Array.from({ length: 7 }, (_, index) => year - 1 + index);
-  return stored !== null && !years.includes(stored) ? [...years, stored].sort((a, b) => a - b) : years;
+/** Answers from anywhere untrusted (a URL, local storage, a request body): unknown values are dropped, never guessed. */
+export function cleanAnswers(raw: { lookingFor?: unknown; fields?: unknown; companies?: unknown }): OnboardingAnswers {
+  const lookingFor = LOOKING_FOR_VALUES.includes(raw.lookingFor as LookingFor) ? (raw.lookingFor as LookingFor) : null;
+  const wanted = Array.isArray(raw.fields) ? (raw.fields as unknown[]) : [];
+  const fields = FIELD_VALUES.filter((value) => wanted.includes(value));
+  const companies = Array.isArray(raw.companies)
+    ? [...new Set((raw.companies as unknown[]).filter((value): value is string => typeof value === "string" && UUID.test(value)).map((value) => value.toLowerCase()))].slice(0, MAX_COMPANIES)
+    : [];
+  return { lookingFor, fields, companies };
+}
+
+export function parseOnboardingAnswers(params: Params): OnboardingAnswers {
+  return cleanAnswers({ lookingFor: first(params.for), fields: all(params.field), companies: all(params.company) });
+}
+
+export function hasAnyAnswer(answers: OnboardingAnswers): boolean {
+  return answers.lookingFor !== null || answers.fields.length > 0 || answers.companies.length > 0;
+}
+
+/** The first run's URL for these answers; `step: "ready"` is the payoff, a server render of exactly these answers. */
+export function welcomeHref(answers: OnboardingAnswers, step?: "ready"): string {
+  const params = new URLSearchParams();
+  if (step) params.set("step", step);
+  if (answers.lookingFor) params.set("for", answers.lookingFor);
+  for (const field of answers.fields) params.append("field", field);
+  for (const company of answers.companies) params.append("company", company);
+  const query = params.toString();
+  return query ? `/welcome?${query}` : "/welcome";
+}
+
+/** The program types a "looking for" answer covers; none means every type. */
+export function programTypesFor(lookingFor: LookingFor | null): ProgramType[] {
+  return lookingFor ? [...(LOOKING_FOR.find((option) => option.value === lookingFor)?.types ?? [])] : [];
 }
 
 /**
- * Which early-career types a graduation year points at, as `personalization.py` ranks them: two or more years out is
- * internships and co-ops; next year is those and graduate programs, since final-year students recruit for both; this
- * year or earlier is graduate programs. No answer means every type.
+ * The dashboard filters the answers make. Companies are not a filter: someone watching three companies still wants to
+ * see every program that fits, so the payoff lists the watched companies' programs first instead of only theirs.
  */
-export function programTypesFor(graduationYear: number | null, today: Date): string[] {
-  if (graduationYear === null) return [];
-  const year = today.getUTCFullYear();
-  const internships = ["internship", "co_op"];
-  // Apprenticeships are full-time early-career roles, offered alongside graduate programs.
-  const graduate = ["new_grad", "graduate_program", "rotational", "apprenticeship"];
-  if (graduationYear >= year + 2) return internships;
-  if (graduationYear === year + 1) return [...internships, ...graduate];
-  return graduate;
+export function answersToFilters(answers: OnboardingAnswers): DashboardFilters {
+  return { ...defaultDashboardFilters, types: programTypesFor(answers.lookingFor), disciplines: [...answers.fields] };
 }
 
-export function programTypeSummary(graduationYear: number | null, today: Date): string {
-  const types = programTypesFor(graduationYear, today);
-  if (types.length === 0) return "every program type";
-  if (!types.includes("new_grad")) return "internships and co-ops";
-  if (!types.includes("internship")) return "new-grad, graduate, rotational, and apprenticeship programs";
-  return "internships, co-ops, and new-grad programs";
+/** Where "keep browsing" goes: the roles page, filtered to the answers. */
+export function browseHref(answers: OnboardingAnswers): string {
+  return dashboardHref(answersToFilters(answers));
 }
 
-export function disciplinesFor(tracks: readonly TrackValue[]): string[] {
-  return [...new Set(TRACKS.filter((track) => tracks.includes(track.value)).flatMap((track) => track.disciplines))];
-}
-
-/** The tracks a stored discipline list came from: a track counts only when every one of its disciplines is present. */
-export function tracksFromDisciplines(disciplines: readonly string[]): TrackValue[] {
-  return TRACKS.filter((track) => track.disciplines.every((discipline) => disciplines.includes(discipline))).map((track) => track.value);
-}
-
-/** Places typed as "New York, NY or London; Toronto": a comma stays inside a place, "or" and semicolons separate them. */
-export function parsePlaces(text: string | undefined): string[] {
-  if (!text) return [];
-  const seen = new Set<string>();
-  const places: string[] = [];
-  for (const raw of text.split(/;|\n|\s+or\s+/i)) {
-    const place = raw.replace(/\s+/g, " ").trim();
-    const key = place.toLowerCase();
-    if (!place || place.length > MAX_PLACE_LENGTH || !/[a-z0-9]/i.test(place) || seen.has(key)) continue;
-    seen.add(key);
-    places.push(place);
-    if (places.length === MAX_PLACES) break;
-  }
-  return places;
-}
-
-export const placesText = (places: readonly string[]) => places.join(" or ");
-
-export function parseOnboardingAnswers(params: Params): OnboardingAnswers {
-  const tracks = TRACK_VALUES.filter((value) => all(params.track).includes(value));
-  const grad = Number(first(params.grad));
-  const season = first(params.season);
-  return {
-    tracks,
-    // The range recruiting_preferences accepts, so a stored year outside the offered list survives a round trip.
-    graduationYear: Number.isInteger(grad) && grad >= 2000 && grad <= 2100 ? grad : null,
-    season: SEASON_VALUES.includes(season as OnboardingSeason) ? (season as OnboardingSeason) : null,
-    places: parsePlaces(first(params.place)),
-  };
-}
-
-export function welcomeHref(answers: OnboardingAnswers, step?: "review"): string {
-  const params = new URLSearchParams();
-  if (step) params.set("step", step);
-  for (const track of answers.tracks) params.append("track", track);
-  if (answers.graduationYear !== null) params.set("grad", String(answers.graduationYear));
-  if (answers.season) params.set("season", answers.season);
-  if (answers.places.length) params.set("place", placesText(answers.places));
-  const query = params.toString();
-  return query ? `/welcome?${query}` : "/welcome";
+/**
+ * The answers in a few plain words, for the payoff's subtitle: "Internship · SWE, ML/AI · Acme first". Company names
+ * come from the caller, which has the list; without them the companies are counted.
+ */
+export function answersSummary(answers: OnboardingAnswers, companyName: (id: string) => string | undefined = () => undefined): string {
+  const lookingFor = LOOKING_FOR.find((option) => option.value === answers.lookingFor)?.label ?? "Every program type";
+  const fields = answers.fields.length ? FIELDS.filter((field) => answers.fields.includes(field.value)).map((field) => field.label).join(", ") : "every field";
+  const names = answers.companies.map(companyName).filter((name): name is string => Boolean(name));
+  const companies = !answers.companies.length
+    ? ""
+    : names.length === answers.companies.length && names.length <= 2
+      ? ` · ${names.join(" and ")} first`
+      : ` · your ${answers.companies.length} ${answers.companies.length === 1 ? "company" : "companies"} first`;
+  return `${lookingFor} · ${fields}${companies}`;
 }
 
 export type StoredPreferences = {
@@ -135,31 +137,22 @@ export type StoredPreferences = {
   preferred_locations?: readonly string[] | null;
 };
 
+/** What a stored account says about the fields. The program type has no column; the roles followed carry it. */
 export function answersFromPreferences(row: StoredPreferences | null): OnboardingAnswers {
-  if (!row) return emptyAnswers;
-  const season = row.target_recruiting_season;
-  return {
-    tracks: tracksFromDisciplines(row.target_disciplines ?? []),
-    graduationYear: row.graduation_year ?? null,
-    season: SEASON_VALUES.includes(season as OnboardingSeason) ? (season as OnboardingSeason) : null,
-    places: (row.preferred_locations ?? []).slice(0, MAX_PLACES),
-  };
+  return cleanAnswers({ fields: row?.target_disciplines ?? [] });
 }
 
-/** Arguments for `onboarding_seed_roles`; an unanswered question passes null, which matches every role. */
-export function seedRpcArgs(answers: OnboardingAnswers, today: Date) {
-  const disciplines = disciplinesFor(answers.tracks);
-  const types = programTypesFor(answers.graduationYear, today);
-  return {
-    p_disciplines: disciplines.length ? disciplines : null,
-    p_types: types.length ? types : null,
-    p_season: answers.season,
-    p_locations: answers.places.length ? answers.places : null,
-  };
-}
+export const SEASON_LABELS: Record<string, string> = { summer: "Summer", fall: "Fall", winter: "Winter", spring: "Spring", year_round: "Year-round" };
 
-export function hasAnyAnswer(answers: OnboardingAnswers): boolean {
-  return answers.tracks.length > 0 || answers.graduationYear !== null || answers.season !== null || answers.places.length > 0;
+/** Answers an earlier version of the first run asked and this one does not, still shown in settings while stored. */
+export type LegacyPreferences = { graduationYear: number | null; season: string | null; places: string[] };
+
+export function legacyFromPreferences(row: StoredPreferences | null): LegacyPreferences {
+  return {
+    graduationYear: row?.graduation_year ?? null,
+    season: row?.target_recruiting_season && row.target_recruiting_season !== "unknown" ? row.target_recruiting_season : null,
+    places: [...(row?.preferred_locations ?? [])],
+  };
 }
 
 export const PLAN_OUTCOMES = ["ready", "not_configured", "unreachable", "refused", "none"] as const;

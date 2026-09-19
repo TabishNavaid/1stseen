@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { RecruitingCalendar, type CalendarMode } from "@/components/recruiting-calendar";
+import { SiteHeader } from "@/components/site-header";
+import { Badge } from "@/components/ui/badge";
 import { fixtureCalendarEvents } from "@/lib/calendar-data";
 import { fixtureBasis } from "@/lib/demo-data";
 import { hasServiceRoleConfig, loadRealCalendar } from "@/lib/real-data";
@@ -18,6 +20,8 @@ export default async function CalendarPage() {
     const session = await currentSession();
     const data = await loadRealCalendar(session?.userId ?? null);
     return (
+      <>
+      <SiteHeader active="calendar" contentId="calendar-content" />
       <RecruitingCalendar
         mode={data.mode as CalendarMode}
         events={data.events}
@@ -25,14 +29,18 @@ export default async function CalendarPage() {
         watchedRoleCount={data.watchedRoleCount}
         today={new Date().toISOString().slice(0, 10)}
       />
+      </>
     );
   }
   const demo = process.env.FIRSTSEEN_DEMO_MODE === "true";
   return (
+    <>
+    <SiteHeader active="calendar" contentId="calendar-content" status={demo ? <Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge> : undefined} />
     <RecruitingCalendar
       mode={demo ? "demo" : "unconfigured"}
       events={demo ? fixtureCalendarEvents.map((event) => (event.semantics === "predicted" ? { ...event, basis: fixtureBasis(event.roleId) ?? undefined } : event)) : []}
       today={demo ? "2026-08-14" : new Date().toISOString().slice(0, 10)}
     />
+    </>
   );
 }

@@ -4,13 +4,10 @@ import { PROVENANCE_PAGE_SIZE } from "@/lib/role-view";
 import type { DatePrecision, RoleView } from "@/lib/role-view";
 import { AgentInvestigation } from "@/components/agent-investigation";
 import { ConfidenceIndicator } from "@/components/confidence-indicator";
-import { FollowButton } from "@/components/follow-button";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { PrecisionChip } from "@/components/precision-chip";
 import { GenerateReadinessButton } from "@/components/generate-readiness-button";
 import { SourceBadge } from "@/components/source-badge";
-import { Badge } from "@/components/ui/badge";
-import { WorkspaceHeader } from "@/components/workspace-header";
 import { confidenceOutOf, formatConfidence } from "@/lib/confidence";
 import { formatDay, formatStamp } from "@/lib/dates";
 import { BASIS } from "@/lib/forecast-basis";
@@ -68,7 +65,7 @@ function WindowVisualization({ view }: { view: RoleView }) {
   const forecast = view.forecast!;
   return (
     <figure
-      className="border border-line bg-surface-sunken p-4"
+      className="rounded-card border border-line bg-surface-sunken p-4"
       aria-label={`Predicted opening window ${day(forecast.windowStart)} to ${day(forecast.windowEnd)}, expected ${day(forecast.expectedOpening)}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -128,7 +125,7 @@ function InsufficientEvidence({ view }: { view: RoleView }) {
             then, the roles at {view.company} that have a forecast show when the company tends to open.
           </p>
           {view.companyId && (
-            <Link href={`/?company=${view.companyId}`} className="link-accent focus-ring mt-2 inline-flex min-h-touch items-center gap-1 text-xs">
+            <Link href={`/roles?company=${view.companyId}`} className="link-accent focus-ring mt-2 inline-flex min-h-touch items-center gap-1 text-xs">
               See every role at {view.company}<Icon name="arrow-right" size={13} />
             </Link>
           )}
@@ -169,47 +166,39 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
 
   return (
     <div className="flex-1 bg-canvas text-ink">
-      <WorkspaceHeader
-        contentId="role-content"
-        status={fixture
-          ? <Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge>
-          : <Badge className="border-success-line bg-success-surface text-success-ink">Real collected evidence</Badge>}
-        actions={<FollowButton roleId={view.id} followed={view.isFollowed} itemId={view.watchlistItemId} disabled={fixture} />}
-      />
-
-      <main id="role-content" className="mx-auto max-w-[1440px] px-4 py-5 md:px-6 md:py-7">
-        <nav className="mb-5 flex min-w-0 items-center gap-1 text-micro text-ink-subtle" aria-label="Breadcrumb">
-          <Link href="/" className="focus-ring inline-flex min-h-touch items-center hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} />
+      <main id="role-content" className="mx-auto max-w-[1440px] px-4 py-6 md:px-6 md:py-8">
+        <nav className="mb-5 flex min-w-0 items-center gap-1 text-caption text-ink-subtle" aria-label="Breadcrumb">
+          <Link href="/roles" className="focus-ring inline-flex min-h-touch items-center rounded-sm hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} />
           <span className="truncate">{view.company}</span><Icon name="chevron-right" size={11} /><span className="truncate text-ink-muted" aria-current="page">{view.role}</span>
         </nav>
 
         {welcome && (
-          <div role="status" className="mb-5 flex flex-col gap-2 border-l-2 border-accent bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <div role="status" className="mb-5 flex flex-col gap-2 rounded-card border border-accent bg-accent-soft px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
             <p className="text-sm leading-6 text-ink">{PLAN_OUTCOME_MESSAGES[welcome]}</p>
             <div className="flex shrink-0 flex-wrap gap-x-5 text-xs">
               <a href="#readiness" className="link-accent focus-ring inline-flex min-h-touch items-center">Go to the plan</a>
-              <Link href="/?watched=1" className="link-accent focus-ring inline-flex min-h-touch items-center">Open your watchlist</Link>
+              <Link href="/roles?watched=1" className="link-accent focus-ring inline-flex min-h-touch items-center">Open your watchlist</Link>
             </div>
           </div>
         )}
 
-        <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
+        <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
             <p className="label-caps text-ink-subtle">
               {[humanize(view.track), humanize(view.roleFamily), `${humanize(view.recruitingSeason)} season`, locationLabel(view.locationScope)].join(" · ")}
             </p>
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
-            <h1 id="role-title" className="mt-1 text-2xl font-semibold tracking-title sm:text-3xl md:text-4xl">{view.role}</h1>
+            <h1 id="role-title" className="heading-display mt-1 text-3xl leading-tight sm:text-4xl md:text-5xl">{view.role}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4">
               <span className="inline-flex min-h-touch items-center gap-1.5 text-xs font-semibold text-ink-muted"><Icon name="circle-dashed" size={14} />{statusLabel}</span>
               {view.careersUrl && <a href={view.careersUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-xs">Official career page<Icon name="arrow-up-right" size={13} /></a>}
               {livePosting?.applyUrl && <a href={livePosting.applyUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-xs">Open current posting<Icon name="arrow-up-right" size={13} /></a>}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-5 lg:border-l lg:border-line lg:pl-6">
+          <div className="flex flex-wrap items-center gap-5 rounded-card bg-surface-sunken p-4 sm:p-5">
             <div>
               <p className="label-caps text-ink-subtle">Predicted window</p>
-              <p className="mt-1 text-xl font-semibold tracking-title tabular">
+              <p className={forecast ? "mt-1.5 inline-flex rounded-control border border-dashed border-date-predicted-line bg-date-predicted-surface px-2.5 py-1 text-xl font-semibold tabular text-date-predicted-ink" : "mt-1 text-xl font-semibold tracking-title"}>
                 {forecast ? `${day(forecast.windowStart)} – ${day(forecast.windowEnd)}` : "Not forecastable yet"}
               </p>
               <p className="mt-1 text-micro text-ink-subtle">
@@ -221,9 +210,9 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
           </div>
         </section>
 
-        <nav className="sticky top-14 z-20 -mx-4 flex gap-1 overflow-x-auto border-b border-line bg-canvas px-4 md:-mx-6 md:px-6" aria-label="Role intelligence sections">
+        <nav className="sticky top-16 z-20 -mx-4 mt-4 flex gap-1 overflow-x-auto bg-canvas/95 px-4 py-1.5 backdrop-blur md:-mx-6 md:px-6" aria-label="Role intelligence sections">
           {sections.map(([href, label]) => (
-            <a key={href} href={href} className="focus-ring inline-flex min-h-touch shrink-0 items-center px-2 text-caption font-semibold text-ink-muted hover:text-accent-ink">{label}</a>
+            <a key={href} href={href} className="focus-ring inline-flex min-h-touch shrink-0 items-center rounded-chip px-3 text-caption font-semibold text-ink-muted hover:bg-surface hover:text-accent-ink">{label}</a>
           ))}
         </nav>
 
@@ -247,7 +236,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 )}
                 <div className="grid gap-5 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:p-5">
                   <WindowVisualization view={view} />
-                  <dl className="grid grid-cols-2 border-l border-t border-line md:grid-cols-1">
+                  <dl className="grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line md:grid-cols-1">
                     {[
                       ["Expected date", day(forecast.expectedOpening)],
                       ["Confidence score", confidenceOutOf(forecast.confidence, 1)],
@@ -261,9 +250,12 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     ))}
                   </dl>
                 </div>
-                <div className="border-t border-line px-4 py-4 md:px-5">
-                  <h3 className="label-caps text-ink-subtle">Why this confidence</h3>
-                  <dl className="mt-3 grid grid-cols-2 gap-px border border-line bg-line lg:grid-cols-3">
+                <details className="group border-t border-line px-4 py-3 md:px-5">
+                  <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 rounded-control [&::-webkit-details-marker]:hidden">
+                    <h3 className="label-caps text-ink-subtle">Why this confidence</h3>
+                    <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
+                  </summary>
+                  <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line lg:grid-cols-3">
                     {forecast.confidenceFactors.map((factor) => (
                       <div key={factor.label} className="bg-surface p-3">
                         <dt className="text-micro text-ink-subtle">{factor.label}</dt>
@@ -277,7 +269,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     {" "}{view.precisionCounts.exact} exact and {view.precisionCounts.observed_by} observed-by opening date{view.precisionCounts.observed_by === 1 ? "" : "s"}.
                     The score measures how much consistent evidence backs the window, not the chance that it is right.
                   </p>
-                </div>
+                </details>
               </section>
             ) : (
               <InsufficientEvidence view={view} />
@@ -321,7 +313,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               </div>
             </Section>
 
-            <section id="evidence" className="scroll-mt-32 border border-source-official-line bg-surface" aria-labelledby="evidence-title">
+            <section id="evidence" className="scroll-mt-32 overflow-clip rounded-panel border border-source-official-line bg-surface shadow-raised" aria-labelledby="evidence-title">
               <div className="border-b border-line bg-source-official-surface px-4 py-4 md:px-5">
                 <p className="label-caps flex items-center gap-1.5 text-source-official-ink"><Icon name="shield-check" size={12} />Provenance</p>
                 <h2 id="evidence-title" className="mt-1 text-lg font-semibold tracking-title">Exactly what contributed to this forecast</h2>
@@ -334,8 +326,12 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     : "Provenance appears once a forecast exists; contributions are recorded per stored forecast version."}
                 </p>
               ) : (
-                <>
-                <table className="w-full border-b border-line text-caption">
+                <details className="group" open={view.provenancePage > 1}>
+                <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-accent-ink hover:bg-surface-hover md:px-5 [&::-webkit-details-marker]:hidden">
+                  <span>Show all {view.provenanceTotal.toLocaleString("en-US")} {view.provenanceTotal === 1 ? "contribution" : "contributions"} and their weights</span>
+                  <Icon name="chevron-down" size={15} className="transition-transform group-open:rotate-180" />
+                </summary>
+                <table className="w-full border-y border-line text-caption">
                   <caption className="px-4 py-3 text-left text-micro text-ink-subtle md:px-5">
                     What the model weighed, over all {view.provenanceTotal.toLocaleString("en-US")} contributions.
                   </caption>
@@ -403,7 +399,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     ) : <span />}
                   </nav>
                 )}
-                </>
+                </details>
               )}
             </section>
 
@@ -537,8 +533,11 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               </Section>
             )}
 
-            <section id="metadata" className="panel scroll-mt-32 p-4" aria-labelledby="metadata-title">
-              <div className="flex items-center gap-2"><Icon name="database" size={14} className="text-ink-subtle" /><h2 id="metadata-title" className="text-sm font-semibold">Model details</h2></div>
+            <details id="metadata" className="panel group scroll-mt-32 p-4">
+              <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center gap-2 rounded-control [&::-webkit-details-marker]:hidden">
+                <Icon name="database" size={14} className="text-ink-subtle" /><h2 id="metadata-title" className="flex-1 text-sm font-semibold">Model details</h2>
+                <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
+              </summary>
               <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-micro">
                 {[
                   ["Model version", forecast?.modelVersion ?? "none", true],
@@ -559,7 +558,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   </div>
                 ))}
               </dl>
-            </section>
+            </details>
 
             <section className="panel p-4" aria-labelledby="precision-title">
               <div className="flex items-center gap-2"><Icon name="history" size={14} className="text-ink-subtle" /><h2 id="precision-title" className="text-sm font-semibold">Evidence precision</h2></div>

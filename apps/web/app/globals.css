@@ -20,6 +20,8 @@
 @theme inline {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Headings only: a characterful serif beside the sans body (the heading-display utility). */
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
 }
 
 @theme {
@@ -47,6 +49,15 @@
   --color-accent-ink: #235b4b;
   --color-accent-soft: #dcebe4;
   --color-focus: #2e7764;
+
+  /*
+   * The warm accent: highlights and celebration moments, never an evidence class or a status.
+   * warm is a fill that only ever sits behind ink; warm-line marks a boundary; warm-ink is text.
+   */
+  --color-warm: #f28b6b;
+  --color-warm-soft: #fdebe3;
+  --color-warm-line: #d0603c;
+  --color-warm-ink: #a3401f;
 
   /* Workspace navigation, a dark surface */
   --color-nav: #162720;
@@ -140,22 +151,35 @@
   --spacing-gutter: 1rem;
   --spacing-gutter-wide: 1.5rem;
 
-  /* Radii */
-  --radius-control: 0.375rem;
-  --radius-panel: 0;
-  --radius-overlay: 0.5rem;
+  /* Radii: rounded, friendly surfaces */
+  --radius-control: 0.625rem;
+  --radius-panel: 1rem;
+  --radius-card: 1.25rem;
+  --radius-overlay: 1rem;
   --radius-chip: 9999px;
 
-  /* Elevation */
-  --shadow-raised: 0 1px 2px rgb(16 33 27 / 0.06);
+  /* Elevation: soft and low, so a card reads as a card without a heavy frame */
+  --shadow-raised: 0 1px 2px rgb(16 33 27 / 0.05);
+  --shadow-card: 0 1px 2px rgb(16 33 27 / 0.04), 0 6px 20px rgb(16 33 27 / 0.06);
+  --shadow-lift: 0 2px 4px rgb(16 33 27 / 0.05), 0 14px 36px rgb(16 33 27 / 0.1);
   --shadow-popover: 0 1px 2px rgb(16 33 27 / 0.08), 0 8px 24px rgb(16 33 27 / 0.12);
   --shadow-dialog: 0 24px 64px rgb(16 33 27 / 0.24);
 
   --animate-skeleton: skeleton 1.4s ease-in-out infinite;
+  --animate-step-in: step-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-pop: pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
 
   @keyframes skeleton {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.45; }
+  }
+  @keyframes step-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.6); }
+    to { opacity: 1; transform: none; }
   }
 }
 
@@ -178,6 +202,43 @@
   border: 1px solid var(--color-line);
   border-radius: var(--radius-panel);
   background-color: var(--color-surface);
+  box-shadow: var(--shadow-raised);
+  /* Rows inside a rounded panel keep to its corners. */
+  overflow: clip;
+}
+
+/* A product card: rounder than a panel, a soft shadow instead of a heavy frame. */
+@utility card {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* Hover lift for a card that is a link. Motion is dropped under prefers-reduced-motion (see the end of this file). */
+@utility lift {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lift);
+    border-color: var(--color-line-strong);
+  }
+}
+
+/* Display headings: the serif, optically sized and set a little tight. `font-display` alone only sets the family. */
+@utility heading-display {
+  /* The next/font variable itself: an inline theme value is not emitted as a custom property. */
+  font-family: var(--font-fraunces), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-weight: 600;
+  /* Fraunces' soft axis rounds the terminals: friendlier, still a serif. */
+  font-variation-settings: "SOFT" 50;
+  letter-spacing: -0.02em;
+}
+
+/* A step or payoff entering the screen. Under prefers-reduced-motion it appears without moving. */
+@utility step-in {
+  animation: var(--animate-step-in);
 }
 
 /* Sets no color, so a label pairs it with one (label-caps text-ink-subtle) without two utilities competing. */
@@ -321,14 +382,31 @@
   color: var(--color-source-community-ink);
 }
 
+/* The first run's celebration: a short burst from the checkmark. Each piece sets its own direction in custom properties. */
+@keyframes confetti-burst {
+  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--confetti-x)), calc(-50% + var(--confetti-y))) rotate(var(--confetti-r)); opacity: 0; }
+}
+
+@utility confetti-piece {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0.5rem;
+  height: 0.8rem;
+  border-radius: 2px;
+  animation: confetti-burst 1100ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@utility pop-in {
+  animation: var(--animate-pop);
+}
+
 * { box-sizing: border-box; }
 html { background: var(--color-canvas); scroll-behavior: smooth; }
 body {
   margin: 0;
-  background:
-    linear-gradient(rgb(24 34 31 / 0.025) 1px, transparent 1px),
-    var(--color-canvas);
-  background-size: 100% 64px;
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
@@ -343,4 +421,7 @@ button { cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  /* No movement at all: a lifted card stays put, and celebration confetti is not drawn. */
+  .lift:hover { transform: none; }
+  .confetti { display: none; }
 }

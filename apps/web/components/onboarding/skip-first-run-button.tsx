@@ -27,7 +27,7 @@ export function SkipFirstRunButton({ label = "Skip for now" }: { label?: string 
       if (!response.ok) {
         throw new Error(response.status === 401 ? "Your session has ended, so the skip was not saved." : "The skip was not saved.");
       }
-      router.replace(body.redirect ?? "/");
+      router.replace(body.redirect ?? "/roles");
       router.refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The skip was not saved.");
@@ -42,7 +42,7 @@ export function SkipFirstRunButton({ label = "Skip for now" }: { label?: string 
       </Button>
       {error && (
         <p role="alert" className="text-caption text-danger-ink">
-          {error} <Link href="/" className="link-accent focus-ring">Go to the dashboard</Link>
+          {error} <Link href="/roles" className="link-accent focus-ring">Browse roles</Link>
         </p>
       )}
     </div>

@@ -1,7 +1,7 @@
 # Guest access
 
-A signed-out visitor gets a real, read-only 1stSeen: the landing section, the dashboard of every in-scope role, role
-pages with their evidence and provenance, Forecast Replay's candidate list, and the agent. Nothing a guest does writes
+A signed-out visitor gets a real, read-only 1stSeen: the landing page, the roles view of every in-scope role, the
+first run and its payoff, role pages with their evidence and provenance, Forecast Replay's candidate list, and the agent. Nothing a guest does writes
 anything, and nothing user-owned is reachable. This page is the contract.
 
 ## The boundary
@@ -89,15 +89,21 @@ Every guest sees the same dashboard and role pages, so the Worker entry serves t
 
 ## Landing
 
-A signed-out visitor on the dashboard's default view gets a landing section above it (`components/landing-section.tsx`).
-It is the first thing on `/` rather than a separate page, because the public dashboard already lives at `/` and every
-filter link points there. It has four parts:
+`/` is a landing page for a first-time visitor (`components/landing/landing-page.tsx`), never the app. The roles view
+lives at `/roles`, and every filter link points there; an old `/?…` dashboard link redirects to the same view at
+`/roles`, and a signed-in visit to `/` goes to `/roles` from the Worker entry (`cloudflare/front-door.ts`) before
+anything renders. One idea per section:
 
-- **What 1stSeen predicts**, and the three decisions that make it evidence-first.
-- **One real forecast**, chosen by a stated rule: the highest confidence score among in-scope forecasts. It is shown
-  with its interval, evidence classes, and the sources its openings were seen on.
-- **The accuracy position:** the one-sentence statement from the first run, plus the latest backtest's own totals.
-- **Two actions:** create an account, or browse every role.
+- **The promise and two actions:** "Get started" opens the first run; "Just browse" opens the roles view as a guest.
+  Beside them, one real program (`lib/landing-data.ts`), chosen by a stated rule: the highest confidence score among
+  current forecasts resting on two or more of its own cycles, shown with the openings behind it, where each was seen,
+  and its next window. With no such forecast, the role with the most dated openings is shown as its observed history,
+  with the plain reason it has no window.
+- **How it works**, in three plain steps.
+- **Opening soon:** every current forecast, soonest window first, one per company, up to six; "Next to open" when the
+  first window is more than 90 days away. Hidden when there is none.
+- **Trust in one line:** every date links to where it was seen, and a link to the methodology page, which carries the
+  evidence model's three rules and the accuracy position.
 
 ## Tests
 

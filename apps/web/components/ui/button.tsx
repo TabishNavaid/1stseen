@@ -3,16 +3,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-chip text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-accent text-white hover:bg-accent-hover",
+        default: "bg-accent text-ink-inverse hover:bg-accent-hover",
         outline: "border border-line-strong bg-surface text-ink hover:bg-surface-hover",
         ghost: "text-ink-muted hover:bg-surface-hover hover:text-ink",
       },
       // Below sm every size meets the 44px touch target.
-      size: { default: "h-10 px-4 max-sm:h-touch", sm: "h-8 px-3 text-xs max-sm:h-touch", icon: "h-9 w-9 max-sm:size-touch" },
+      size: { default: "h-10 px-5 max-sm:h-touch", sm: "h-9 px-3.5 text-xs max-sm:h-touch", icon: "h-9 w-9 max-sm:size-touch" },
     },
     defaultVariants: { variant: "default", size: "default" },
   },

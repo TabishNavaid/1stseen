@@ -131,7 +131,8 @@ investigation, and readiness-plan generation all call it.
 npm run dev
 ```
 
-Open <http://localhost:3000>. The header badge reads **Real data**.
+Open <http://localhost:3000>. A first visit shows the landing page; <http://localhost:3000/roles> lists every in-scope
+role from the rig's data.
 
 ## 7. Check the whole rig
 

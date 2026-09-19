@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { FollowButton } from "@/components/follow-button";
 import { RoleIntelligencePage } from "@/components/role-intelligence-page";
+import { SiteHeader } from "@/components/site-header";
+import { Badge } from "@/components/ui/badge";
 import { fixtureRoleViews } from "@/lib/demo-data";
 import { parsePlanOutcome } from "@/lib/onboarding";
 import { hasServiceRoleConfig, loadRealRoleIdentity, loadRealRoleView } from "@/lib/real-data";
@@ -66,5 +69,15 @@ export default async function RolePage({
   // Where the first run lands: only a signed-in user who follows this role is told their watchlist is set.
   const outcome = parsePlanOutcome(query.welcome);
   const welcome = outcome && outcome !== "none" && view.isFollowed === true ? outcome : null;
-  return <RoleIntelligencePage view={view} welcome={welcome} />;
+  const fixture = view.origin === "fixture";
+  return (
+    <>
+      <SiteHeader
+        contentId="role-content"
+        status={fixture ? <Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge> : undefined}
+        actions={<FollowButton roleId={view.id} followed={view.isFollowed} itemId={view.watchlistItemId} disabled={fixture} />}
+      />
+      <RoleIntelligencePage view={view} welcome={welcome} />
+    </>
+  );
 }

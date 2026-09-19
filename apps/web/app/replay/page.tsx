@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ForecastReplay } from "@/components/forecast-replay";
+import { SiteHeader } from "@/components/site-header";
 import { loadReplayCandidates } from "@/lib/real-data";
 import { parseReplayFilters, replayHref } from "@/lib/replay-query";
 
@@ -21,5 +22,10 @@ export default async function ReplayPage({
   const filters = parseReplayFilters(await searchParams);
   const data = await loadReplayCandidates(filters);
   // Keyed by the URL so the selected target and cutoff reset with each page or filter.
-  return <ForecastReplay key={replayHref(filters)} data={data} />;
+  return (
+    <>
+      <SiteHeader active="replay" contentId="replay-content" />
+      <ForecastReplay key={replayHref(filters)} data={data} />
+    </>
+  );
 }

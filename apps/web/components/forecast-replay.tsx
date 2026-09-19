@@ -10,9 +10,7 @@ import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { forecastBasis } from "@/lib/forecast-basis";
 import { PrecisionChip } from "@/components/precision-chip";
 import { SourceBadge } from "@/components/source-badge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { WorkspaceHeader } from "@/components/workspace-header";
 import type { ReplayCandidate, ReplayCandidateData } from "@/lib/real-data";
 import { REPLAY_OUTCOMES, REPLAY_PAGE_SIZE, replayHref, replayOutcomeLabel } from "@/lib/replay-query";
 import { formatDay as day } from "@/lib/dates";
@@ -123,10 +121,9 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
 
   return (
     <div className="flex-1 bg-canvas text-ink">
-      <WorkspaceHeader contentId="replay-content" status={<Badge className="border-success-line bg-success-surface text-success-ink">Real backtest path</Badge>} />
 
       <main id="replay-content" className="mx-auto max-w-[1440px] px-4 py-6 md:px-6 md:py-8">
-        <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end"><div><p className="flex items-center gap-2 label-caps text-accent-ink"><Icon name="history" size={13} />Historical model audit</p><h1 className="mt-3 text-3xl font-semibold tracking-title md:text-4xl">Forecast Replay</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted">Return to a historical cutoff and reconstruct what 1stSeen could have predicted—using only evidence the system actually knew by then. Every run is computed by the worker&rsquo;s leak-safe backtest when you ask for it.</p></div><div className="flex items-start gap-3 border-l-2 border-success-line bg-success-surface px-4 py-3"><Icon name="lock-keyhole" size={16} className="mt-0.5 shrink-0 text-success-ink" /><div><p className="text-xs font-semibold">Future evidence is sealed</p><p className="mt-1 text-micro leading-4 text-ink-muted">The held-out opening and every post-cutoff observation are scoring data only. They cannot enter the forecasting component.</p></div></div></section>
+        <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end"><div><p className="flex items-center gap-2 label-caps text-accent-ink"><Icon name="history" size={13} />Historical model audit</p><h1 className="heading-display mt-3 text-3xl md:text-4xl">Forecast Replay</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-ink-muted">Return to a historical cutoff and reconstruct what 1stSeen could have predicted—using only evidence the system actually knew by then. Every run is computed by the worker&rsquo;s leak-safe backtest when you ask for it.</p></div><div className="flex items-start gap-3 border-l-2 border-success-line bg-success-surface px-4 py-3"><Icon name="lock-keyhole" size={16} className="mt-0.5 shrink-0 text-success-ink" /><div><p className="text-xs font-semibold">Future evidence is sealed</p><p className="mt-1 text-micro leading-4 text-ink-muted">The held-out opening and every post-cutoff observation are scoring data only. They cannot enter the forecasting component.</p></div></div></section>
 
         {mode === "unconfigured" && (
           <section className="mt-6 border border-danger-line bg-danger-surface p-5"><h2 className="text-sm font-semibold text-danger-ink">Live data is not configured</h2><p className="mt-1.5 text-caption leading-5 text-danger-ink">Replay reads real reconstructed openings. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.</p></section>

@@ -190,7 +190,11 @@ test("authentication flows against the local rig", async (t) => {
         assert.match(line, /;\s*Path=\//i);
       }
 
-      const dashboard = await call("/", { method: "GET", jar });
+      // A signed-in visit to the front page goes straight to the roles view.
+      const front = await call("/", { method: "GET", jar });
+      assert.ok(front.response.status >= 300 && front.response.status < 400, "a signed-in / redirects");
+      assert.match(front.response.headers.get("location") ?? "", /\/roles$/);
+      const dashboard = await call("/roles", { method: "GET", jar });
       // React's server render separates the text and the interpolated address with <!-- -->.
       const escaped = newEmail.replace(/[.+]/g, "\\$&");
       const dashboardHtml = await dashboard.text();

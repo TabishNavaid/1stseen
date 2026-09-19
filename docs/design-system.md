@@ -24,8 +24,11 @@ a hex value. New surfaces use tokens only; an arbitrary `[#hex]` value in new co
 | Confidence | `confidence-strong`, `confidence-moderate`, `confidence-limited`, `confidence-track` | The ring around forecasting.py's number |
 | Type | `text-micro` (10px), `text-caption` (11px), then Tailwind's `xs` and up; `tracking-label`, `tracking-title` | Dense evidence tables, labels, titles |
 | Spacing | `control` (36px), `control-sm` (32px), `touch` (44px), `gutter`, `gutter-wide` | `h-control`, `min-h-touch`, `size-touch`, `p-gutter` |
-| Radii | `rounded-control`, `rounded-panel`, `rounded-overlay`, `rounded-chip` | Controls, panels, popovers and dialogs, chips |
-| Elevation | `shadow-raised`, `shadow-popover`, `shadow-dialog` | Floating layers only |
+| Warm accent | `warm`, `warm-soft`, `warm-line`, `warm-ink` | Highlights and celebration moments only; never an evidence class or a status. `warm` is a fill that only sits behind `ink` |
+| Radii | `rounded-control` (10px), `rounded-panel` (16px), `rounded-card` (20px), `rounded-overlay`, `rounded-chip` | Controls, panels, cards, popovers and dialogs, chips and pill buttons |
+| Elevation | `shadow-raised`, `shadow-card`, `shadow-lift`, `shadow-popover`, `shadow-dialog` | Panels, cards, a hovered card, floating layers |
+| Display type | `heading-display` | Page and section headings in Fraunces (self-hosted by `next/font`); body text stays Geist |
+| Motion | `lift`, `step-in`, `pop-in`, `confetti-piece` | A hovered card, a first-run step entering, the payoff's checkmark and burst. All stop under `prefers-reduced-motion`, and the burst is not drawn at all |
 
 ### Contrast
 
@@ -68,6 +71,12 @@ To add an icon, add its lucide-react export name to `scripts/build-icon-sprite.m
 sprite and `components/ui/icon-names.ts`. `icon-sprite.test.mjs` fails if either is stale, and ESLint forbids importing
 `lucide-react` in `app`, `components`, or `lib`. Icons are decorative by default; pass `label` only when the icon alone
 carries meaning.
+
+The landing page and the first run draw a few larger pictograms (field chips, program types, the how-it-works steps)
+from a second sprite, `apps/web/public/pictograms.svg`, with `<Pictogram name="code-xml" />`
+(`components/ui/pictogram.tsx`). It is built the same way by `apps/web/tools/build-pictograms.mjs` and checked by
+`pictogram-sprite.test.mjs`. Illustrations are a handful of self-hosted Open Doodles SVGs in
+`apps/web/public/illustrations`, recoloured to the palette; `docs/credits.md` records their source and license.
 
 ## Primitives
 
@@ -118,9 +127,10 @@ Every product surface now uses tokens only: no `[#hex]` class or inline hex colo
 
 | Frame | File | Used by |
 | --- | --- | --- |
-| Workspace sidebar | `forecast-dashboard.tsx` | The dashboard |
-| Workspace header | `workspace-header.tsx` | Role pages, calendar, replay, digests: back to Intelligence, the mark, a status badge hidden on a phone, the page's action |
-| Focused shell | `focused-shell.tsx` | Single-purpose flows: first run, settings, sign-in, confirmation, password reset |
+| Site header | `site-header.tsx`, `site-header-bar.tsx` | Every app page (roles, a role, calendar, replay, digests): the mark, the navigation from `lib/site-nav.ts`, the page's action, the account. A guest sees account-only items locked, each with its one-line reason in a popover (and inline in the phone menu) |
+| Landing page | `landing/landing-page.tsx` | `/` for a first-time visitor: its own light header, no app navigation |
+| First run | `onboarding/onboarding-flow.tsx` | `/welcome`: full screen, progress dots, a sticky action bar, "Skip, just browse" on every step |
+| Focused shell | `focused-shell.tsx` | Single-purpose pages: settings, sign-in, confirmation, password reset |
 | Document page | `document-page.tsx` | Pages that are read rather than used: methodology and accuracy, terms, privacy, data sources, contact |
 | Site footer | `site-footer.tsx` | Every page, from the root layout: the one product-wide disclosure and the links in `lib/site-links.ts` |
 

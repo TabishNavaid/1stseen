@@ -14,6 +14,15 @@ import type { ForecastRole } from "@firstseen/shared";
 
 export const DASHBOARD_PAGE_SIZE = 20;
 
+/** Where the roles view lives. The site's front page is the landing page for guests. */
+export const DASHBOARD_PATH = "/roles";
+
+/** Every query parameter the roles view reads: its filters, sort, and page, and the first run's landing note. */
+export const DASHBOARD_PARAMS: readonly string[] = [
+  "q", "discipline", "company", "type", "season", "year", "window", "confidence", "cycles", "precision", "location", "listed",
+  "watched", "sort", "page", "welcome",
+];
+
 /** At most this many roles per company before the next company appears, unless the view is one company's. */
 export const ROLES_PER_COMPANY = 3;
 
@@ -74,7 +83,7 @@ export const PRECISIONS = [
 ] as const;
 
 export const SORTS = [
-  ["window", "Soonest forecast window"],
+  ["window", "Soonest window"],
   ["confidence", "Highest confidence"],
   ["evidence", "Strongest evidence"],
   ["company", "Company"],
@@ -243,7 +252,7 @@ export function dashboardHref(filters: DashboardFilters, changes: Partial<Dashbo
   if (next.sort !== "window") params.set("sort", next.sort);
   if (next.page > 1) params.set("page", String(next.page));
   const query = params.toString();
-  return query ? `/?${query}` : "/";
+  return query ? `${DASHBOARD_PATH}?${query}` : DASHBOARD_PATH;
 }
 
 /** Zero lists every role: one company's view gathers everything for that employer. */

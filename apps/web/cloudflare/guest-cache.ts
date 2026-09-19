@@ -1,7 +1,7 @@
 /**
  * The edge cache for guest pages.
  *
- * Every signed-out visitor sees identical content on the dashboard (which carries the landing section) and on role
+ * Every signed-out visitor sees identical content on the landing page, the roles view, the methodology page, and role
  * pages, so those documents are rendered once and served from the Cloudflare Cache API until what they show changes.
  *
  * - Only a whole-document GET with no Supabase session cookie is cached. A signed-in request, an RSC navigation, and
@@ -10,8 +10,9 @@
  *   guest page reads advances that version, so a forecast regeneration or a collection run purges every guest page
  *   everywhere at once, with no purge API call. A five-minute TTL bounds anything the version does not track, such as
  *   the agent activity panel.
- * - The dashboard's query is canonicalised: unknown parameters are dropped and known ones are put in one order, so a
- *   random query string cannot force a render.
+ * - The roles view's query is canonicalised: unknown parameters are dropped and known ones are put in one order, so a
+ *   random query string cannot force a render. The landing page takes no query: any query on `/` is one path, except an
+ *   old dashboard link, which the page redirects to the roles view and which is therefore rendered, never stored.
  * - A rendered page carries its CSP nonce in 37 places. The stored copy records the nonce it was rendered with, and a
  *   hit swaps in the request's fresh nonce, so a cached page never reuses a nonce across visitors.
  * - Only a 200 HTML response with no Set-Cookie is stored.
@@ -20,7 +21,7 @@
  */
 
 // The explicit extension lets Node's test runner load this file directly; Vite resolves it either way.
-import { dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
+import { DASHBOARD_PARAMS, DASHBOARD_PATH, dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
 
 export const CACHE_STATUS_HEADER = "x-firstseen-cache";
 export const STORED_NONCE_HEADER = "x-firstseen-stored-nonce";
@@ -52,6 +53,11 @@ export function guestCachePath(request: Request): string | null {
   if (request.headers.has("rsc") || url.searchParams.has("_rsc")) return null;
   if (!(request.headers.get("accept") ?? "").includes("text/html")) return null;
   if (url.pathname === "/") {
+    // A signed-out visit to the front page is the landing page, whatever else the query holds; an old dashboard link
+    // redirects to the roles view, and a redirect is never stored.
+    return [...url.searchParams.keys()].some((key) => DASHBOARD_PARAMS.includes(key)) ? null : "/";
+  }
+  if (url.pathname === DASHBOARD_PATH) {
     const params: Record<string, string | string[]> = {};
     for (const [key, value] of url.searchParams) {
       const existing = params[key];

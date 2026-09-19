@@ -43,7 +43,7 @@ export function AgentActivity({
     : activity?.evidenceCount ?? 0;
   const forecastReady = demo ? true : Boolean(activity?.forecastReady);
 
-  return <section className="border border-line bg-surface" aria-labelledby="agent-activity-title">
+  return <section className="panel" aria-labelledby="agent-activity-title">
     <div className="flex items-center justify-between border-b border-line bg-surface-selected px-4 py-3"><div className="flex items-center gap-2"><Icon name="cpu" size={15} className="text-accent-ink" /><div><p className="label-caps text-accent-ink">Latest investigation</p><h2 id="agent-activity-title" className="mt-0.5 text-xs font-semibold">RecruitingAgent activity</h2></div></div><span className="flex items-center gap-1 text-micro text-ink-subtle"><Icon name="shield-check" size={12} />observable only</span></div>
     {rows.length === 0 ? (
       <p className="p-5 text-caption leading-5 text-ink-subtle">

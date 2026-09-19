@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { EmailDigestPage } from "@/components/email-digest-page";
+import { SiteHeader } from "@/components/site-header";
+import { Badge } from "@/components/ui/badge";
 import { loadDigestSourceData } from "@/lib/email-digests/data";
 import { buildEmailDigest, type EmailDigest } from "@/lib/email-digests/digest";
 import { digestFixtureSource } from "@/lib/email-digests/fixture";
@@ -24,7 +26,7 @@ export const dynamic = "force-dynamic";
 export default async function DigestsPage() {
   if (hasServiceRoleConfig()) {
     const session = await currentSession();
-    if (!session) return <EmailDigestPage mode="signed_out" initialDigest={null} />;
+    if (!session) return <><SiteHeader active="digests" contentId="digest-content" /><EmailDigestPage mode="signed_out" initialDigest={null} /></>;
     let digest: EmailDigest | null = null;
     let error: string | null = null;
     try {
@@ -32,10 +34,10 @@ export default async function DigestsPage() {
     } catch (reason) {
       error = reason instanceof Error ? reason.message : "digest_preview_failed";
     }
-    return <EmailDigestPage mode="real" initialDigest={digest} loadError={error} />;
+    return <><SiteHeader active="digests" contentId="digest-content" /><EmailDigestPage mode="real" initialDigest={digest} loadError={error} /></>;
   }
   if (process.env.FIRSTSEEN_DEMO_MODE === "true") {
-    return <EmailDigestPage mode="demo" initialDigest={await buildEmailDigest(digestFixtureSource)} />;
+    return <><SiteHeader active="digests" contentId="digest-content" status={<Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge>} /><EmailDigestPage mode="demo" initialDigest={await buildEmailDigest(digestFixtureSource)} /></>;
   }
-  return <EmailDigestPage mode="unconfigured" initialDigest={null} />;
+  return <><SiteHeader active="digests" contentId="digest-content" /><EmailDigestPage mode="unconfigured" initialDigest={null} /></>;
 }

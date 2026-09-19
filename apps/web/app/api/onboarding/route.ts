@@ -2,12 +2,10 @@ import { z } from "zod";
 import { json, readJson, sameOrigin } from "@/lib/auth/route-helpers";
 import { hasSupabaseConfig } from "@/lib/config";
 import {
-  MAX_PLACE_LENGTH,
-  MAX_PLACES,
+  FIELD_VALUES,
+  LOOKING_FOR_VALUES,
+  MAX_COMPANIES,
   MAX_SEED_FOLLOWS,
-  SEASON_VALUES,
-  TRACK_VALUES,
-  disciplinesFor,
   planOutcome,
 } from "@/lib/onboarding";
 import { requestReadinessPlan } from "@/lib/readiness-plan";
@@ -18,10 +16,9 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 
 const answersSchema = z.object({
-  tracks: z.array(z.enum(TRACK_VALUES)).max(TRACK_VALUES.length),
-  graduation_year: z.number().int().min(2000).max(2100).nullable(),
-  season: z.enum(SEASON_VALUES).nullable(),
-  places: z.array(z.string().trim().min(1).max(MAX_PLACE_LENGTH)).max(MAX_PLACES),
+  looking_for: z.enum(LOOKING_FOR_VALUES as [string, ...string[]]).nullable(),
+  fields: z.array(z.enum(FIELD_VALUES as [string, ...string[]])).max(FIELD_VALUES.length),
+  companies: z.array(z.string().uuid()).max(MAX_COMPANIES),
 }).strict();
 
 const requestSchema = z.discriminatedUnion("action", [
@@ -40,8 +37,12 @@ type FactRow = { role_id: string; forecastable: boolean; window_end: string | nu
  *
  * The user is the Supabase session and nothing else. Preferences and follows are written with the user's own client,
  * so the table's RLS policies apply to every write. The service role is used only to read which of the chosen roles
- * are in scope and have a current forecast. Finishing asks the worker for a readiness plan on the first chosen role
- * with a current forecast and says where to land; a plan that cannot be built is reported, never faked.
+ * are in scope and have a current forecast, and which chosen companies exist. Finishing follows the chosen roles and
+ * companies, asks the worker for a readiness plan on the first chosen role with a current forecast, and says where to
+ * land; a plan that cannot be built is reported, never faked. A guest's answers arrive here the same way, after sign-up.
+ *
+ * Only the fields are stored as preferences: the program type has no column, and the roles followed carry it. Answers
+ * an earlier first run stored (graduation year, season, places) are left as they are.
  */
 export async function POST(request: Request) {
   if (!hasSupabaseConfig() || !hasServiceRoleConfig()) return json({ error: "supabase_unavailable" }, 503);
@@ -59,17 +60,14 @@ export async function POST(request: Request) {
       .from("recruiting_preferences")
       .upsert({ user_id: userId, onboarding_skipped_at: now.toISOString() }, { onConflict: "user_id" });
     if (skipped.error) return json({ error: "onboarding_save_failed" }, 500);
-    return json({ status: "skipped", redirect: "/" });
+    return json({ status: "skipped", redirect: "/roles" });
   }
 
   const { answers } = parsed.data;
   const saved = await supabase.from("recruiting_preferences").upsert(
     {
       user_id: userId,
-      target_disciplines: disciplinesFor(answers.tracks),
-      graduation_year: answers.graduation_year,
-      target_recruiting_season: answers.season,
-      preferred_locations: answers.places,
+      target_disciplines: answers.fields,
       onboarding_completed_at: now.toISOString(),
       onboarding_skipped_at: null,
     },
@@ -77,8 +75,34 @@ export async function POST(request: Request) {
   );
   if (saved.error) return json({ error: "onboarding_save_failed" }, 500);
 
+  const companies = [...new Set(answers.companies.map((id) => id.toLowerCase()))];
+  if (companies.length) {
+    // bounded: at most MAX_COMPANIES (10) rows by primary key, from the request schema.
+    const known = await createAdminClient().from("companies").select("id").in("id", companies);
+    if (known.error) return json({ error: "company_lookup_failed" }, 500);
+    const existing = new Set((known.data as { id: string }[]).map((row) => row.id));
+    // bounded: at most MAX_COMPANIES (10) rows, filtered to the requested companies.
+    const followed = await supabase
+      .from("watchlist_items")
+      .select("company_id")
+      .eq("user_id", userId)
+      .eq("target_type", "company")
+      .in("company_id", companies);
+    if (followed.error) return json({ error: "follow_failed" }, 500);
+    const already = new Set((followed.data as { company_id: string }[]).map((row) => row.company_id));
+    const fresh = companies.filter((id) => existing.has(id) && !already.has(id));
+    if (fresh.length) {
+      const inserted = await supabase
+        .from("watchlist_items")
+        .insert(fresh.map((id) => ({ user_id: userId, target_type: "company", company_id: id, alerts_enabled: true })));
+      if (inserted.error) return json({ error: "follow_failed" }, 500);
+    }
+  }
+
   const requested = [...new Set(parsed.data.role_ids)];
-  if (requested.length === 0) return json({ status: "completed", watching: 0, plan: null, redirect: "/" });
+  if (requested.length === 0) {
+    return json({ status: "completed", watching: 0, plan: null, redirect: companies.length ? "/roles?watched=1" : "/roles" });
+  }
 
   // bounded: filtered to the requested ids, at most MAX_SEED_FOLLOWS (12) by the request schema.
   const facts = await createAdminClient()
@@ -114,7 +138,7 @@ export async function POST(request: Request) {
     return fact.forecastable && fact.window_end !== null && fact.window_end >= today;
   });
   if (!landing) {
-    return json({ status: "completed", watching: chosen.length, plan: null, redirect: "/?watched=1&welcome=none" });
+    return json({ status: "completed", watching: chosen.length, plan: null, redirect: "/roles?watched=1&welcome=none" });
   }
   const plan = planOutcome((await requestReadinessPlan(userId, landing)).status);
   return json({ status: "completed", watching: chosen.length, plan, redirect: `/roles/${landing}?welcome=${plan}` });

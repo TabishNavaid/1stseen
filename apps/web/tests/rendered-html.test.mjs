@@ -21,13 +21,13 @@ async function render(pathname = "/", { demo = true } = {}) {
   }
 }
 
-test("server-renders the 1stSeen forecast product", async () => {
-  const response = await render();
+test("server-renders the 1stSeen forecast product at /roles", async () => {
+  const response = await render("/roles");
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /<title>Forecasts · 1stSeen<\/title>/i);
-  assert.match(html, /Recruiting intelligence/);
+  assert.match(html, /Explore roles/);
   assert.match(html, /Roles and forecasts/);
   assert.match(html, /Development fixture/);
   assert.match(html, /Why this confidence/i);
@@ -156,7 +156,7 @@ test("renders an explicit preview-only email intelligence digest", async () => {
 });
 
 test("renders evidence and preparation language", async () => {
-  const html = await (await render()).text();
+  const html = await (await render("/roles")).text();
   assert.match(html, /Forecast evidence/);
   assert.match(html, /Work-back plan/);
   assert.match(html, /Roles that opened/);
@@ -166,7 +166,7 @@ test("renders evidence and preparation language", async () => {
 });
 
 test("labels fixture provenance and derives visible portfolio counts", async () => {
-  const html = await (await render()).text();
+  const html = await (await render("/roles")).text();
   assert.match(html, />2<\/strong><span[^>]*>of <!-- -->3 forecasts<!-- --> in this view/);
   // The default view states the whole in-scope set, not only the forecasts.
   assert.match(html, /in-scope roles: /);
@@ -175,7 +175,7 @@ test("labels fixture provenance and derives visible portfolio counts", async () 
 });
 
 test("the dashboard shows an unconfigured workspace, not fixtures, without an opt-in", async () => {
-  const html = await (await render("/", { demo: false })).text();
+  const html = await (await render("/roles", { demo: false })).text();
   assert.match(html, /Not configured/);
   assert.match(html, /Live data is not configured/);
   assert.doesNotMatch(html, /Northstar|Meridian|Atlas/);
@@ -188,7 +188,7 @@ function visible(html) {
 }
 
 test("every page says the product-wide disclosure once, in its footer, linked to methodology and the policy pages", async () => {
-  for (const path of ["/", "/roles/northstar-swe-intern", "/roles/meridian-apm", "/calendar", "/replay", "/digests", "/signin", "/methodology"]) {
+  for (const path of ["/", "/roles", "/roles/northstar-swe-intern", "/roles/meridian-apm", "/calendar", "/replay", "/digests", "/signin", "/welcome", "/methodology"]) {
     const html = visible(await (await render(path)).text());
     // The page body streams after the layout, so the site footer is found by its text, not by position.
     const at = html.indexOf("Opening dates on 1stSeen");
@@ -243,18 +243,18 @@ const REMOVED_HEDGES = [
 ];
 
 test("no surface repeats the product-wide disclosure; only the methodology page explains it", async () => {
-  for (const path of ["/", "/roles/northstar-swe-intern", "/roles/meridian-apm", "/calendar", "/replay", "/digests"]) {
+  for (const path of ["/", "/roles", "/roles/northstar-swe-intern", "/roles/meridian-apm", "/calendar", "/replay", "/digests"]) {
     const html = visible(await (await render(path)).text());
     for (const hedge of REMOVED_HEDGES) assert.doesNotMatch(html, hedge, `${path}: ${hedge}`);
   }
-  const unconfigured = visible(await (await render("/", { demo: false })).text());
+  const unconfigured = visible(await (await render("/roles", { demo: false })).text());
   for (const hedge of REMOVED_HEDGES) assert.doesNotMatch(unconfigured, hedge, `unconfigured: ${hedge}`);
 });
 
 // Every forecast says what its window rests on, the program's own openings or comparable programs' timing, as
 // data beside the evidence classes (lib/forecast-basis). Fixtures carry labelled fixture weights so both bases render.
 test("a forecast shows its basis wherever it appears", async () => {
-  const dashboard = visible(await (await render("/")).text());
+  const dashboard = visible(await (await render("/roles")).text());
   assert.match(dashboard, /Own history 74%/, "the dashboard card of a forecast resting on its own openings");
   assert.match(dashboard, /Borrowed timing 58%/, "and of one borrowing comparable programs' timing");
   assert.match(dashboard, /of the weight from comparable programs/, "the chip says what its share is of, to a screen reader");
@@ -271,4 +271,79 @@ test("a forecast shows its basis wherever it appears", async () => {
 
   const insufficient = visible(await (await render("/roles/meridian-apm")).text());
   assert.doesNotMatch(insufficient, /Own history \d+%|Borrowed timing \d+%/, "a role with no forecast has no basis");
+});
+
+// The front door is a landing page, never the app: one idea per section, plain words, nothing that reads as broken.
+test("a first-time visitor lands on the landing page, not the app shell", async () => {
+  const response = await render("/");
+  assert.equal(response.status, 200);
+  const html = visible(await response.text());
+  assert.match(html, /Know when internships open,/);
+  assert.match(html, /href="\/welcome"[^>]*>Get started/);
+  assert.match(html, /href="\/roles"[^>]*>\s*Just browse/);
+  assert.match(html, /How it works/);
+  assert.match(html, /Every date links to where we saw it\./);
+  assert.match(html, /href="\/methodology"/);
+  // No dashboard: no workspace navigation, no watchlist count, no stat tile, no debug-looking status pill.
+  assert.doesNotMatch(html, /Recruiting workspace|Watchlist|Watched roles|Recruiting calendar/);
+  assert.doesNotMatch(html, /data-stat-tile/);
+  assert.doesNotMatch(html, />Real data</);
+  // The evidence model's vocabulary lives on the methodology page, not on the front door.
+  assert.doesNotMatch(html, /corpus|hindsight|Observed by|Bounded|Exact\b/);
+  // With no data behind it the preview card and "Opening soon" are left out rather than drawn empty or from fixtures.
+  assert.doesNotMatch(html, /A real program we track|Opening soon|Next to open/);
+  assert.doesNotMatch(html, /Northstar|Meridian|Atlas|\.example/);
+  assert.match(html, /\/illustrations\/sprinting\.svg/);
+});
+
+test("an old link to a filtered dashboard on / goes to the same view at /roles", async () => {
+  const response = await render("/?discipline=data&page=2");
+  assert.ok([307, 308].includes(response.status), `redirects, got ${response.status}`);
+  assert.equal(new URL(response.headers.get("location"), "http://localhost").pathname, "/roles");
+  assert.match(response.headers.get("location"), /discipline=data/);
+  assert.match(response.headers.get("location"), /page=2/);
+});
+
+test("a guest's roles view renders no zero tile and no watched tile", async () => {
+  for (const [path, demo] of [["/roles", true], ["/roles", false]]) {
+    const html = visible(await (await render(path, { demo })).text());
+    assert.doesNotMatch(html, /Watched roles/, "a guest follows nothing, so the watched tile is never drawn");
+    for (const [tile] of html.matchAll(/data-stat-tile[\s\S]*?<\/strong>/g)) {
+      const value = Number(tile.match(/>(\d+)<\/strong>$/)?.[1]);
+      assert.ok(value > 0, `a tile shows ${value}`);
+    }
+  }
+  const unconfigured = visible(await (await render("/roles", { demo: false })).text());
+  assert.doesNotMatch(unconfigured, /data-stat-tile/, "an empty deployment draws no tiles at all");
+});
+
+test("a guest sees account-only navigation locked, each with its reason", async () => {
+  const html = visible(await (await render("/roles")).text());
+  for (const [label, reason] of [
+    ["Watchlist", "Sign in to save roles and get alerts"],
+    ["Calendar", "Sign in to plan around the roles you watch"],
+    ["Replay", "Sign in to replay a past forecast"],
+    ["Digests", "Sign in to get a weekly email of changes"],
+  ]) {
+    assert.match(html, new RegExp(`${label}(?:<!-- -->)? needs a free account`), label);
+    assert.match(html, new RegExp(reason), reason);
+  }
+  assert.match(html, /aria-current="page"[^>]*>(?:<svg[\s\S]*?<\/svg>)?Explore/);
+});
+
+test("the first run renders for a guest, and says so plainly when live data is not configured", async () => {
+  const response = await render("/welcome", { demo: false });
+  assert.equal(response.status, 200, "a guest is not sent to sign in");
+  const html = visible(await response.text());
+  assert.match(html, /Get started/);
+  assert.match(html, /Live data is not configured/);
+  assert.doesNotMatch(html, /Northstar|Meridian|Atlas/);
+});
+
+test("the methodology page carries the evidence model the front page no longer explains", async () => {
+  const html = visible(await (await render("/methodology")).text());
+  assert.match(html, /Why the evidence model matters/);
+  assert.match(html, /Dates keep their precision/);
+  assert.match(html, /Numbers come from statistics/);
+  assert.match(html, /Replays refuse hindsight/);
 });

@@ -3,12 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { GoogleCalendarSync } from "@/components/google-calendar-sync";
 import { useOffCanvas } from "@/components/ui/off-canvas";
-import { WorkspaceHeader } from "@/components/workspace-header";
 import { confidencePhrase, formatConfidence } from "@/lib/confidence";
 import { type CalendarEvent, type CalendarEventType } from "@/lib/calendar-data";
 import { cn } from "@/lib/utils";
@@ -119,15 +117,11 @@ export function RecruitingCalendar({
   const noEvents = <div className="p-12 text-center"><Icon name="calendar-days" size={24} className="mx-auto text-ink-subtle" /><p className="mt-3 text-sm font-semibold">No matching calendar events</p><p className="mt-1 text-xs text-ink-subtle">Try changing the month or clearing a filter.</p></div>;
 
   return <div className="flex-1 bg-canvas text-ink">
-    <WorkspaceHeader
-      contentId="calendar-content"
-      status={isDemo ? <Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge> : mode === "real" ? <Badge className="border-success-line bg-success-surface text-success-ink">Your watched roles</Badge> : <Badge>Not signed in</Badge>}
-    />
     <main id="calendar-content" className="mx-auto max-w-[1500px] px-4 py-6 md:px-6 md:py-8">
       <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(380px,.65fr)] lg:items-end" aria-labelledby="calendar-title">
         <div>
           <p className="label-caps flex items-center gap-2 text-accent-ink"><Icon name="calendar-days" size={13} />Watched recruiting plan</p>
-          <h1 id="calendar-title" className="mt-3 text-3xl font-semibold tracking-title md:text-4xl">Recruiting Calendar</h1>
+          <h1 id="calendar-title" className="heading-display mt-3 text-3xl md:text-4xl">Recruiting Calendar</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for preparation milestones, predicted opening windows, and openings that are actually confirmed.</p>
         </div>
         <div className="flex flex-col items-start gap-4 lg:items-end">
@@ -169,7 +163,7 @@ export function RecruitingCalendar({
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/welcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Set up your watchlist</Link>
-            <Link href="/" className="focus-ring inline-flex h-9 items-center rounded-control border border-line-strong px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch">Browse roles</Link>
+            <Link href="/roles" className="focus-ring inline-flex h-9 items-center rounded-chip border border-line-strong px-4 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch">Browse roles</Link>
           </div>
         </section>
       )}
