@@ -104,15 +104,17 @@ Versions worth knowing (19 September 2026):
 
 | Version | Commit | What it is |
 | --- | --- | --- |
-| `88e2eff0-dac1-40b0-ac98-87ce1f883435` | `3053c1c` | Current: the redesign, with the landing page as the link preview image |
+| `73c7424a-7f01-4a55-bd18-67ce221e4abd` | `a16146b` | Current: the not-found and error pages, and buttons at their own text size |
+| `890c6646-b71d-4ddb-b4e4-ba3087a3a452` | `b65458e` | The first not-found and error pages, before their redesign |
+| `88e2eff0-dac1-40b0-ac98-87ce1f883435` | `3053c1c` | The redesign with the landing page as the link preview image |
 | `c48139f4-b68e-4549-a268-e0b0ceea0381` | `9219cf6` | The redesign, before the link preview image |
 | `2bed8d50-1e99-48c9-8278-79d4cfb7faa6` | | The last version before the redesign (deployed 16:39 UTC): the dashboard at `/` |
 
-To tell them apart on the live site: before the redesign, `/` has no "Know when internships open"; only the current
-version's pages name `og-image.png`:
+To tell them apart on the live site: before the redesign, `/` has no "Know when internships open"; from `88e2eff0` on,
+the pages name `og-image.png`; and from `73c7424a` on, a missing page draws a character:
 
 ```bash
-curl -s -H "Accept: text/html" https://1stseen.win/ | grep -c og-image.png
+curl -s -H "Accept: text/html" https://1stseen.win/this-page-does-not-exist | grep -o "illustrations/[a-z-]*\.svg"
 ```
 
 - **What a rollback restores:** the earlier build, including the `NEXT_PUBLIC_*` values baked into it, and its runtime
