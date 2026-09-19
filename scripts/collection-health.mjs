@@ -72,7 +72,7 @@ const TABLES = [
  * `source_ingestion` agent name; a run is historical when it touched a Wayback source.
  */
 const WORKFLOWS = [
-  { file: "current-jobs.yml", label: "Current jobs", pipeline: "current", staleHours: 12 },
+  { file: "current-jobs.yml", label: "Current jobs", pipeline: "current", staleHours: 24 },
   { file: "career-page-signals.yml", label: "Career page signals", pipeline: "signals", staleHours: 12 },
   { file: "historical-enrichment.yml", label: "Historical enrichment", pipeline: "historical", staleHours: 24 * 14 },
   { file: "forecast-regeneration.yml", label: "Forecast regeneration", pipeline: "regeneration", staleHours: 12 },

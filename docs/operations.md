@@ -8,7 +8,7 @@ allows. Every number here was measured on the local rig on 18 September 2026 unl
 
 | Workflow | Schedule (UTC) | What it does | On failure |
 | --- | --- | --- | --- |
-| `current-jobs.yml` | 00:17, 06:17, 12:17, 18:17 | Current postings from every enabled source | ops-alert issue |
+| `current-jobs.yml` | 00:17, 12:17 | Current postings from every enabled source | ops-alert issue |
 | `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | Career-page changes and recruiting signals | ops-alert issue |
 | `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | Re-forecasts changed roles, writes plans, then `collection-health --alert` | ops-alert issue, and a separate "Collection health" issue for any warning |
 | `historical-enrichment.yml` | Sunday 04:07 | Wayback history | ops-alert issue |
@@ -26,7 +26,8 @@ depends on the owner watching a dashboard.
   timed-out, or cancelled run opens the workflow's issue (`scripts/ops-alert.mjs`); the next successful run comments
   and closes it. It is a step in a job that is already running, so it costs no extra billed minutes.
 - **Collection health** (`scripts/collection-health.mjs --alert`, after every regeneration) raises one "Collection
-  health" issue while any warning stands: a collector with no completed pass in 12 hours, no source fetch in 24 hours,
+  health" issue while any warning stands: a collector with no completed pass in twice its interval (24 hours for
+  current jobs, 12 for signals and regeneration), no source fetch in 24 hours,
   a source failing three times in a row, or a run that never finished. It closes when no warning remains.
 - **Production health** (`scripts/ops-health.mjs --alert`, every six hours) raises one "Production health" issue while
   any check fails. It is the watchdog for the other workflows: it checks each one's last success against its interval.
@@ -164,9 +165,9 @@ September 2026; check the providers' pages before relying on them.
 | Limit | Free tier | 1stSeen |
 | --- | --- | --- |
 | Database size | 500 MB, then read-only | 243 MB on the rebuilt rig (229 MB in `public`). `raw_job_observations` is the largest table at 89 MB; with everything derived from them the corpus costs about 14 KB per observation (240 MB / 17,103). |
-| Egress | 5 GB uncached a month | A signed-in dashboard render reads 45 KiB in 13 requests; guest pages are served from the edge cache until the data changes. About 110,000 signed-in dashboard renders a month fit, before collection's own traffic. |
+| Egress | 5 GB uncached a month | Collection is most of it. Each current-jobs run reads every company's evidence once, about 45 MB projected from hosted Figma, so twice a day is about 2.7 GB a month; forecast regeneration adds about 0.5 GB and the weekly historical run about 0.2 GB (docs/github-actions-collection.md). A signed-in dashboard render reads 45 KiB in 13 requests and guest pages are served from the edge cache until the data changes, so the remaining 1.5 GB is about 35,000 signed-in renders a month. Check **Organization → Usage → Egress** after the first week. |
 | Monthly active users | 50,000 | Not a constraint. |
-| Pausing | After a week without activity | Collection writes four times a day, so the project never idles. |
+| Pausing | After a week without activity | Collection writes several times a day, so the project never idles. |
 | Backups | None | The weekly workflow above. |
 
 **When the database fills.** 500 MB less 243 MB leaves about 257 MB, which is about 18,000 more observations at today's
@@ -262,7 +263,7 @@ that a second is needed is questions queueing, seen as agent latency, not a lowe
 | Minutes | Unmetered on standard runners | 2,000 a month |
 | Artifact and package storage | Unmetered | 500 MB |
 
-The collection schedule needs about 4,000 minutes a month (docs/github-actions-collection.md). Operations adds about 150: the
+The collection schedule needs about 2,800 minutes a month (docs/github-actions-collection.md). Operations adds about 150: the
 health check four times a day at about a minute each (120), the weekly backup at about 6 minutes (26), and the monthly
 backtest at about 3. Storage: two weekly backups at about 51 MiB each, plus JSON summaries kept 14 to 30 days, stay
 under 120 MB. A private repository needs a paid plan or a lower collection cadence; a public one runs as is.
