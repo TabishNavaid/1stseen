@@ -25,6 +25,19 @@ about 38 minutes), a preloaded regeneration pass over 3,451 roles took about 12 
 backtest took 7.4 s. Signal collection has never run against a real corpus, so its 45 minutes is an
 estimate to revisit after the first production run.
 
+### Historical collection runs a slice, not the whole corpus
+
+One archived company took 497 s on hosted (Datadog, 45 captures at the 1.5 s courtesy interval for
+web.archive.org), so the 50 configured Wayback sources cannot finish inside one 90-minute job, and adding
+companies makes that worse rather than better. The weekly run therefore takes the **least recently collected**
+Wayback sources first (`sources.last_fetched_at`, never-fetched first) and stops starting sources once
+`--max-seconds 4200` is spent. The sources it did not reach are reported as `sources_deferred_to_next_run`
+and are not failures: next Sunday they sort to the front, so consecutive runs rotate through every company
+with no cursor to keep, and a company that gains sources cannot starve the others.
+
+Enrichment afterwards covers exactly the companies whose sources this run collected, so a deferred company
+keeps whatever it had rather than being half-enriched.
+
 ### Round trips to the hosted database
 
 Those durations were measured against a local database, where a request costs about a millisecond. The hosted
@@ -190,6 +203,14 @@ clean `collection_checkpoints` cursor. It skips roles whose newly computed forec
 the latest stored version. The cursor advances only when every affected role succeeds. On a partial failure,
 successful forecast versions remain committed, the old cursor remains, and the next run safely retries the
 range; already-saved roles then skip by input fingerprint.
+
+A stored posting keeps the row id it was first written with. Wayback derives an observation id from the
+capture it came from (`source|captured_at|original|digest`), so the same posting seen in a new capture
+recomputes a different id while keeping its identity key. Writing that id onto the existing row moved a
+primary key that `historical_opening_events` references, which Postgres refuses (FK 23503) — the first weekly
+historical run failed that way on 2026-09-19, after its own first pass had created the events. The write now
+keeps the stored id and updates the row's archive fields, so the second and later passes over a company are
+ordinary updates.
 
 Every source and role is audited independently in `agent_tool_calls`. A partial run exits successfully so one
 unavailable source does not discard other sources' work. A run fails only when all non-empty scoped sources

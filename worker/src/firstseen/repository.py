@@ -322,6 +322,17 @@ class IntelligenceRepository:
             )
         return configs
 
+    def source_fetch_times(self) -> dict[UUID, datetime | None]:
+        """Each source's last fetch, so a run with a time budget can take the least recently collected first."""
+        rows = fetch_all_rows(
+            lambda: self.client.table("sources").select("id,last_fetched_at").eq("enabled", True),
+            key="id",
+        )
+        return {
+            UUID(str(row["id"])): datetime.fromisoformat(str(row["last_fetched_at"])) if row.get("last_fetched_at") else None
+            for row in rows
+        }
+
     def collection_checkpoint(self, pipeline: str) -> datetime | None:
         # bounded: one row, the checkpoint keyed by its primary key (pipeline).
         response = (
@@ -513,7 +524,7 @@ class IntelligenceRepository:
             # bounded: an existence check on the unique (company, url, adapter) source, one row at most.
             existing_query = (
                 self.client.table("sources")
-                .select("id,enabled")
+                .select("id,enabled,metadata")
                 .eq("company_id", str(company_id))
                 .eq("url", source_url)
                 .eq("adapter", source.adapter)
@@ -523,6 +534,10 @@ class IntelligenceRepository:
             existing_rows = cast(list[dict[str, Any]], existing_query.data or [])
             source_id = UUID(str(existing_rows[0]["id"])) if existing_rows else source.id
             enabled = bool(existing_rows[0].get("enabled", True)) if existing_rows else True
+            # A stored source keeps the options it was given, with anything this save names winning. Discovery
+            # carries no options, so re-running it must not drop the read limit an oversized board was given: without
+            # this, one `discover --force` would put Anduril's 42 MB board back over the cap and fail it every run.
+            stored_options = cast(dict[str, Any], (existing_rows[0].get("metadata") or {}).get("options") or {}) if existing_rows else {}
             source_payload: dict[str, Any] = {
                 "company_id": str(company_id),
                 "url": source_url,
@@ -531,7 +546,7 @@ class IntelligenceRepository:
                 "trust_score": source.trust_score,
                 "metadata": {
                     "external_key": source.external_key,
-                    "options": source.options,
+                    "options": {**stored_options, **source.options},
                     "discovery_category": source.category,
                 },
             }
@@ -719,6 +734,10 @@ class IntelligenceRepository:
             self.client.table("raw_job_observations").insert(payload).execute()
             return "created"
         existing = rows[0]
+        # The stored row keeps its id whatever the observation recomputes, because historical events and role matches
+        # reference it: moving a primary key the database still has references to is refused outright (FK 23503, which
+        # is how the first weekly historical run failed on 2026-09-19).
+        payload["id"] = str(existing["id"])
         if existing["content_hash"] == observation.content_hash:
             seen: dict[str, Any] = {
                 "last_seen_at": observation.last_seen_at.isoformat(),
@@ -767,12 +786,10 @@ class IntelligenceRepository:
                 outcomes.append("unchanged")
             else:
                 payload["first_seen_at"] = row["first_seen_at"]
-                if payload.setdefault("id", row["id"]) != row["id"]:
-                    # A posting whose own id differs from its stored row's: upsert_job's update would move the row
-                    # to the new id, which an upsert on id cannot do. It is written exactly that way.
-                    self.upsert_job(observation)
-                else:
-                    changed.append((observation, payload))
+                # As in upsert_job: the stored row keeps its id, so a posting whose recomputed id differs is written
+                # onto the row it already has rather than moving a primary key that events and matches reference.
+                payload["id"] = str(row["id"])
+                changed.append((observation, payload))
                 outcomes.append("changed")
         for chunk in write_chunks([payload for _, payload in created]):
             self._write_or_replay(

@@ -67,6 +67,9 @@ class Query:
     def is_(self, *_: Any) -> Query:
         return self
 
+    def limit(self, *_: Any) -> Query:
+        return self
+
     @property
     def not_(self) -> Query:
         return self
@@ -85,6 +88,10 @@ class Query:
 
     def upsert(self, payload: Any, **options: Any) -> Query:
         self.op, self.payload, self.options = "upsert", payload, options
+        return self
+
+    def update(self, payload: Any, **options: Any) -> Query:
+        self.op, self.payload, self.options = "update", payload, options
         return self
 
     def execute(self) -> Any:
@@ -349,6 +356,48 @@ class ScopeBulkSaveTests(unittest.TestCase):
         summary = Service(refused).classify()  # type: ignore[arg-type]
         self.assertEqual(refused.single, [roles[0], roles[2]])
         self.assertEqual((summary.written, summary.failures, summary.by_status["in_scope"]), (2, 1, 2))
+
+
+
+
+class StoredRowKeepsItsIdTests(unittest.TestCase):
+    """A posting written onto a row that already exists never moves that row's primary key.
+
+    Historical events and role matches reference an observation by id, so an update that changed the id was refused by
+    the database (FK 23503 on historical_opening_events) and failed the whole source. That is how the first weekly
+    historical run failed on 2026-09-19: a Wayback posting whose recomputed id no longer matched its stored row.
+    """
+
+    def stored(self) -> list[dict[str, Any]]:
+        return [{"id": "row-stored", "identity_key": f"{7:064x}", "first_seen_at": "2025-01-01T00:00:00+00:00",
+                 "content_hash": "b" * 64}]
+
+    def changed_posting(self) -> JobObservation:
+        # A posting carrying its own id, different from the stored row's, and different content.
+        observation = posting(7, content="c")
+        return observation.model_copy(update={"id": UUID("00000000-0000-4000-8000-0000000007ff")})
+
+    def test_the_batched_write_keeps_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        outcomes = repository(client).upsert_jobs([self.changed_posting()])
+        self.assertEqual(outcomes, ["changed"])
+        written = [payload for table, op, payload, _ in client.requests if table == "raw_job_observations" and op != "select"]
+        self.assertEqual(len(written), 1, "one bulk write, not a per-posting fallback")
+        self.assertEqual([row["id"] for row in written[0]], ["row-stored"])
+        self.assertEqual(written[0][0]["first_seen_at"], "2025-01-01T00:00:00+00:00", "the first sighting is kept")
+
+    def test_the_per_posting_write_keeps_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        self.assertEqual(repository(client).upsert_job(self.changed_posting()), "changed")
+        updates = [payload for table, op, payload, _ in client.requests if op == "update"]
+        self.assertEqual([payload["id"] for payload in updates], ["row-stored"])
+
+    def test_an_unchanged_posting_is_touched_on_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        observation = posting(7, content="b").model_copy(update={"id": UUID("00000000-0000-4000-8000-0000000007ff")})
+        self.assertEqual(repository(client).upsert_jobs([observation]), ["unchanged"])
+        touched = [payload for name, op, payload, _ in client.requests if op == "rpc"]
+        self.assertEqual([row["id"] for row in touched[0]["p_rows"]], ["row-stored"])
 
 
 if __name__ == "__main__":

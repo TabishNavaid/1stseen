@@ -390,6 +390,67 @@ def identity_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.casefold())
 
 
+# How many of a board's postings must name the company before an unlinked Ashby or Lever board is accepted as
+# theirs. Those two APIs publish no board name, so the postings are the only thing the ATS itself says about whose
+# board it is; one mention could be a customer or a competitor, so several are required.
+BOARD_POSTINGS_NAMING_COMPANY = 3
+
+
+def postings_naming_company(
+    adapter: AdapterName, text: str, company_name: str, domain: str
+) -> tuple[int, int, str]:
+    """How many of a board's postings name this company, how many were read, and one posting title that does.
+
+    Only the company's full name and its domain label count, matched as whole words. A first word does not: "Physical"
+    would accept any board that mentions physical work, and the point of this check is to refuse a board that is
+    somebody else's.
+    """
+    labels = {company_name.strip(), domain.split(".")[-2] if "." in domain else domain} - {""}
+    pattern = re.compile("|".join(rf"\b{re.escape(label)}\b" for label in sorted(labels)), re.IGNORECASE)
+    postings = _board_postings(adapter, text)
+    naming, quote = 0, ""
+    for posting in postings:
+        if pattern.search(_posting_words(posting)):
+            naming += 1
+            if not quote:
+                quote = str(posting.get("title") or posting.get("text") or "").strip()[:200]
+    return naming, len(postings), quote
+
+
+def _posting_words(posting: Any) -> str:
+    """A posting's words, with its links and identifiers left out.
+
+    Every posting carries its own board URL, which holds the tenant: counting that would make the check circular and
+    accept any tenant spelled like the company. `greenhouse/purestorage` is Everpure's board, and its postings say
+    Everpure; only what a posting *says* may confirm whose board it is.
+    """
+    if isinstance(posting, str):
+        return "" if posting.strip().lower().startswith(("http://", "https://", "www.")) else posting
+    if isinstance(posting, dict):
+        return " ".join(
+            _posting_words(value)
+            for key, value in posting.items()
+            if not re.search(r"url|link|href|\bid\b|^id$|slug|path", str(key), re.IGNORECASE)
+        )
+    if isinstance(posting, list):
+        return " ".join(_posting_words(item) for item in posting)
+    return ""
+
+
+def _board_postings(adapter: AdapterName, text: str) -> list[dict[str, Any]]:
+    """The postings in one board API response, for the two APIs that publish no board name of their own."""
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return []
+    if adapter == "ashby" and isinstance(payload, dict):
+        jobs = payload.get("jobs")
+        return [job for job in jobs if isinstance(job, dict)] if isinstance(jobs, list) else []
+    if adapter == "lever" and isinstance(payload, list):
+        return [job for job in payload if isinstance(job, dict)]
+    return []
+
+
 def board_names_company(board_name: str, company_name: str, domain: str) -> bool:
     """Whether an ATS board's own name names this company: its full name, first word, or domain label."""
     labels = domain.split(".")

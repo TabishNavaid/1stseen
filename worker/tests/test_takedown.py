@@ -179,6 +179,31 @@ class DiscoveryRespectsTakedownTests(unittest.TestCase):
         self.assertTrue(all("enabled" not in payload for payload in source_writes))
         self.assertFalse(subject.client.tables["sources"][0]["enabled"])  # type: ignore[attr-defined]
 
+    def test_rediscovery_keeps_the_read_limit_an_oversized_board_was_given(self):
+        # Anduril's 42 MB Greenhouse board carries its own `max_source_bytes`, and discovery carries no options. If a
+        # save replaced the metadata wholesale, one `discover --force` would drop that limit and the board would fail
+        # every run against the 10 MB cap.
+        url = "https://takedown-fixture.example/careers"
+        subject = repository(
+            {
+                "collection_takedowns": [],
+                "sources": [
+                    {
+                        "id": SOURCE_A,
+                        "company_id": COMPANY,
+                        "url": url,
+                        "adapter": "generic",
+                        "enabled": True,
+                        "metadata": {"options": {"max_source_bytes": 50_000_000}, "external_key": "fixture"},
+                    }
+                ],
+                "source_discovery_evidence": [],
+            }
+        )
+        subject.save_discovered_sources(UUID(COMPANY), "Takedown Fixture", [discovered(url)])
+        stored = subject.client.tables["sources"][0]["metadata"]["options"]  # type: ignore[attr-defined]
+        self.assertEqual(stored, {"max_source_bytes": 50_000_000})
+
     def test_a_new_source_of_an_unheld_company_is_created_enabled(self):
         subject = repository({"collection_takedowns": [], "sources": [], "source_discovery_evidence": []})
         configs = subject.save_discovered_sources(

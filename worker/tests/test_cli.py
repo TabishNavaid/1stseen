@@ -284,7 +284,7 @@ class CliTests(unittest.TestCase):
             ["firstseen", "ingest", "--all", "--collection", "historical"],
         ):
             self.assertEqual(cli.main(), 0)
-        run_ingestion.assert_called_once_with(None, collection="historical")
+        run_ingestion.assert_called_once_with(None, collection="historical", max_seconds=None)
 
     @patch.object(cli, "IntelligenceRepository", Repository)
     def test_ingestion_enriches_the_companies_it_collected(self):
@@ -407,10 +407,11 @@ class BoardTransport:
     def __init__(self, settings):
         pass
 
-    def get(self, url, *, accept="*/*"):
+    def get(self, url, *, accept="*/*", max_bytes=None):
         from firstseen.adapters.base import FetchedDocument
 
         type(self).requested.append(url)
+        type(self).max_bytes = max_bytes
         return FetchedDocument(url=url, status=type(self).status, content_type="application/json", body=type(self).body)
 
 
@@ -600,3 +601,80 @@ class RegenerationScopeTests(unittest.TestCase):
             (summary["roles_changed"], summary["out_of_scope_skipped"], summary["forecasts_regenerated"]), (3, 2, 1)
         )
         self.assertEqual(ScopedForecastRepository.saved_forecasts, 1)
+
+
+class HistoricalSliceRepository(Repository):
+    """Three Wayback sources with different last-fetch times, plus two current sources that must be left alone."""
+
+    ingested: ClassVar[list[str]] = []
+
+    def list_source_configs(self, company):
+        def source(number, adapter):
+            return SimpleNamespace(
+                id=UUID(f"00000000-0000-4000-8000-0000000009{number:02d}"),
+                company_id=UUID(f"00000000-0000-4000-8000-0000000001{number:02d}"),
+                adapter=adapter,
+            )
+
+        return [source(1, "wayback"), source(2, "greenhouse"), source(3, "wayback"), source(4, "wayback")]
+
+    def source_fetch_times(self):
+        from datetime import UTC, datetime
+
+        return {
+            UUID("00000000-0000-4000-8000-000000000901"): datetime(2026, 9, 18, tzinfo=UTC),
+            UUID("00000000-0000-4000-8000-000000000903"): None,
+            UUID("00000000-0000-4000-8000-000000000904"): datetime(2026, 9, 10, tzinfo=UTC),
+        }
+
+    def record_tool_call(self, run_id, **kwargs):
+        return None
+
+
+class HistoricalRotationTests(unittest.TestCase):
+    """The weekly historical run takes the least recently collected sources first and stops when its budget is spent.
+
+    One archived company took 497 s on hosted, so the 50 configured Wayback sources cannot all run in one 90-minute
+    job. Ordering by last fetch makes consecutive runs rotate through every company with no cursor to keep, and the
+    sources left over are reported rather than counted as failures.
+    """
+
+    def ingest(self, max_seconds, clock):
+        HistoricalSliceRepository.ingested = []
+
+        class Service:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def ingest(self, source, *, observed_at):
+                HistoricalSliceRepository.ingested.append(str(source.id)[-3:])
+                return SimpleNamespace(
+                    detected=0, created=0, changed=0, unchanged=0, complete=True, diagnostics=[],
+                    page_unchanged=False, document_hash="a" * 64,
+                )
+
+        with (
+            patch.object(cli, "IntelligenceRepository", HistoricalSliceRepository),
+            patch.object(cli, "SourceIngestionService", Service),
+            patch.object(cli, "_enrich_companies", lambda *args, **kwargs: ([], 0, 0)),
+            patch.object(cli.time, "monotonic", side_effect=clock),
+            redirect_stdout(StringIO()) as output,
+        ):
+            code = cli.run_ingestion(None, collection="historical", max_seconds=max_seconds)
+        return code, json.loads(output.getvalue())
+
+    def test_the_least_recently_collected_wayback_sources_run_first(self):
+        _, payload = self.ingest(None, lambda: 0.0)
+        # Never fetched first, then oldest fetch, then newest. The Greenhouse source is not a historical source.
+        self.assertEqual(HistoricalSliceRepository.ingested, ["903", "904", "901"])
+        self.assertEqual(payload["sources"], 3)
+        self.assertEqual(payload["sources_deferred_to_next_run"], 0)
+
+    def test_the_budget_leaves_the_rest_for_the_next_run_without_failing(self):
+        # The clock passes the budget after the first source, so the second is never started.
+        seconds = iter([0.0, 0.0])  # the run starts, the first source is inside the budget, then time is up
+        _, payload = self.ingest(5.0, lambda: next(seconds, 10.0))
+        self.assertEqual(HistoricalSliceRepository.ingested, ["903"])
+        self.assertEqual(payload["sources"], 1)
+        self.assertEqual(payload["sources_deferred_to_next_run"], 2)
+        self.assertEqual(payload["status"], "succeeded", "sources left for next week are not a failure")
