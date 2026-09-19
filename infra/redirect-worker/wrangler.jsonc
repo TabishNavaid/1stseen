@@ -1,0 +1,12 @@
+// The redirect Worker: www.1stseen.win and firstseen.tabishnavaid.dev answer 301 to https://1stseen.win.
+// Deploy: npx wrangler deploy --config infra/redirect-worker/wrangler.jsonc
+{
+  "name": "firstseen-redirects",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "routes": [
+    { "pattern": "www.1stseen.win", "custom_domain": true },
+    { "pattern": "firstseen.tabishnavaid.dev", "custom_domain": true }
+  ]
+}

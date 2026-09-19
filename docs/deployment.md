@@ -320,7 +320,7 @@ Prepared and dry-run verified; not yet deployed.
 Log in once with `npx wrangler login` (or export `CLOUDFLARE_API_TOKEN`). Then, from the repository root:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key> FIRSTSEEN_AGENT_API_URL=https://<service>.run.app WEB_DOMAIN=firstseen.tabishnavaid.dev npm run deploy:web
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key> FIRSTSEEN_AGENT_API_URL=https://<service>.run.app WEB_DOMAIN=1stseen.win npm run deploy:web
 ```
 
 Set the two secrets once. Each command prompts for the value on stdin:
@@ -358,10 +358,16 @@ fold development values into the server bundle.
 
 ### Custom domain
 
-`tabishnavaid.dev` uses Cloudflare nameservers. `--domain firstseen.tabishnavaid.dev` attaches a Workers
-Custom Domain, which creates the DNS record and certificate. That works only when the zone is in the same
+`1stseen.win` is registered with Cloudflare Registrar, so its zone is in the Worker's account. `--domain 1stseen.win`
+attaches a Workers Custom Domain, which creates the DNS record and certificate. That works only when the zone is in the same
 Cloudflare account as the Worker and no other record exists for the hostname. Once the domain serves, set
 the Supabase Auth Site URL and Redirect URLs to it (`docs/hosted-supabase-setup.md` §3).
+
+The app serves one origin. `www.1stseen.win` and `firstseen.tabishnavaid.dev` belong to a separate Worker,
+`firstseen-redirects` (`infra/redirect-worker/`), which answers every request with a 301 to the same path and query on
+`https://1stseen.win`. Serving the app on a second hostname would break sign-in across hosts (session cookies are
+host-only, auth emails and OAuth callbacks name `NEXT_PUBLIC_APP_URL`) and split the guest cache. Deploy it with
+`npx wrangler deploy --config infra/redirect-worker/wrangler.jsonc`; both zones must be in the Worker's account.
 
 ### Authentication
 
@@ -377,7 +383,7 @@ Hosted project settings that must match the code:
 | Authentication → Emails → **Reset password** template | contents of `supabase/templates/recovery.html`, subject "Reset your 1stSeen password" | same |
 | Authentication → Sign In / Providers → Confirm email | on | sign-up never signs anyone in; it waits for the confirmation link |
 | Minimum password length | 8, and no extra character rules | the app enforces the same policy before calling Supabase; sign-up runs after its response is sent, so a stricter Supabase rule could not be reported to the user |
-| Authentication → URL Configuration → Redirect URLs | `https://firstseen.tabishnavaid.dev/**` (and `http://localhost:3000/**`) | the app sends `/auth/confirm` and `/auth/reset` as redirect targets |
+| Authentication → URL Configuration → Redirect URLs | `https://1stseen.win/**` (and `http://localhost:3000/**`) | the app sends `/auth/confirm` and `/auth/reset` as redirect targets |
 | Authentication → Attack Protection → CAPTCHA | **off** | the auth routes send no CAPTCHA token, so turning it on makes every sign-in fail |
 
 Account enumeration. Sign-up, resend, and reset requests wait for Supabase and answer the same 202 on a
