@@ -14,6 +14,10 @@ required, credited here anyway).
 | `apps/web/public/illustrations/sprinting.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/sprinting.svg` | Landing page hero |
 | `apps/web/public/illustrations/jumping.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/jumping.svg` | First-run payoff (the celebration) |
 | `apps/web/public/illustrations/reading-side.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading-side.svg` | Teaching empty states |
+| `apps/web/public/illustrations/unboxing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/unboxing.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/reading.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/zombieing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/zombieing.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/clumsy.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/clumsy.svg` | The error page |
 
 Changes from the originals, all mechanical: black recolored to the brand's deep green (`#1b3a31`), the pink recolored
 to the warm accent (`#f28b6b`), the view box cropped to the figure, Sketch metadata and ids removed, and path

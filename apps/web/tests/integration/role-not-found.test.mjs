@@ -1,7 +1,7 @@
 /**
  * Integration test: a role page answers 404 for any id that is not a role in the product, with real data configured.
  *
- * The page renders "This program is no longer tracked", but the root loading boundary sends the shell with 200 before
+ * The page renders "This program isn't tracked anymore", but the root loading boundary sends the shell with 200 before
  * the page body runs, so every missing role used to answer 200. The Worker entry now checks the id beside the render
  * (cloudflare/index.ts, roleIsListed) and reads the page's own status (cloudflare/page-status.ts). Needs the local rig
  * and `npm run build`.
@@ -48,7 +48,7 @@ test("a role page is 404 for an unknown, malformed, fixture, or out-of-scope id,
       assert.equal(response.headers.get("cache-control") === "no-store", status === 404, path);
       if (status === 404) {
         assert.match(html, /<title>Program no longer tracked · 1stSeen<\/title>/, path);
-        assert.match(html, /This program is no longer tracked\./, path);
+        assert.match(html, /This program isn’t tracked anymore\./, path);
       }
     }
     // A program the product no longer lists links to its company's other programs, and names nothing else about it.
@@ -57,7 +57,7 @@ test("a role page is 404 for an unknown, malformed, fixture, or out-of-scope id,
     assert.equal(sibling.status, 404);
     const siblingHtml = (await sibling.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
     assert.match(siblingHtml, new RegExp(`href="/roles\\?company=${company.id}"`));
-    assert.match(siblingHtml, /See the other programs at/);
+    assert.match(siblingHtml, /See other roles at/);
     assert.ok(!siblingHtml.includes(company.canonical_title), "the program itself is not named");
   } finally {
     await sql.end();
@@ -74,7 +74,7 @@ test("with the database unreachable, a role page answers 500, not that the role 
     // What a reader sees: the document without its inline RSC payload. The error view ("Something broke on our side")
     // is drawn by the error boundary in the browser; on the server the page must not say the program is gone.
     const html = (await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
-    assert.doesNotMatch(html, /no longer tracked|This page could not be found/);
+    assert.doesNotMatch(html, /tracked anymore|This page could not be found/);
   } finally {
     process.env.SUPABASE_URL = saved;
   }
