@@ -32,6 +32,7 @@ from .discovery import (
     board_names_company,
 )
 from .enrichment import EnrichmentSummary, EvidenceEnrichmentService
+from .enrichment_fingerprints import UNCHANGED_RESULT, skip_key, worker_fingerprint
 from .forecasting import Forecast, InsufficientEvidenceError
 from .providers import ModelRouter
 from .readiness import (
@@ -154,13 +155,13 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
     # Collected evidence only becomes forecastable once it carries canonical role
     # identity and reconstructed opening history, so enrichment runs in the same
     # pass over exactly the companies whose sources were just collected.
-    enrichment_summaries, enrichment_failures = _enrich_companies(
+    enrichment_summaries, enrichment_failures, enrichment_unchanged = _enrich_companies(
         repository,
         sorted({source.company_id for source in sources}, key=str),
         run_id=run_id,
         router=router,
     )
-    enrichment = _enrichment_totals(enrichment_summaries, enrichment_failures)
+    enrichment = _enrichment_totals(enrichment_summaries, enrichment_failures, enrichment_unchanged)
     status = (
         "failed"
         if failures == len(sources) and sources
@@ -198,7 +199,8 @@ def _enrich_companies(
     *,
     run_id: UUID,
     router: ModelRouter,
-) -> tuple[list[EnrichmentSummary], int]:
+    force: bool = False,
+) -> tuple[list[EnrichmentSummary], int, int]:
     """Derive canonical roles and historical openings from persisted evidence.
 
     Companies enrich independently and every outcome is audited, so one failing
@@ -215,9 +217,31 @@ def _enrich_companies(
         ),
     )
     summaries: list[EnrichmentSummary] = []
-    failures = 0
+    failures = unchanged = 0
+    # A company whose inputs are exactly those of its last pass that changed nothing is not re-read or re-derived
+    # (enrichment_fingerprints.py). The fingerprints are computed in the database, a hash per company.
+    worker = worker_fingerprint(get_settings())
+    try:
+        before = repository.company_enrichment_fingerprints(company_ids)
+    except APIError:
+        # The fingerprint function (migration 202608140046) is not in this database yet: enrich every company.
+        before = {}
+    noop_keys = repository.enrichment_noop_keys()
     for company_id in company_ids:
         started_at = datetime.now(UTC)
+        key = skip_key(before[company_id], worker) if company_id in before else None
+        if key is not None and not force and noop_keys.get(str(company_id)) == key:
+            unchanged += 1
+            repository.record_tool_call(
+                run_id,
+                tool_name="enrichment.company",
+                status="succeeded",
+                input_redacted={"company_id": str(company_id)},
+                output_redacted={"result": UNCHANGED_RESULT},
+                started_at=started_at,
+            )
+            continue
+        noop_keys.pop(str(company_id), None)
         try:
             summary = service.enrich_company(company_id)
         except Exception as exc:  # noqa: BLE001 - companies enrich independently
@@ -233,6 +257,13 @@ def _enrich_companies(
             )
             continue
         summaries.append(summary)
+        # A complete pass that left the inputs as it found them changed nothing, and would change nothing again.
+        if (
+            key is not None
+            and summary.complete
+            and repository.company_enrichment_fingerprints([company_id]).get(company_id) == before[company_id]
+        ):
+            noop_keys[str(company_id)] = key
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",
@@ -241,12 +272,14 @@ def _enrich_companies(
             output_redacted=summary.as_dict(),
             started_at=started_at,
         )
-    return summaries, failures
+    repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+    return summaries, failures, unchanged
 
 
-def _enrichment_totals(summaries: list[EnrichmentSummary], failures: int) -> dict[str, object]:
+def _enrichment_totals(summaries: list[EnrichmentSummary], failures: int, unchanged: int = 0) -> dict[str, object]:
     return {
-        "companies": len(summaries) + failures,
+        "companies": len(summaries) + failures + unchanged,
+        "companies_unchanged": unchanged,
         "observations_considered": sum(item.observations_considered for item in summaries),
         "roles_matched": sum(item.roles_matched for item in summaries),
         "roles_created": sum(item.roles_created for item in summaries),
@@ -259,7 +292,7 @@ def _enrichment_totals(summaries: list[EnrichmentSummary], failures: int) -> dic
     }
 
 
-def run_enrichment(company: str | None) -> int:
+def run_enrichment(company: str | None, *, force: bool = False) -> int:
     """Standalone re-derivation of roles and openings from already-collected evidence."""
     started = time.monotonic()
     settings = get_settings()
@@ -273,8 +306,10 @@ def run_enrichment(company: str | None) -> int:
         input_fingerprint=sha256("|".join(str(item) for item in company_ids).encode()).hexdigest(),
     )
     router = ModelRouter.from_settings(settings, tracker=repository)
-    summaries, failures = _enrich_companies(repository, company_ids, run_id=run_id, router=router)
-    totals = _enrichment_totals(summaries, failures)
+    summaries, failures, unchanged = _enrich_companies(
+        repository, company_ids, run_id=run_id, router=router, force=force
+    )
+    totals = _enrichment_totals(summaries, failures, unchanged)
     status = (
         "failed"
         if company_ids and failures == len(company_ids)
@@ -1240,6 +1275,11 @@ def main() -> int:
     enrich_scope = enrich_parser.add_mutually_exclusive_group(required=True)
     enrich_scope.add_argument("--company", help="Company name, domain, or UUID")
     enrich_scope.add_argument("--all", action="store_true", help="Process all configured companies")
+    enrich_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Enrich every company, including those whose inputs are unchanged since a pass that changed nothing",
+    )
     classify_parser = subparsers.add_parser(
         "classify-roles",
         help="Classify canonical roles into product scope: early-career technical programs only",
@@ -1341,7 +1381,7 @@ def main() -> int:
     if args.command == "signals":
         return run_signal_ingestion(args.company if not args.all else None)
     if args.command == "enrich":
-        return run_enrichment(args.company if not args.all else None)
+        return run_enrichment(args.company if not args.all else None, force=args.force)
     if args.command == "classify-roles":
         return run_scope_classification(args.company if not args.all else None)
     if args.command == "review-scope":

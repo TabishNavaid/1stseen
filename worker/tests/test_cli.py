@@ -38,6 +38,15 @@ class Repository:
     def cache_company_roles(self):
         type(self).company_roles_cached = True
 
+    def company_enrichment_fingerprints(self, company_ids):
+        return {}
+
+    def enrichment_noop_keys(self):
+        return {}
+
+    def save_enrichment_noop_keys(self, keys, *, run_id):
+        type(self).noop_keys_saved = dict(keys)
+
     def finish_agent_run(self, run_id, *, status, error=None):
         type(self).finished_status = status
 
@@ -282,7 +291,7 @@ class CliTests(unittest.TestCase):
         # Collection alone cannot produce a forecast, so the same pass must derive
         # the canonical-role and historical-event records forecasting depends on.
         with (
-            patch.object(cli, "_enrich_companies", return_value=([], 0)) as enrich,
+            patch.object(cli, "_enrich_companies", return_value=([], 0, 0)) as enrich,
             patch.object(sys, "argv", ["firstseen", "ingest", "--all"]),
             redirect_stdout(StringIO()) as output,
         ):

@@ -110,9 +110,9 @@ const MIGRATION_VERSIONS = readdirSync(resolve(ROOT, "supabase/migrations"))
 /**
  * Bounded read-path functions (202608140023, 202608140025, 202608140029, 202608140035, 202608140040), the worker's
  * scope-review write (202608140033), account export and deletion (202608140037), and the collectors' batched writes
- * (202608140045). Callable only by service_role: an anon or authenticated caller must not be able to run them through
- * PostgREST's /rpc surface. finish_account_deletion alone is SECURITY DEFINER, because it removes Supabase Auth's
- * leftovers for a deleted id; checkDefinerFunctions pins its search_path.
+ * and enrichment fingerprints (202608140045, 202608140046). Callable only by service_role: an anon or authenticated
+ * caller must not be able to run them through PostgREST's /rpc surface. finish_account_deletion alone is SECURITY
+ * DEFINER, because it removes Supabase Auth's leftovers for a deleted id; checkDefinerFunctions pins its search_path.
  */
 const SERVICE_ONLY_FUNCTIONS = [
   "followed_role_ids",
@@ -147,6 +147,8 @@ const SERVICE_ONLY_FUNCTIONS = [
   "touch_job_observations",
   "save_role_scopes",
   "latest_source_fetch_errors",
+  // Each company's enrichment-input fingerprint, so an unchanged company is skipped (202608140046).
+  "company_enrichment_fingerprints",
 ];
 
 /* -------------------------------------------------------------------- output */

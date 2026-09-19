@@ -69,6 +69,7 @@ if TYPE_CHECKING:
     from .enrichment_session import CompanyEnrichmentSession
 
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
+ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
 _PAGE_SIZE = 1000
@@ -353,6 +354,42 @@ class IntelligenceRepository:
             },
             on_conflict="pipeline",
         ).execute()
+
+    def company_enrichment_fingerprints(self, company_ids: Sequence[UUID]) -> dict[UUID, str]:
+        """Each company's enrichment-input fingerprint, computed in the database (migration 202608140046)."""
+        fingerprints: dict[UUID, str] = {}
+        ids = [str(item) for item in company_ids]
+        # Ten companies a call: the function hashes every row a company's enrichment reads, about 150 ms of database
+        # time per company, so a call stays far inside any statement timeout.
+        for chunk in (ids[index : index + 10] for index in range(0, len(ids), 10)):
+            # bounded: one row per company in the chunk, at most ten.
+            response = self.client.rpc("company_enrichment_fingerprints", {"p_company_ids": chunk}).execute()
+            for row in cast(list[dict[str, Any]], response.data or []):
+                fingerprints[UUID(str(row["company_id"]))] = str(row["fingerprint"])
+        return fingerprints
+
+    def enrichment_noop_keys(self) -> dict[str, str]:
+        """Per company, the key of its last enrichment pass that changed nothing (enrichment_fingerprints.py)."""
+        # bounded: one row, the checkpoint keyed by its primary key (pipeline).
+        response = (
+            self.client.table("collection_checkpoints")
+            .select("metadata")
+            .eq("pipeline", ENRICHMENT_FINGERPRINT_PIPELINE)
+            .limit(1)
+            .execute()
+        )
+        rows = cast(list[dict[str, Any]], response.data or [])
+        companies = cast(dict[str, Any], rows[0].get("metadata") or {}).get("companies") if rows else None
+        return {str(key): str(value) for key, value in (companies or {}).items()}
+
+    def save_enrichment_noop_keys(self, keys: dict[str, str], *, run_id: UUID) -> None:
+        self.save_collection_checkpoint(
+            ENRICHMENT_FINGERPRINT_PIPELINE,
+            cursor_at=datetime.now(UTC),
+            run_id=run_id,
+            status="succeeded",
+            metadata={"companies": dict(sorted(keys.items()))},
+        )
 
     def changed_role_ids_since(self, since: datetime | None) -> list[UUID]:
         boundary = since.isoformat() if since is not None else None
@@ -878,7 +915,7 @@ class IntelligenceRepository:
 
     _SCOPE_ROLE_COLUMNS = (
         "id,canonical_title,scope_status,scope_reason,discipline,early_career_type,scope_evidence,"
-        "scope_method,scope_classifier_version,scope_classified_at,role_aliases(alias_title)"
+        "scope_method,scope_classifier_version,scope_classified_at,role_aliases(alias_title,first_seen_at,id)"
     )
 
     def list_role_scope_inputs(self, company_id: UUID | None = None) -> list[StoredRoleScope]:
@@ -956,9 +993,15 @@ class IntelligenceRepository:
         recent: dict[str, list[Posting]] = {}
         for row in role_rows:
             role_id = str(row["id"])
+            # Earliest-seen title first. When every title is out of scope the classifier reports the first title's
+            # reason, and PostgREST embeds aliases in no particular order, so a role's stored reason flipped between
+            # passes over the same evidence.
             aliases = [
                 str(item.get("alias_title") or "")
-                for item in cast(list[dict[str, Any]], row.get("role_aliases") or [])
+                for item in sorted(
+                    cast(list[dict[str, Any]], row.get("role_aliases") or []),
+                    key=lambda item: (str(item.get("first_seen_at") or ""), str(item.get("id") or "")),
+                )
             ]
             titles = tuple(dict.fromkeys(alias for alias in aliases if alias.strip())) or (str(row["canonical_title"]),)
             inputs[role_id] = RoleScopeInput(
