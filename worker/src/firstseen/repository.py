@@ -6,6 +6,7 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from functools import partial
 from hashlib import sha256
@@ -63,6 +64,8 @@ from .signals import ForecastChange, RecruitingSignal, SignalSourceState, Stored
 from .takedown import HOLD_ACTIONS, CollectionHeldError, TakedownAction
 
 if TYPE_CHECKING:
+    import httpx
+
     from .enrichment_session import CompanyEnrichmentSession
 
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
@@ -79,6 +82,8 @@ _FILTER_CHUNK = 100
 _UNIQUE_KEY: dict[str, str | tuple[str, ...]] = {
     "forecast_evidence": "id",
     "forecasts": "id",
+    "historical_opening_events": "id",
+    "signals": "id",
     "raw_job_observations": "id",
     "observation_role_matches": ("observation_id", "canonical_role_id"),
     "role_scope_reviews": "id",
@@ -87,6 +92,16 @@ _UNIQUE_KEY: dict[str, str | tuple[str, ...]] = {
 
 #: Roles, historical opening events, and signals: the full temporal evidence set.
 BacktestDataset = tuple[list["BacktestRole"], list["BacktestEvent"], list["BacktestSignal"]]
+
+
+@dataclass
+class ForecastEvidence:
+    """Everything in the temporal evidence set but its signals, with each loaded observation's availability time."""
+
+    roles: list[BacktestRole]
+    events: list[BacktestEvent]
+    observed_at: dict[str, datetime]
+    active_role_ids: set[str]
 
 _FOLLOW_COLUMNS = "user_id,target_type,company_id,canonical_role_id,role_family,track"
 _ROLE_FOLLOW_COLUMNS = "id,company_id,role_family,track,scope_status,active"
@@ -231,23 +246,32 @@ _LEVEL_TO_TRACK = {
 
 
 class IntelligenceRepository:
-    # Every request this repository's client sends to PostgREST, counted so a run can report its round trips.
+    # Every request this repository's client sends to PostgREST, and the bytes its responses carried on the wire,
+    # counted so a run can report its round trips and what it cost of the project's egress.
     database_requests: int = 0
+    database_bytes: int = 0
 
     def __init__(self, client: Client) -> None:
         self.client = client
         self._count_requests()
 
     def _count_requests(self) -> None:
-        """Count each HTTP request the PostgREST client sends. Test doubles without an HTTP session count nothing."""
+        """Count each HTTP request the PostgREST client sends and the bytes each response carried on the wire
+        (compressed, as egress is billed). Test doubles without an HTTP session count nothing."""
         session = getattr(getattr(self.client, "postgrest", None), "session", None)
         hooks = getattr(session, "event_hooks", None)
         if isinstance(hooks, dict):
             hooks.setdefault("request", []).append(self._record_request)
+            hooks.setdefault("response", []).append(self._record_response)
 
     def _record_request(self, request: object) -> None:
         del request
         self.database_requests += 1
+
+    def _record_response(self, response: httpx.Response) -> None:
+        # The body is read here rather than when the caller reads it, so its size is known; httpx reads it once.
+        response.read()
+        self.database_bytes += response.num_bytes_downloaded
 
     def insert_rows(self, table: str, rows: Sequence[dict[str, Any]]) -> None:
         """Insert rows in as few requests as write_chunks allows."""
@@ -2058,15 +2082,39 @@ class IntelligenceRepository:
             raise RuntimeError("Supabase did not return the signal observation")
         return UUID(str(rows[0]["id"]))
 
-    def resolve_signal_role(self, company_id: UUID, evidence: str) -> UUID | None:
+    # A company's in-scope roles, kept for the rest of a run by cache_company_roles(); None reads them every time.
+    _company_roles: dict[tuple[str, str], list[dict[str, Any]]] | None = None
+
+    def cache_company_roles(self) -> None:
+        """Read each company's in-scope roles once for the rest of this repository's life.
+
+        Signal ingestion resolves every signal against its company's roles, and nothing it writes changes them, so a
+        second read would return the same rows. Only that command turns this on.
+        """
+        if self._company_roles is None:
+            self._company_roles = {}
+
+    _SIGNAL_ROLE_COLUMNS = "id,normalized_title,company_normalized,role_aliases(normalized_alias)"
+
+    def _in_scope_role_rows(self, company_id: UUID) -> list[dict[str, Any]]:
+        """A company's active in-scope roles with the titles signal resolution matches against."""
+        key = (str(company_id), self._SIGNAL_ROLE_COLUMNS)
+        if self._company_roles is not None and key in self._company_roles:
+            return self._company_roles[key]
         rows = fetch_all_rows(
             lambda: self.client.table("canonical_roles")
-            .select("id,normalized_title,company_normalized,role_aliases(normalized_alias)")
+            .select(self._SIGNAL_ROLE_COLUMNS)
             .eq("scope_status", "in_scope")
             .eq("company_id", str(company_id))
             .eq("active", True),
             key="id",
         )
+        if self._company_roles is not None:
+            self._company_roles[key] = rows
+        return rows
+
+    def resolve_signal_role(self, company_id: UUID, evidence: str) -> UUID | None:
+        rows = self._in_scope_role_rows(company_id)
         evidence_tokens = set(normalize_title(evidence).split())
         matches: list[tuple[int, UUID]] = []
         for row in rows:
@@ -2090,15 +2138,7 @@ class IntelligenceRepository:
 
     def list_company_role_ids(self, company_id: UUID) -> list[UUID]:
         """In-scope roles a company-scoped signal may recompute; nothing else is forecast."""
-        rows = fetch_all_rows(
-            lambda: self.client.table("canonical_roles")
-            .select("id")
-            .eq("scope_status", "in_scope")
-            .eq("company_id", str(company_id))
-            .eq("active", True),
-            key="id",
-        )
-        return [UUID(str(row["id"])) for row in rows]
+        return [UUID(str(row["id"])) for row in self._in_scope_role_rows(company_id)]
 
     def upsert_recruiting_signal(self, signal: RecruitingSignal) -> bool:
         # bounded: an existence check on the unique signal identity key, one row at most.
@@ -2111,7 +2151,11 @@ class IntelligenceRepository:
         )
         if existing.data:
             return False
-        self.client.table("signals").insert(
+        # One page observation holds at most one signal of a kind for a role (signals' unique key: role, observation,
+        # kind). A sitemap that gains two recruiting URLs naming the same role reaches that key twice, and a plain
+        # insert of the second was refused, failing the whole source before its state was saved, so every later run
+        # failed the same way. The first signal stands for the page; a later one for the same key is not stored.
+        response = self.client.table("signals").upsert(
             {
                 "id": str(signal.id),
                 "company_id": str(signal.company_id),
@@ -2142,9 +2186,11 @@ class IntelligenceRepository:
                     if signal.signal_type == "community_recruiting_discussion"
                     else None,
                 },
-            }
+            },
+            on_conflict="canonical_role_id,observation_id,kind",
+            ignore_duplicates=True,
         ).execute()
-        return True
+        return bool(response.data)
 
     @staticmethod
     def _forecast_from_row(row: dict[str, Any]) -> Forecast:
@@ -2327,6 +2373,20 @@ class IntelligenceRepository:
         return forecast_id
 
     def _save_forecast_evidence(self, forecast_id: UUID, forecast: Forecast) -> None:
+        # Each piece of evidence is written with the observation it came from. Those are read for every cited signal
+        # and opening together, a hundred ids a request, instead of one request per id: a forecast can cite over a
+        # thousand signals.
+        cited: dict[str, set[str]] = defaultdict(set)
+        for contribution in forecast.feature_contributions:
+            table = "signals" if contribution.kind == "signal" else "historical_opening_events"
+            cited[table].update(
+                str(item) for item in contribution.evidence_ids or ((contribution.evidence_id,) if contribution.evidence_id else ())
+            )
+        found = {
+            (table, str(row["id"])): row
+            for table, ids in cited.items()
+            for row in self._rows_in(table, "id,observation_id", "id", sorted(ids))
+        }
         payloads: list[dict[str, Any]] = []
         for contribution in forecast.feature_contributions:
             evidence_ids = contribution.evidence_ids or (
@@ -2336,18 +2396,9 @@ class IntelligenceRepository:
                 continue
             table = "signals" if contribution.kind == "signal" else "historical_opening_events"
             for evidence_id in evidence_ids:
-                # bounded: one row per evidence id, by primary key.
-                response = (
-                    self.client.table(table)
-                    .select("id,observation_id")
-                    .eq("id", evidence_id)
-                    .limit(1)
-                    .execute()
-                )
-                rows = cast(list[dict[str, Any]], response.data or [])
-                if not rows:
+                row = found.get((table, str(evidence_id)))
+                if row is None:
                     continue
-                row = rows[0]
                 total_weight = contribution.date_weight or abs(contribution.confidence_effect)
                 payloads.append(
                     {
@@ -2392,7 +2443,8 @@ class IntelligenceRepository:
         `dataset` lets a caller that forecasts many roles load the evidence once
         instead of re-reading every role, observation, match, event, and signal
         per role. Pass it only when nothing in the pass mutates that evidence;
-        signal ingestion, which creates signals as it runs, must re-read.
+        signal ingestion, which creates signals as it runs, re-reads the signals
+        (load_backtest_signals) after each source that created some.
         """
         roles, events, signals = dataset if dataset is not None else self.load_backtest_dataset()
         role_by_id = {item.id: item for item in roles}
@@ -2464,6 +2516,15 @@ class IntelligenceRepository:
 
     def load_backtest_dataset(self) -> BacktestDataset:
         """Load source-linked temporal evidence with its original availability time."""
+        evidence = self.load_forecast_evidence()
+        return evidence.roles, evidence.events, self.load_backtest_signals(evidence)
+
+    def load_forecast_evidence(self) -> ForecastEvidence:
+        """The dataset's roles and opening events, and when each observation became available.
+
+        Signal ingestion adds signals (and the page observations they cite) and nothing else a forecast reads, so it
+        loads this once and re-reads only the signals after each source that created some (load_backtest_signals).
+        """
         role_rows = fetch_all_rows(
             lambda: self.client.table("canonical_roles")
             .select("id,company_id,role_family,level,recruiting_season,companies(metadata)")
@@ -2559,7 +2620,15 @@ class IntelligenceRepository:
                     else None,
                 )
             )
+        return ForecastEvidence(roles=roles, events=events, observed_at=observed_at, active_role_ids=active_role_ids)
 
+    def load_backtest_signals(self, evidence: ForecastEvidence) -> list[BacktestSignal]:
+        """Every signal of an active role, as load_backtest_dataset reads them, against evidence loaded earlier.
+
+        A signal cites the observation it was read from. One written after `evidence` was loaded is read by id here,
+        so its availability time is the stored one, exactly as a fresh full load would find it.
+        """
+        roles, observed_at, active_role_ids = evidence.roles, evidence.observed_at, evidence.active_role_ids
         signal_rows = fetch_all_rows(
             lambda: self.client.table("signals").select(
                 "id,company_id,canonical_role_id,observation_id,observed_at,available_at,"
@@ -2567,6 +2636,9 @@ class IntelligenceRepository:
             ),
             key="id",
         )
+        unseen = sorted({str(row["observation_id"]) for row in signal_rows} - set(observed_at))
+        for row in self._rows_in("raw_job_observations", "id,observed_at", "id", unseen):
+            observed_at[str(row["id"])] = datetime.fromisoformat(str(row["observed_at"]))
         signals: list[BacktestSignal] = []
         for row in signal_rows:
             if row.get("canonical_role_id") and str(row["canonical_role_id"]) not in active_role_ids:
@@ -2597,7 +2669,7 @@ class IntelligenceRepository:
                         observation_available_at=observed_at[observation_id],
                     )
                 )
-        return roles, events, signals
+        return signals
 
     # ------------------------------------------------------------------ takedowns (docs/takedown.md)
 
