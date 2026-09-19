@@ -143,8 +143,8 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
     <div className="flex-1 bg-canvas text-ink">
       <main id="role-content" className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <nav className="mb-5 flex min-w-0 items-center gap-1 text-caption text-ink-subtle" aria-label="Breadcrumb">
-          <Link href="/roles" className="focus-ring inline-flex min-h-touch items-center rounded-sm hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} />
-          <span className="truncate">{view.company}</span><Icon name="chevron-right" size={11} /><span className="truncate text-ink-muted" aria-current="page">{view.role}</span>
+          <Link href="/roles" className="focus-ring inline-flex min-h-touch shrink-0 items-center whitespace-nowrap rounded-sm hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} className="shrink-0" />
+          <span className="truncate">{view.company}</span><Icon name="chevron-right" size={11} className="shrink-0" /><span className="truncate text-ink-muted" aria-current="page">{view.role}</span>
         </nav>
 
         {welcome && (

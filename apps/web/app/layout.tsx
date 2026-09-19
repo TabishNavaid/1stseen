@@ -9,11 +9,21 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 // Headings only. Self-hosted like Geist: the build downloads the files and serves them from this origin.
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axes: ["opsz", "SOFT"] });
 
+// A screenshot of the production landing page at 1200 by 630, the size link previews expect. It shows real data as it
+// was on the day it was taken; retake it from the live site rather than from a development server.
+const SOCIAL_IMAGE = {
+  url: "/og-image.png",
+  width: 1200,
+  height: 630,
+  alt: "The 1stSeen landing page: Know when internships open, before everyone else, beside a real program's likely opening date.",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "1stseen.example";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const origin = `${protocol}://${host}`;
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
+  // Absolute URLs (the link preview image) use the host the page was asked for; without one, the configured app URL.
+  const origin = host ? `${protocol}://${host}` : process.env.NEXT_PUBLIC_APP_URL || "http://localhost";
 
   return {
     metadataBase: new URL(origin),
@@ -24,9 +34,9 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "1stSeen — Recruiting intelligence before the opening",
       description: "Evidence-backed forecasts, recruiting signals, and preparation deadlines for recurring early-career roles.",
       type: "website",
+      images: [SOCIAL_IMAGE],
     },
-    // No social image yet: a production screenshot is added with the og:image and twitter:image tags.
-    twitter: { card: "summary" },
+    twitter: { card: "summary_large_image", images: [SOCIAL_IMAGE] },
   };
 }
 
