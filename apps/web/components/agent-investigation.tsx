@@ -10,6 +10,7 @@ import { confidenceOutOf } from "@/lib/confidence";
 import { forecastBasis } from "@/lib/forecast-basis";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { formatDay } from "@/lib/dates";
+import { agentErrorMessage, agentErrorOffersSignUp, type AgentErrorPayload } from "@/lib/agent-availability";
 
 type ProgressItem = RecruitingAgentProgress;
 
@@ -84,9 +85,9 @@ export function AgentInvestigation({ company, role, roleId }: { company: string;
         }),
       });
       if (!response.ok || !response.body) {
-        const payload = await response.json().catch(() => ({})) as { error?: string; message?: string };
-        if (payload.error === "guest_rate_limited" || payload.error === "guest_agent_unavailable" || payload.error === "sign_in_required") setSignUp(true);
-        throw new Error(payload.error === "guest_rate_limited" || payload.error === "guest_agent_unavailable" ? payload.message ?? "Questions without an account are limited right now." : payload.error === "sign_in_required" ? "Your session has ended. Sign in again to ask the agent." : payload.error === "agent_api_unavailable" ? "The RecruitingAgent service is not configured for this environment." : payload.error === "agent_api_unreachable" ? "The RecruitingAgent service is configured but not responding. Try again in a moment." : "The investigation could not be started.");
+        const payload = await response.json().catch(() => ({})) as AgentErrorPayload;
+        if (agentErrorOffersSignUp(payload)) setSignUp(true);
+        throw new Error(agentErrorMessage(payload));
       }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();

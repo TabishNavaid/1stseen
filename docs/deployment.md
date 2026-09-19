@@ -62,7 +62,7 @@ So `--allow-unauthenticated` is set and **the application is the auth boundary**
 | Dev bypass impossible | `ALLOW_UNAUTHENTICATED_AGENT_DEV=true` with `FIRSTSEEN_ENV=production` also refuses to construct. |
 | Constant-time compare | `hmac.compare_digest`, before any body read, agent construction, or database connection. |
 | Only one open route | `/health`: no input, no configuration, no database. Not `/healthz`: Cloud Run's front end reserves paths ending in "z" and answers them with its own 404. |
-| Cost ceiling | Per-token rate limit plus `--max-instances=1`. |
+| Cost ceiling | Per-token rate limit, `--max-instances=1`, and a $5 monthly spend cap on Cloud Run (`docs/operations.md`). |
 | No error disclosure | Every unexpected exception becomes a fixed `{"error":"internal_error"}`. |
 
 Covered by `worker/tests/test_agent_api_surface.py`.
@@ -277,6 +277,10 @@ What keeps it near zero:
   than one concurrent vCPU no matter what arrives. Past that, Cloud Run queues
   and then returns **429** — a throttle, not a charge. Raising it is a deliberate
   decision (`docs/operations.md`, "Google Cloud Run").
+- **A $5 monthly spend cap on Cloud Run** (Billing console, a preview feature)
+  stops the service when the month's Cloud Run spend reaches it, until the next
+  month or until the owner lifts it. Questions then say they are temporarily
+  unavailable; everything else keeps working (`docs/operations.md`).
 - **`--timeout=300`** bounds the worst single request at 5 vCPU-minutes.
 
 Other services:

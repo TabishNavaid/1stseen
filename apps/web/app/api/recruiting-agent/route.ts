@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GUEST_AGENT_HEADER } from "@/cloudflare/guest-agent";
 import { agentCaller } from "@/lib/agent-auth";
+import { QUESTIONS_UNAVAILABLE_MESSAGE } from "@/lib/agent-availability";
 
 const requestSchema = z.object({
   question: z.string().trim().min(3).max(2000),
@@ -48,11 +49,15 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
   } catch {
-    // Configured but not answering: an honest 502, distinct from the 503 for "not configured".
-    return Response.json({ error: "agent_api_unreachable" }, { status: 502 });
+    // Configured but not answering. A paused service (the Cloud Run spend cap) looks like this or like the failure below;
+    // either way the question cannot be asked now, through no fault of the visitor's, and the panel says so in words.
+    return Response.json({ error: "agent_api_unreachable", message: QUESTIONS_UNAVAILABLE_MESSAGE }, { status: 503 });
   }
   if (!upstream.ok || !upstream.body) {
-    return Response.json({ error: "agent_api_failed" }, { status: 502 });
+    return Response.json(
+      { error: "agent_api_failed", upstream_status: upstream.status, message: QUESTIONS_UNAVAILABLE_MESSAGE },
+      { status: 503 },
+    );
   }
   return new Response(upstream.body, {
     status: 200,

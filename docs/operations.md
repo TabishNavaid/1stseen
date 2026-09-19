@@ -224,12 +224,33 @@ Billing is for the time an instance is handling at least one request. 180,000 vC
 questions a month, roughly 6,000 a day or 4 a minute sustained. Guests share 10 questions a minute, counted exactly by one
 Durable Object (`docs/guest-access.md`); sustained, that is about 432,000 one-second
 questions a month, roughly $6 past the free tier. Every question, a guest's or a member's, also passes the agent API's
-per-token limit of 60 a minute, and one instance runs them, so the worst case is that instance busy all month: about
-2.6 million vCPU-seconds, roughly $58 in CPU and $2 in memory at list prices. `--max-instances=1` is the ceiling on that,
-and the billing account's $5 budget alert reports long before it.
+per-token limit of 60 a minute, and one instance runs them. Without a cap the worst case would be that instance busy all
+month: about 2.6 million vCPU-seconds, roughly $58 in CPU and $2 in memory at list prices.
+
+**The worst case is $5 a month.** The billing account has two budgets on this project, both kept:
+
+| Budget | Scope | What it does |
+| --- | --- | --- |
+| "1stSeen monthly (5 USD)" | the whole project | Alerts only, at 50%, 90%, and 100% of actual spend and 100% of forecast spend, by email to the billing admins and hello@1stseen.win. |
+| "firstseen" | Cloud Run (`run.googleapis.com`) | 50%, 80%, and 100% alerts, with spend cap enforcement at $5 (a preview feature). |
+
+When Cloud Run's spend for the month reaches $5, the cap stops the agent API until the next month or until the owner lifts
+it. The cap was set and confirmed in the Billing console (Billing, Budgets & alerts). The Budget API, v1 and v1beta1,
+does not list preview spend caps (on 19 September 2026 it returned only the first budget), so no script here can check
+that the cap is still in place: look in the console.
+
+**What stops, and what a visitor sees.** Only questions to the agent, a member's preparation plan, and a Forecast Replay
+run need the agent API. A question gets a 503 from `/api/recruiting-agent` carrying one sentence, which the question panel
+shows in place of an answer: "Asking questions is temporarily unavailable. Forecasts, role pages, and their evidence still
+work. Please try again later." (`apps/web/lib/agent-availability.ts`). It is the same whether the paused service does not
+answer or Google's front end answers with an error page, and it is never an error page itself. A member's preparation
+plan or Replay run says the plan "could not be generated" or the replay "could not be run" (or, when the service does not
+answer at all, that it is configured but not responding): accurate, but not yet worded as a pause. Every page, the dashboard, role pages, evidence, and collection keep working: they read
+Supabase directly or run on GitHub Actions. The production health check reports the agent API as failing while it is
+paused, which opens one "Production health" issue.
 
 **Raising `--max-instances` is a deliberate decision, not tuning.** It is 1 from launch (18 September 2026) until a week
-of real bills has been watched. Each instance adds its own per-token allowance and about $60 a month to the worst case.
+of real bills has been watched. Each instance adds its own per-token allowance and, without the spend cap, about $60 a month to the worst case.
 One instance runs one investigation at a time (`docs/deployment.md`, "Concurrency and the blocking stream"), so the sign
 that a second is needed is questions queueing, seen as agent latency, not a lower bill.
 

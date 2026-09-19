@@ -53,6 +53,10 @@ through two limits, each a sliding 60-second window counted exactly by the `Gues
   of running them unlimited.
 - **A refusal is honest.** It is a 429 with `Retry-After: 60`, the scope that refused it, and a sentence saying so,
   which the agent panel shows with a link to create an account.
+- **A paused agent service reads as a pause.** When the agent API does not answer or answers with an error (as when the
+  Cloud Run spend cap has stopped it), the route answers 503 and the panel says "Asking questions is temporarily
+  unavailable. Forecasts, role pages, and their evidence still work. Please try again later." No account is offered: one
+  would not help.
 - **A guest question carries no user.** The route sends `audience: "guest"` and no `user_id`, and the agent service
   rejects a guest question that names one. Tool selection is the same deterministic selection, except that a guest
   never gets a readiness plan (the answer says a plan needs an account), and a watchlist question is refused as for any

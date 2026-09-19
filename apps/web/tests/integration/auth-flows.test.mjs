@@ -222,17 +222,19 @@ test("authentication flows against the local rig", async (t) => {
           assert.equal(result.response.status, 503, route);
           assert.deepEqual(await result.json(), { error }, route);
         }
-        // Configured but not answering (port 9 refuses connections): an honest 502, never a crash.
+        // Configured but not answering (port 9 refuses connections): an honest answer, never a crash. A question says
+        // questions are temporarily unavailable (503), as it does when the agent service is paused by its spend cap.
         process.env.FIRSTSEEN_AGENT_API_URL = "http://127.0.0.1:9";
         process.env.AGENT_API_BEARER_TOKEN = "synthetic-unreachable-service-token-000000";
-        for (const [route, body, error] of [
-          ["/api/readiness", { role_id: roleId }, "readiness_api_unreachable"],
-          ["/api/recruiting-agent", { question: "When does Stripe open its internship?" }, "agent_api_unreachable"],
-          ["/api/forecast-replay", { role_id: roleId, target_year: 2025, forecast_cutoff: "2025-04-01" }, "replay_api_unreachable"],
+        const { QUESTIONS_UNAVAILABLE_MESSAGE } = await import("../../lib/agent-availability.ts");
+        for (const [route, body, status, expected] of [
+          ["/api/readiness", { role_id: roleId }, 502, { error: "readiness_api_unreachable" }],
+          ["/api/recruiting-agent", { question: "When does Stripe open its internship?" }, 503, { error: "agent_api_unreachable", message: QUESTIONS_UNAVAILABLE_MESSAGE }],
+          ["/api/forecast-replay", { role_id: roleId, target_year: 2025, forecast_cutoff: "2025-04-01" }, 502, { error: "replay_api_unreachable" }],
         ]) {
           const result = await call(route, { body, jar });
-          assert.equal(result.response.status, 502, `${route} unreachable`);
-          assert.deepEqual(await result.json(), { error }, `${route} unreachable`);
+          assert.equal(result.response.status, status, `${route} unreachable`);
+          assert.deepEqual(await result.json(), expected, `${route} unreachable`);
         }
       } finally {
         if (saved.url !== undefined) process.env.FIRSTSEEN_AGENT_API_URL = saved.url;

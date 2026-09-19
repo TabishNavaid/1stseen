@@ -24,14 +24,16 @@ const FORGED = {
 const ALLOW = { limit: async () => ({ success: true }) };
 const REFUSE = { limit: async () => ({ success: false }) };
 
-async function withStubAgent(run) {
+const STREAM = (response) => response.writeHead(200, { "content-type": "text/event-stream" }).end("event: run_started\ndata: {}\n\n");
+
+async function withStubAgent(run, respond = STREAM) {
   const calls = [];
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk) => { body += chunk; });
     request.on("end", () => {
       calls.push({ line: `${request.method} ${request.url}`, body });
-      response.writeHead(200, { "content-type": "text/event-stream" }).end("event: run_started\ndata: {}\n\n");
+      respond(response);
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -107,4 +109,33 @@ test("a guest question that passes the limits reaches the agent service with no 
     assert.equal("user_id" in sent, false);
     assert.equal(sent.question, AGENT[1].question);
   });
+});
+
+test("a paused or failing agent service gives a guest the temporarily-unavailable sentence, never an error page", async () => {
+  const { QUESTIONS_UNAVAILABLE_MESSAGE } = await import("../lib/agent-availability.ts");
+  // Google's front end refusing a stopped service (an HTML page), and a service that is up but failing.
+  for (const [status, contentType, body] of [
+    [403, "text/html", "<html><title>Error 403 (Forbidden)!!1</title></html>"],
+    [503, "text/plain", "Service Unavailable"],
+  ]) {
+    await withStubAgent(async () => {
+      const response = await post(...AGENT, FORGED, { GUEST_AGENT_ADDRESS_LIMIT: ALLOW, GUEST_AGENT_OVERALL_LIMIT: ALLOW });
+      assert.equal(response.status, 503, `upstream ${status}`);
+      assert.match(response.headers.get("content-type") ?? "", /application\/json/);
+      assert.deepEqual(await response.json(), { error: "agent_api_failed", upstream_status: status, message: QUESTIONS_UNAVAILABLE_MESSAGE });
+    }, (response) => response.writeHead(status, { "content-type": contentType }).end(body));
+  }
+  // No answer at all: port 9 refuses connections.
+  const previous = { url: process.env.FIRSTSEEN_AGENT_API_URL, token: process.env.AGENT_API_BEARER_TOKEN };
+  process.env.FIRSTSEEN_AGENT_API_URL = "http://127.0.0.1:9";
+  process.env.AGENT_API_BEARER_TOKEN = "synthetic-test-token-not-a-credential-0000";
+  try {
+    const response = await post(...AGENT, FORGED, { GUEST_AGENT_ADDRESS_LIMIT: ALLOW, GUEST_AGENT_OVERALL_LIMIT: ALLOW });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "agent_api_unreachable", message: QUESTIONS_UNAVAILABLE_MESSAGE });
+  } finally {
+    for (const [name, value] of [["FIRSTSEEN_AGENT_API_URL", previous.url], ["AGENT_API_BEARER_TOKEN", previous.token]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
 });
