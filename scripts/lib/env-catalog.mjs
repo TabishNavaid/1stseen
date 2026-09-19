@@ -307,6 +307,7 @@ export const DEPLOY_PARAMETERS = {
   SERVICE: "scripts/deploy-agent.sh: Cloud Run service, default firstseen-agent",
   REPO: "scripts/deploy-agent.sh: Artifact Registry repository, default firstseen",
   SA_NAME: "scripts/deploy-agent.sh: runtime service account, default firstseen-agent",
+  BUILD_SA_NAME: "scripts/deploy-agent.sh: Cloud Build service account, default firstseen-build",
   IMAGE_TAG: "scripts/deploy-agent.sh: image tag, default the short commit",
 };
 

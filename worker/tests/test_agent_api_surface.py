@@ -68,7 +68,7 @@ def unreachable_agent() -> Any:  # pragma: no cover - invoked only on a bug
 
 
 class HealthEndpointTests(unittest.TestCase):
-    """`/healthz` is the Cloud Run startup probe: no auth, no database."""
+    """`/health` is the Cloud Run startup probe and the outside health check: no auth, no database."""
 
     def setUp(self) -> None:
         """Make any storage access during a probe an outright failure."""
@@ -84,7 +84,7 @@ class HealthEndpointTests(unittest.TestCase):
         )
 
     def test_health_requires_no_bearer_token(self) -> None:
-        responses = call(self.subject(), path="/healthz", method="GET")
+        responses = call(self.subject(), path="/health", method="GET")
 
         self.assertEqual(responses[0]["status"], 200)
         self.assertEqual(
@@ -95,7 +95,7 @@ class HealthEndpointTests(unittest.TestCase):
         """A probe never presents credentials; a bad one must not turn into a 401."""
         responses = call(
             self.subject(),
-            path="/healthz",
+            path="/health",
             method="GET",
             headers=[(b"authorization", b"Bearer not-the-token")],
         )
@@ -103,13 +103,13 @@ class HealthEndpointTests(unittest.TestCase):
         self.assertEqual(responses[0]["status"], 200)
 
     def test_health_reports_the_installed_package_version(self) -> None:
-        payload = json.loads(body_of(call(self.subject(), path="/healthz", method="GET")))
+        payload = json.loads(body_of(call(self.subject(), path="/health", method="GET")))
 
         self.assertEqual(payload["status"], "ok")
         self.assertNotEqual(payload["version"], "unknown")
 
     def test_health_refuses_a_write_method(self) -> None:
-        responses = call(self.subject(), path="/healthz", method="POST")
+        responses = call(self.subject(), path="/health", method="POST")
 
         self.assertEqual(responses[0]["status"], 405)
 
@@ -356,7 +356,7 @@ class RateLimitTests(unittest.TestCase):
             ),
         )
 
-        statuses = [call(api, path="/healthz", method="GET")[0]["status"] for _ in range(5)]
+        statuses = [call(api, path="/health", method="GET")[0]["status"] for _ in range(5)]
 
         self.assertEqual(statuses, [200] * 5)
 

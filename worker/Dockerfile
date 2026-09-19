@@ -63,7 +63,7 @@ EXPOSE 8080
 # No secret, no database, no auth — see agent_api.RecruitingAgentApi.__call__.
 # Cloud Run runs its own probes; this HEALTHCHECK is for local `docker run`.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD python -c "import os,urllib.request,sys; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8080\")}/healthz', timeout=2).status==200 else 1)"
+  CMD python -c "import os,urllib.request,sys; sys.exit(0 if urllib.request.urlopen(f'http://127.0.0.1:{os.environ.get(\"PORT\",\"8080\")}/health', timeout=2).status==200 else 1)"
 
 # One worker on purpose. `RecruitingAgent.stream()` is a synchronous generator
 # iterated on the event loop, so a second process would not make a single

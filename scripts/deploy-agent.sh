@@ -26,7 +26,7 @@
 #   * ALLOW_UNAUTHENTICATED_AGENT_DEV=false, and production refuses it anyway.
 #   * Every /v1/* route checks the token with hmac.compare_digest before reading
 #     a body, constructing an agent, or opening a database connection.
-#   * /healthz is the only unauthenticated route. It takes no input, reads no
+#   * /health is the only unauthenticated route. It takes no input, reads no
 #     configuration, and touches no database.
 #   * A per-token rate limit plus --max-instances caps the cost of a leaked token.
 # See docs/deployment.md for the rotation procedure.
@@ -38,6 +38,7 @@ REGION="${REGION:-us-west1}"
 SERVICE="${SERVICE:-firstseen-agent}"
 REPO="${REPO:-firstseen}"
 SA_NAME="${SA_NAME:-firstseen-agent}"
+BUILD_SA_NAME="${BUILD_SA_NAME:-firstseen-build}"
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -52,6 +53,8 @@ command -v gcloud >/dev/null || die "gcloud not found. https://cloud.google.com/
   || die "set PROJECT_ID=<your-gcp-project> (or run 'gcloud config set project <id>')"
 
 SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+BUILD_SA_EMAIL="${BUILD_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+SOURCE_BUCKET="gs://${PROJECT_ID}_cloudbuild"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO}/${SERVICE}:${IMAGE_TAG}"
 
 echo "project   $PROJECT_ID"
@@ -168,6 +171,30 @@ for secret in SUPABASE_SERVICE_ROLE_KEY AGENT_API_BEARER_TOKEN; do
   echo "granted secretAccessor on $secret"
 done
 
+# ----------------------------------------------------- Build service account
+step "Build service account"
+# Newer projects run Cloud Build as the Compute Engine default service account and grant it nothing, so a build fails
+# reading its own uploaded source. Rather than give that shared account the broad Cloud Build role, the build runs as
+# its own identity with exactly three grants: read its source bucket, write this one image repository, write logs.
+if gcloud iam service-accounts describe "$BUILD_SA_EMAIL" --project "$PROJECT_ID" >/dev/null 2>&1; then
+  echo "service account $BUILD_SA_EMAIL already exists"
+else
+  gcloud iam service-accounts create "$BUILD_SA_NAME" \
+    --display-name="1stSeen agent image build" \
+    --description="Cloud Build identity for the agent image. Reads its source, writes one repository, writes logs." \
+    --project "$PROJECT_ID"
+fi
+# gcloud builds submit uploads the source to this bucket; create it first so the grant has something to name.
+gcloud storage buckets describe "$SOURCE_BUCKET" --project "$PROJECT_ID" >/dev/null 2>&1 \
+  || gcloud storage buckets create "$SOURCE_BUCKET" --project "$PROJECT_ID" --location "$REGION" --uniform-bucket-level-access
+gcloud storage buckets add-iam-policy-binding "$SOURCE_BUCKET" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" --role="roles/storage.objectViewer" --project "$PROJECT_ID" >/dev/null
+gcloud artifacts repositories add-iam-policy-binding "$REPO" --location "$REGION" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" --role="roles/artifactregistry.writer" --project "$PROJECT_ID" >/dev/null
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${BUILD_SA_EMAIL}" --role="roles/logging.logWriter" --condition=None >/dev/null
+echo "granted source read, repository write, and log write to $BUILD_SA_EMAIL"
+
 # ------------------------------------------------------------------ Build
 step "Build and push"
 # Context is the repository root because the Dockerfile copies worker/; the
@@ -177,6 +204,8 @@ gcloud builds submit \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --config worker/cloudbuild.yaml \
+  --service-account "projects/${PROJECT_ID}/serviceAccounts/${BUILD_SA_EMAIL}" \
+  --gcs-source-staging-dir "${SOURCE_BUCKET}/source" \
   --substitutions "_IMAGE=$IMAGE" \
   --ignore-file worker/.dockerignore \
   .
@@ -194,6 +223,7 @@ gcloud run deploy "$SERVICE" \
   --set-env-vars "SUPABASE_URL=${SUPABASE_URL},FIRSTSEEN_ENV=production,ALLOW_UNAUTHENTICATED_AGENT_DEV=false,AGENT_INTENT_LLM_ENABLED=false" \
   --min-instances=0 \
   --max-instances=1 \
+  --max=1 \
   --concurrency=40 \
   --cpu=1 \
   --memory=512Mi \
@@ -201,7 +231,7 @@ gcloud run deploy "$SERVICE" \
   --allow-unauthenticated \
   --port=8080 \
   --execution-environment=gen2 \
-  --startup-probe="httpGet.path=/healthz,initialDelaySeconds=5,periodSeconds=5,timeoutSeconds=3,failureThreshold=10"
+  --startup-probe="httpGet.path=/health,initialDelaySeconds=5,periodSeconds=5,timeoutSeconds=3,failureThreshold=10"
 
 URL="$(gcloud run services describe "$SERVICE" \
         --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
@@ -210,7 +240,7 @@ step "Deployed"
 echo "service URL: $URL"
 echo
 echo "Verify:"
-echo "  curl -s $URL/healthz"
+echo "  curl -s $URL/health"
 echo "  curl -s -o /dev/null -w '%{http_code}\\n' -X POST $URL/v1/forecast-replay   # expect 401"
 echo
 echo "Point the web app at it:"

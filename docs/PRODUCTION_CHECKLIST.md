@@ -183,7 +183,7 @@ nothing in that case; just run it again.
 **Expected:** it ends with `service URL: https://firstseen-agent-….run.app`.
 
 ```bash
-curl -s https://<service URL>/healthz
+curl -s https://<service URL>/health
 ```
 
 **Expected:** a small JSON body with `"status":"ok"`.
@@ -440,7 +440,7 @@ Every variable, with what breaks without it: `npm run preflight`. Full inventory
 - Add the repository variables `FIRSTSEEN_WEB_URL` and `FIRSTSEEN_AGENT_API_URL`, and for Worker errors and CPU the
   variable `CLOUDFLARE_ACCOUNT_ID` and secret `CLOUDFLARE_ANALYTICS_TOKEN` (Account Analytics: Read). Run
   `ops-health.yml` once by hand: every check should be ok or say why it is not configured.
-- In Google Cloud Monitoring, add uptime checks on the web `/api/health` and the agent `/healthz`, with an email alert:
+- In Google Cloud Monitoring, add uptime checks on the web `/api/health` and the agent `/health`, with an email alert:
   the only check that does not depend on GitHub's scheduler.
 - Watch the database size: the rebuilt rig is 243 MB of Supabase Free's 500 MB, and the growth rate is not yet measured
   (docs/operations.md, "When the database fills").

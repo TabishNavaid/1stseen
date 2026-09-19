@@ -39,7 +39,9 @@ Send = Callable[[Message], Awaitable[None]]
 AGENT_ROUTES = frozenset(
     {"/v1/recruiting/query", "/v1/forecast-replay", "/v1/readiness-plan"}
 )
-HEALTH_ROUTE = "/healthz"
+# Not /healthz: Cloud Run's front end reserves URL paths ending in "z" and answers them with its own 404, so an
+# outside check could never reach one. The container's own startup probe could, which hid the problem.
+HEALTH_ROUTE = "/health"
 
 try:
     PACKAGE_VERSION = package_version("firstseen-intelligence")

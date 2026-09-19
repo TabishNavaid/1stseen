@@ -6,3 +6,6 @@ steps:
     args: ["build", "-f", "worker/Dockerfile", "-t", "${_IMAGE}", "."]
 images:
   - "${_IMAGE}"
+options:
+  # A build that runs as its own service account must say where its logs go; Cloud Logging needs only logWriter.
+  logging: CLOUD_LOGGING_ONLY

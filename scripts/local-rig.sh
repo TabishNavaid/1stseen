@@ -93,7 +93,7 @@ case "${1:-}" in
       }
     ' || ok "DOWN" "Supabase (run: scripts/local-rig.sh up)"
     if curl -sf -m 3 "$OLLAMA_URL/api/tags" | grep -q "\"$OLLAMA_MODEL\""; then ok "up" "Ollama with $OLLAMA_MODEL"; else ok "DOWN" "Ollama or $OLLAMA_MODEL (run: ollama serve; ollama pull $OLLAMA_MODEL)"; fi
-    if curl -sf -m 3 "http://$AGENT_HOST:$AGENT_PORT/healthz" >/dev/null; then ok "up" "agent API http://$AGENT_HOST:$AGENT_PORT"; else ok "DOWN" "agent API (run: scripts/local-rig.sh agent)"; fi
+    if curl -sf -m 3 "http://$AGENT_HOST:$AGENT_PORT/health" >/dev/null; then ok "up" "agent API http://$AGENT_HOST:$AGENT_PORT"; else ok "DOWN" "agent API (run: scripts/local-rig.sh agent)"; fi
     if curl -s -m 5 -o /dev/null http://localhost:3000/; then ok "up" "web http://localhost:3000"; else ok "DOWN" "web (run: npm run dev)"; fi
     ;;
   down)

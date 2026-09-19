@@ -4,7 +4,7 @@
  *
  * Probes, each reported as ok, FAILING, or not configured (never silently passed or failed when its inputs are unset):
  *   - Web app       GET  $FIRSTSEEN_WEB_URL/api/health          expects 200 {"service":"1stseen-web","status":"ok"}
- *   - Agent API     GET  $FIRSTSEEN_AGENT_API_URL/healthz       expects 200 {"status":"ok"}; allows a cold start
+ *   - Agent API     GET  $FIRSTSEEN_AGENT_API_URL/health        expects 200 {"status":"ok"}; allows a cold start
  *   - Database      HEAD $SUPABASE_URL/rest/v1/companies        with the service-role key; expects 200/206
  *   - Schedules     each scheduled workflow's last successful run is recent enough (GitHub API, `actions: read`)
  *   - Worker errors Cloudflare's GraphQL analytics for the Worker over the last 24 h, with requests and CPU for the
@@ -79,7 +79,7 @@ function checkWeb() {
 
 function checkAgent() {
   // min-instances=0, so the first request after a quiet period starts an instance.
-  return jsonHealth("Agent API (Cloud Run)", bare(process.env.FIRSTSEEN_AGENT_API_URL), "/healthz", { status: "ok" }, 45_000, "FIRSTSEEN_AGENT_API_URL");
+  return jsonHealth("Agent API (Cloud Run)", bare(process.env.FIRSTSEEN_AGENT_API_URL), "/health", { status: "ok" }, 45_000, "FIRSTSEEN_AGENT_API_URL");
 }
 
 async function checkDatabase() {

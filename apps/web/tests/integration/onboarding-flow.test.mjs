@@ -82,7 +82,7 @@ test("the first run against the local rig", async (t) => {
   }
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const plannerUp = Boolean(process.env.FIRSTSEEN_AGENT_API_URL)
-    && await fetch(new URL("/healthz", process.env.FIRSTSEEN_AGENT_API_URL)).then((r) => r.ok).catch(() => false);
+    && await fetch(new URL("/health", process.env.FIRSTSEEN_AGENT_API_URL)).then((r) => r.ok).catch(() => false);
   t.diagnostic(plannerUp ? "readiness planner is running: a real plan is required" : "readiness planner is not running: the honest outcome is required");
 
   const password = `Correct-horse-${RUN}`;

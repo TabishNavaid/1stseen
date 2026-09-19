@@ -29,7 +29,7 @@ Cloudflare Workers (section 7); `docs/hosted-supabase-setup.md` covers the datab
                 │   │  Cloud Run                   │  worker/Dockerfile
                 │   │  firstseen-agent             │  uvicorn firstseen.agent_api:app
                 │   │                              │
-                │   │  GET  /healthz      no auth  │  SA: firstseen-agent@
+                │   │  GET  /health       no auth  │  SA: firstseen-agent@
                 │   │  POST /v1/recruiting/query   │  secrets mounted from
                 │   │  POST /v1/forecast-replay    │  Secret Manager
                 │   │  POST /v1/readiness-plan     │
@@ -61,7 +61,7 @@ So `--allow-unauthenticated` is set and **the application is the auth boundary**
 | Token is mandatory | `FIRSTSEEN_ENV=production` makes `Settings` refuse to construct without `AGENT_API_BEARER_TOKEN`. The container exits at import rather than serving open. |
 | Dev bypass impossible | `ALLOW_UNAUTHENTICATED_AGENT_DEV=true` with `FIRSTSEEN_ENV=production` also refuses to construct. |
 | Constant-time compare | `hmac.compare_digest`, before any body read, agent construction, or database connection. |
-| Only one open route | `/healthz`: no input, no configuration, no database. |
+| Only one open route | `/health`: no input, no configuration, no database. Not `/healthz`: Cloud Run's front end reserves paths ending in "z" and answers them with its own 404. |
 | Cost ceiling | Per-token rate limit plus `--max-instances=1`. |
 | No error disclosure | Every unexpected exception becomes a fixed `{"error":"internal_error"}`. |
 
@@ -73,7 +73,7 @@ Covered by `worker/tests/test_agent_api_surface.py`.
 
 | Route | Method | Auth | Notes |
 |---|---|---|---|
-| `/healthz` | GET, HEAD | **none** | `{"status":"ok","version":"<package version>"}`. Startup and liveness probe. |
+| `/health` | GET, HEAD | **none** | `{"status":"ok","version":"<package version>"}`. Startup and liveness probe. |
 | `/v1/recruiting/query` | POST | bearer | SSE. `text/event-stream`, `x-accel-buffering: no`. |
 | `/v1/forecast-replay` | POST | bearer | Result, or `422` with the runner's own eligibility reason. |
 | `/v1/readiness-plan` | POST | bearer | `403` unless the user already follows the role. |
@@ -90,7 +90,7 @@ revision** — not a restart of the same one.
 
 `RecruitingAgent.stream()` is a **synchronous generator** iterated directly on the
 event loop in `agent_api.__call__`. While an investigation runs, that instance
-serves nothing else — including `/healthz`.
+serves nothing else — including `/health`.
 
 Measured locally: a real investigation against a 3,451-role corpus took ~2.7 s end
 to end, and idle RSS is ~43 MiB of the 512 MiB limit.

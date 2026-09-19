@@ -55,7 +55,7 @@ stops with them. The independent check is a **Google Cloud Monitoring uptime che
 the project that hosts the agent API:
 
 - `GET https://<web origin>/api/health`, expecting 200 and `"status":"ok"`, every 15 minutes.
-- `GET https://<agent API origin>/healthz`, expecting 200, every 15 minutes.
+- `GET https://<agent API origin>/health`, expecting 200, every 15 minutes.
 - An alerting policy on either check failing, notifying the owner's email.
 
 That is outside this repository and has to be done in the Cloud console by the owner.
@@ -68,7 +68,7 @@ reported as such, never silently passed):
 | Check | How | Needs |
 | --- | --- | --- |
 | Web app | `GET $FIRSTSEEN_WEB_URL/api/health` returns 200 `{"service":"1stseen-web","status":"ok"}` | repository variable `FIRSTSEEN_WEB_URL` |
-| Agent API | `GET $FIRSTSEEN_AGENT_API_URL/healthz` returns 200, allowing a cold start | repository variable `FIRSTSEEN_AGENT_API_URL` |
+| Agent API | `GET $FIRSTSEEN_AGENT_API_URL/health` returns 200, allowing a cold start | repository variable `FIRSTSEEN_AGENT_API_URL` |
 | Database | `HEAD $SUPABASE_URL/rest/v1/companies` with the service-role key returns 200 or 206 | the collection secrets |
 | Schedules | each scheduled workflow's last successful run is younger than its interval plus its timeout | `actions: read` |
 | Worker errors | Cloudflare GraphQL analytics for `firstseen-web` over 24 hours: errors, requests, CPU p50 and p99 | variable `CLOUDFLARE_ACCOUNT_ID`, secret `CLOUDFLARE_ANALYTICS_TOKEN` (Account Analytics: Read) |
