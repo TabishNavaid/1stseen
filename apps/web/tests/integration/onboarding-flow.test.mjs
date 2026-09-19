@@ -106,7 +106,7 @@ test("the first run against the local rig", async (t) => {
       const html = decode(await response.text());
       const visible = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
       assert.match(visible, /What are you looking for\?/);
-      for (const label of ["Internship", "New grad", "Co-op"]) assert.ok(visible.includes(label), label);
+      for (const label of ["Internship", "New grad", "Co-op", "Show me all three"]) assert.ok(visible.includes(label), label);
       assert.match(visible, /<a[^>]*href="\/roles"[^>]*>\s*Skip, just browse\s*<\/a>/, "the guest skip path is a plain link to the roles view");
       assert.equal(visible.match(/accuracy is not\s+yet validated/g)?.length, 1, "the footer's disclosure, and only that");
 
@@ -136,7 +136,8 @@ test("the first run against the local rig", async (t) => {
       ]);
       assert.ifError(summary.error);
       assert.ifError(expected.error);
-      assert.match(html, new RegExp(`Here are ${Number(summary.data.matching_roles).toLocaleString("en-US")} programs? to watch`), "the count is the roles view's own");
+      assert.match(html, new RegExp(`Your top ${payoffIds.length} to watch`), "the headline leads with the listed programs");
+      assert.match(html, new RegExp(`${Number(summary.data.matching_roles).toLocaleString("en-US")} programs? match`), "the count is the roles view's own");
       assert.deepEqual(payoffIds, expected.data.map((row) => row.role_id), "the page lists the function's roles, in order");
 
       let seenWithoutForecast = false;

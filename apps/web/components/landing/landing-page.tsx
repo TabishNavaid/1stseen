@@ -1,14 +1,14 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
-import { BrandMark } from "@/components/brand-mark";
 import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { ReturningGuestNote } from "@/components/onboarding/returning-guest-note";
-import { Icon } from "@/components/ui/icon";
-import { Pictogram, type PictogramName } from "@/components/ui/pictogram";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { formatShortDay } from "@/lib/dates";
 import type { LandingData } from "@/lib/landing-data";
 import { sitePage } from "@/lib/site-links";
 
-const STEPS: ReadonlyArray<{ icon: PictogramName; title: string; body: string }> = [
+const STEPS: ReadonlyArray<{ icon: IconName; title: string; body: string }> = [
   {
     icon: "binoculars",
     title: "We watch career pages and job boards",
@@ -21,8 +21,8 @@ const STEPS: ReadonlyArray<{ icon: PictogramName; title: string; body: string }>
   },
   {
     icon: "bell-ring",
-    title: "You get a heads-up before it opens",
-    body: "Watch the programs you care about. Their predicted windows and a prep plan land on your calendar, so your résumé is ready before the rush.",
+    title: "You know before it opens",
+    body: "Save the programs you care about. Their likely dates and a prep plan go on your watchlist and calendar, so your résumé is ready before the rush.",
   },
 ];
 
@@ -37,23 +37,16 @@ function daysUntil(windowStart: string, now: Date): number {
  * methodology page. Nothing here is a dashboard, and nothing is shown that the data cannot back: without a preview role
  * the card gives way to the illustration, and without a current window "Opening soon" is left out.
  */
-export function LandingPage({ data, now = new Date() }: { data: LandingData | null; now?: Date }) {
+export function LandingPage({ data, header, now = new Date() }: { data: LandingData | null; header: ReactNode; now?: Date }) {
   const preview = data?.preview ?? null;
   const soon = data?.openingSoon ?? [];
+  const opened = data?.justOpened ?? { openings: [], total: 0 };
   // "Soon" only when it is: a first window three months or more away is "next", not "soon".
   const soonHeading = soon.length > 0 && daysUntil(soon[0].forecast.windowStart, now) <= 90 ? "Opening soon" : "Next to open";
 
   return (
     <div className="flex-1 bg-canvas text-ink">
-      <a href="#landing-content" className="sr-only z-[60] rounded-control bg-surface px-3 py-2 text-xs font-semibold text-ink focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-2 focus:outline-focus">Skip to content</a>
-      <header className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-4 md:px-6">
-        <BrandMark />
-        <nav aria-label="Primary" className="ml-auto flex items-center gap-1 sm:gap-2">
-          <Link href="/roles" className="focus-ring hidden h-10 items-center rounded-chip px-3 text-sm font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink sm:inline-flex">Browse roles</Link>
-          <Link href="/signin" className="focus-ring inline-flex min-h-touch items-center rounded-chip px-3 text-sm font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">Sign in</Link>
-        </nav>
-      </header>
-
+      {header}
       <main id="landing-content">
         <section aria-labelledby="hero-title" className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-8 md:px-6 md:pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-16 lg:pb-24">
           <div>
@@ -64,7 +57,7 @@ export function LandingPage({ data, now = new Date() }: { data: LandingData | nu
               Know when internships open, <span className="relative whitespace-nowrap text-accent">before<span className="absolute inset-x-0 -bottom-1 h-2 rounded-full bg-warm/60" aria-hidden="true" /></span> everyone else.
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-8 text-ink-muted">
-              1stSeen learns when each program opens every year and gives you a heads-up before it does.
+              1stSeen learns when each program opens every year and shows you when it is likely to open next.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link href="/welcome" className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-6 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">
@@ -92,6 +85,31 @@ export function LandingPage({ data, now = new Date() }: { data: LandingData | nu
           </div>
         </section>
 
+        {opened.openings.length > 0 && (
+          <section aria-labelledby="opened-title" className="mx-auto max-w-6xl px-4 pb-14 md:px-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <h2 id="opened-title" className="flex items-center gap-2 text-lg font-semibold text-ink">
+                <span className="relative flex size-2.5" aria-hidden="true"><span className="absolute inline-flex size-full animate-ping rounded-full bg-warm opacity-60" /><span className="relative inline-flex size-2.5 rounded-full bg-warm-line" /></span>
+                Just opened
+              </h2>
+              <Link href="/opened" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-sm">
+                See all {opened.total.toLocaleString("en-US")}<Icon name="arrow-right" size={14} />
+              </Link>
+            </div>
+            <ul className="-mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0" aria-label="Programs that just opened">
+              {opened.openings.map((opening) => (
+                <li key={opening.id} className="card lift relative w-64 shrink-0 snap-start p-4">
+                  <p className="text-micro font-semibold uppercase tracking-label text-warm-ink">Opened {formatShortDay(opening.openedOn)}</p>
+                  <p className="mt-2 truncate text-caption font-semibold text-ink-muted">{opening.company}</p>
+                  <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-ink">
+                    <Link href={`/roles/${opening.roleId}`} className="focus-ring rounded-sm after:absolute after:inset-0 after:rounded-card after:content-['']">{opening.role}</Link>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section id="how" aria-labelledby="how-title" className="border-y border-line bg-surface">
           <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-24">
             <p className="label-caps text-accent-ink">How it works</p>
@@ -101,7 +119,7 @@ export function LandingPage({ data, now = new Date() }: { data: LandingData | nu
                 <li key={step.title} className="rounded-card border border-line bg-canvas p-6">
                   <span className="flex items-center gap-3">
                     <span className={`grid size-12 place-items-center rounded-card ${index === 2 ? "bg-warm-soft text-warm-ink" : "bg-accent-soft text-accent-ink"}`}>
-                      <Pictogram name={step.icon} size={24} />
+                      <Icon name={step.icon} size={24} />
                     </span>
                     <span className="text-caption font-semibold tabular text-ink-subtle">Step {index + 1}</span>
                   </span>
@@ -133,7 +151,7 @@ export function LandingPage({ data, now = new Date() }: { data: LandingData | nu
 
         <section aria-labelledby="trust-title" className={soon.length > 0 ? "px-4 pb-20 md:px-6" : "px-4 py-16 md:px-6 md:py-20"}>
           <div className="mx-auto flex max-w-3xl flex-col items-center rounded-card bg-accent px-6 py-10 text-center text-ink-inverse sm:px-10">
-            <span className="grid size-12 place-items-center rounded-full bg-warm text-ink" aria-hidden="true"><Pictogram name="link-2" size={22} /></span>
+            <span className="grid size-12 place-items-center rounded-full bg-warm text-ink" aria-hidden="true"><Icon name="link-2" size={22} /></span>
             <h2 id="trust-title" className="heading-display mt-4 text-2xl leading-snug sm:text-3xl">Every date links to where we saw it.</h2>
             <Link href={sitePage("methodology").href} className="focus-ring mt-4 inline-flex min-h-touch items-center gap-1 rounded-chip px-2 text-sm font-semibold text-ink-inverse underline decoration-warm decoration-2 underline-offset-4 hover:decoration-ink-inverse">
               How forecasts are made<Icon name="arrow-right" size={14} />

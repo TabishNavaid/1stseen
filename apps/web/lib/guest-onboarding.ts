@@ -2,7 +2,7 @@
  * A guest's first-run answers, kept in the browser's local storage until they sign up.
  *
  * Nothing about a guest is stored on the server. The answers live under one key on the guest's own device, personalize
- * what they browse through the URL, and carry into an account on sign-up: a guest who chose "Save these" is marked
+ * what they browse through the URL, and carry into an account on sign-up: a guest who chose "Save to my watchlist" is marked
  * `pendingSave`, and the first signed-in visit to /welcome posts the answers to /api/onboarding and clears the mark.
  * A different device, or cleared storage, simply has no answers, and the first run starts again.
  *
@@ -19,7 +19,7 @@ export type GuestOnboarding = {
   answers: OnboardingAnswers;
   /** When the guest reached the payoff, or null while they are still answering. */
   completedAt: string | null;
-  /** Set when the guest chose "Save these and get alerts": the next signed-in first run saves the answers. */
+  /** Set when the guest chose "Save to my watchlist": the next signed-in first run saves the answers. */
   pendingSave: boolean;
 };
 

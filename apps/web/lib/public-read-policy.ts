@@ -5,7 +5,7 @@
  * and that reader refuses anything this file does not list. RLS and grants are untouched: anon holds no privilege on
  * any table (migration 202608140024), and nothing here changes that.
  *
- * Every relation below is non-user data: companies, roles, observations and opening events, forecasts with their
+ * Every relation below is non-user data: companies, roles and their recorded titles, observations and opening events, forecasts with their
  * provenance and changes, signals, and backtest run totals and metrics. No column that holds raw scraped content (`raw_text`,
  * `raw_payload`, `metadata`) is listed. Pure, so the tests read it directly.
  */
@@ -25,6 +25,8 @@ export const PUBLIC_TABLE_COLUMNS = {
     "archive_capture_at",
   ],
   observation_role_matches: ["observation_id", "canonical_role_id", "evidence_kind"],
+  // A role's titles as companies published them, read only to show a title with its accents and punctuation.
+  role_aliases: ["id", "canonical_role_id", "alias_title", "last_seen_at"],
   forecasts: [
     "id", "canonical_role_id", "as_of", "point_date", "window_start", "window_end", "confidence", "confidence_factors",
     "method", "model_version", "history_count", "input_fingerprint", "forecasted_at", "calibrated_probability",

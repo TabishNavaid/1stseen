@@ -136,7 +136,7 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
               A replay holds out an opening whose actual date is known, an exact or bounded one. Of{" "}
               <strong className="font-semibold">{summary.rolesWithHistory}</strong> role{summary.rolesWithHistory === 1 ? "" : "s"} with two
               or more recorded openings, <strong className="font-semibold">{summary.observedByOnly}</strong> have only
-              {" "}<code className="font-mono">observed_by</code> openings, which prove a role was visible by a date, not that it opened then.
+              {" "}observed-by openings, which prove a role was visible by a date, not that it opened then.
             </p>
             <p className="mt-3 max-w-3xl text-caption leading-5 text-ink-muted">
               A cycle becomes replayable once 1stSeen observes its opening with a source-supplied publication date, or a complete
@@ -152,12 +152,12 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
               <h2 id="replay-scope-title" className="mt-1 text-sm font-semibold">Held-out targets with a defensible actual interval</h2>
               <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 text-caption">
                 <dt className="text-ink-muted">Roles with two or more recorded openings</dt><dd className="text-right font-semibold tabular">{summary.rolesWithHistory}</dd>
-                <dt className="text-ink-muted">Excluded: only <code className="font-mono">observed_by</code> evidence</dt><dd className="text-right font-semibold tabular">{summary.observedByOnly}</dd>
+                <dt className="text-ink-muted">Excluded: only observed-by evidence</dt><dd className="text-right font-semibold tabular">{summary.observedByOnly}</dd>
                 <dt className="text-ink-muted">Replay candidates</dt><dd className="text-right font-semibold tabular">{summary.candidates}</dd>
                 <dt className="pl-3 text-ink-muted">held out on an <PrecisionChip variant="code" precision="exact" /> opening</dt><dd className="text-right tabular">{summary.exactCandidates}</dd>
                 <dt className="pl-3 text-ink-muted">held out on a <PrecisionChip variant="code" precision="bounded" /> opening</dt><dd className="text-right tabular">{summary.boundedCandidates}</dd>
               </dl>
-              <p className="mt-3 text-micro leading-4 text-ink-subtle">An archive capture proves a role was visible by then, not that it opened then, so an <code className="font-mono">observed_by</code> opening is never scored as ground truth.</p>
+              <p className="mt-3 text-micro leading-4 text-ink-subtle">An archive capture proves a role was visible by then, not that it opened then, so an observed-by opening is never scored as ground truth.</p>
             </section>
 
             <section className="panel p-4" aria-labelledby="backtest-reasons-title">

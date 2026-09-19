@@ -11,35 +11,51 @@
 
 // Relative with its extension, so Node's test runner loads this file directly; Vite resolves it either way.
 import { dashboardHref, defaultDashboardFilters, type DashboardFilters, type Discipline, type ProgramType } from "./dashboard-query.ts";
-import type { PictogramName } from "@/components/ui/pictogram-names";
+import type { IconName } from "@/components/ui/icon-names";
 
 export type LookingFor = "internship" | "new_grad" | "co_op";
 
 /** Question one. "New grad" covers every full-time early-career program type, as the scope does (docs/role-scope.md). */
-export const LOOKING_FOR: ReadonlyArray<{ value: LookingFor; label: string; hint: string; pictogram: PictogramName; types: readonly ProgramType[] }> = [
-  { value: "internship", label: "Internship", hint: "A summer or term placement while you study", pictogram: "backpack", types: ["internship"] },
-  { value: "new_grad", label: "New grad", hint: "Full-time roles and programs after you graduate", pictogram: "graduation-cap", types: ["new_grad", "graduate_program", "rotational", "apprenticeship"] },
-  { value: "co_op", label: "Co-op", hint: "Paid work terms that alternate with school", pictogram: "repeat", types: ["co_op"] },
+export const LOOKING_FOR: ReadonlyArray<{ value: LookingFor; label: string; hint: string; icon: IconName; types: readonly ProgramType[] }> = [
+  { value: "internship", label: "Internship", hint: "A summer or term placement while you study", icon: "backpack", types: ["internship"] },
+  { value: "new_grad", label: "New grad", hint: "Full-time roles and programs after you graduate", icon: "graduation-cap", types: ["new_grad", "graduate_program", "rotational", "apprenticeship"] },
+  { value: "co_op", label: "Co-op", hint: "Paid work terms that alternate with school", icon: "repeat", types: ["co_op"] },
 ];
 
 export const LOOKING_FOR_VALUES: readonly LookingFor[] = LOOKING_FOR.map((option) => option.value);
 
-/** Question two: ten fields, each exactly one scope discipline. */
-export const FIELDS: ReadonlyArray<{ value: Discipline; label: string; name: string; pictogram: PictogramName }> = [
-  { value: "software_engineering", label: "SWE", name: "Software engineering", pictogram: "code-xml" },
-  { value: "machine_learning", label: "ML/AI", name: "Machine learning and AI", pictogram: "brain-circuit" },
-  { value: "data", label: "Data", name: "Data engineering and science", pictogram: "chart-column" },
-  { value: "infrastructure", label: "Infra", name: "Infrastructure and SRE", pictogram: "server" },
-  { value: "security", label: "Security", name: "Security", pictogram: "shield" },
-  { value: "hardware", label: "Hardware", name: "Hardware and embedded", pictogram: "cpu" },
-  { value: "robotics", label: "Robotics", name: "Robotics and controls", pictogram: "bot" },
-  { value: "quantitative", label: "Quant", name: "Quant research, trading, and development", pictogram: "chart-line" },
-  { value: "product_management", label: "PM", name: "Product management", pictogram: "square-kanban" },
-  { value: "design", label: "Design", name: "Design and UX research", pictogram: "palette" },
+export type FieldValue = Discipline | "other_engineering";
+
+/**
+ * Question two: eleven fields that together cover the scope's seventeen disciplines exactly once (docs/role-scope.md).
+ * Ten are one discipline each; "Other engineering" is the seven engineering disciplines outside computing.
+ */
+export const FIELDS: ReadonlyArray<{ value: FieldValue; label: string; name: string; icon: IconName; disciplines: readonly Discipline[] }> = [
+  { value: "software_engineering", label: "SWE", name: "Software engineering", icon: "code-xml", disciplines: ["software_engineering"] },
+  { value: "machine_learning", label: "ML/AI", name: "Machine learning and AI", icon: "brain-circuit", disciplines: ["machine_learning"] },
+  { value: "data", label: "Data", name: "Data engineering and science", icon: "chart-column", disciplines: ["data"] },
+  { value: "infrastructure", label: "Infra", name: "Infrastructure and SRE", icon: "server", disciplines: ["infrastructure"] },
+  { value: "security", label: "Security", name: "Security", icon: "shield", disciplines: ["security"] },
+  { value: "hardware", label: "Hardware", name: "Hardware and embedded", icon: "cpu", disciplines: ["hardware"] },
+  { value: "robotics", label: "Robotics", name: "Robotics and controls", icon: "bot", disciplines: ["robotics"] },
+  { value: "quantitative", label: "Quant", name: "Quant research, trading, and development", icon: "chart-line", disciplines: ["quantitative"] },
+  { value: "product_management", label: "PM", name: "Product management", icon: "square-kanban", disciplines: ["product_management"] },
+  { value: "design", label: "Design", name: "Design and UX research", icon: "palette", disciplines: ["design"] },
+  {
+    value: "other_engineering",
+    label: "Other engineering",
+    name: "Mechanical, aerospace, manufacturing, materials, chemical, civil, and biomedical engineering",
+    icon: "wrench",
+    disciplines: ["mechanical_engineering", "aerospace_engineering", "manufacturing_engineering", "materials_engineering", "chemical_engineering", "civil_engineering", "biomedical_engineering"],
+  },
 ];
 
-export type FieldValue = Discipline;
-export const FIELD_VALUES: readonly Discipline[] = FIELDS.map((field) => field.value);
+export const FIELD_VALUES: readonly FieldValue[] = FIELDS.map((field) => field.value);
+
+/** The disciplines a set of fields covers, in scope order. */
+export function disciplinesForFields(fields: readonly FieldValue[]): Discipline[] {
+  return [...new Set(FIELDS.filter((field) => fields.includes(field.value)).flatMap((field) => field.disciplines))];
+}
 
 /** Question three: at most this many companies. */
 export const MAX_COMPANIES = 10;
@@ -106,7 +122,7 @@ export function programTypesFor(lookingFor: LookingFor | null): ProgramType[] {
  * see every program that fits, so the payoff lists the watched companies' programs first instead of only theirs.
  */
 export function answersToFilters(answers: OnboardingAnswers): DashboardFilters {
-  return { ...defaultDashboardFilters, types: programTypesFor(answers.lookingFor), disciplines: [...answers.fields] };
+  return { ...defaultDashboardFilters, types: programTypesFor(answers.lookingFor), disciplines: disciplinesForFields(answers.fields) };
 }
 
 /** Where "keep browsing" goes: the roles page, filtered to the answers. */
@@ -137,9 +153,13 @@ export type StoredPreferences = {
   preferred_locations?: readonly string[] | null;
 };
 
-/** What a stored account says about the fields. The program type has no column; the roles followed carry it. */
+/**
+ * What a stored account says about the fields: a field is chosen when every discipline it covers is stored. The program
+ * type has no column; the roles followed carry it.
+ */
 export function answersFromPreferences(row: StoredPreferences | null): OnboardingAnswers {
-  return cleanAnswers({ fields: row?.target_disciplines ?? [] });
+  const stored = row?.target_disciplines ?? [];
+  return cleanAnswers({ fields: FIELDS.filter((field) => field.disciplines.every((discipline) => stored.includes(discipline))).map((field) => field.value) });
 }
 
 export const SEASON_LABELS: Record<string, string> = { summer: "Summer", fall: "Fall", winter: "Winter", spring: "Spring", year_round: "Year-round" };

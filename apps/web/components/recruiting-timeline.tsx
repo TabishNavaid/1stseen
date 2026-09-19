@@ -1,15 +1,50 @@
+import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import type { OpenedRole } from "@/lib/demo-data";
-import { SourceBadge } from "@/components/source-badge";
 
-/** `total` counts every opening the list is drawn from; when the list is shorter, it says it is the newest of them. */
-export function RecruitingTimeline({ roles, total = roles.length }: { roles: OpenedRole[]; total?: number }) {
+/** One program that opened: the date its posting went up, who, what, and where to apply. */
+export type OpenedProgram = {
+  id: string;
+  roleId: string | null;
+  company: string;
+  role: string;
+  details: string;
+  /** The ISO date, when known; a development fixture has only its label. */
+  openedOn: string | null;
+  openedLabel: string;
+  applyUrl: string | null;
+};
+
+/**
+ * Programs that just opened, newest first. Each date is the job board's own publication date, so "opened" is a fact,
+ * never an estimate; each row links to the program and, when the posting is known, to the posting itself.
+ */
+export function RecruitingTimeline({ programs }: { programs: OpenedProgram[] }) {
   return (
-    <section className="panel" aria-labelledby="opened-title">
-      <div className="flex items-end justify-between border-b border-line px-4 py-3"><div><p className="label-caps text-accent-ink">Observed now</p><h2 id="opened-title" className="mt-1 text-sm font-semibold">Roles that opened</h2></div><span className="text-micro text-ink-subtle">{total > roles.length ? `The ${roles.length} most recent of ${total}` : "verified sources"}</span></div>
-      {roles.length === 0 ? <div className="p-8 text-center"><Icon name="clock-3" size={24} className="mx-auto text-ink-subtle" /><p className="mt-3 text-sm font-semibold">No openings observed</p><p className="mt-1 text-xs text-ink-subtle">Watched sources will appear here when a role is first seen.</p></div> : (
-        <div>{roles.map((role) => <article key={role.id} className="grid gap-3 border-b border-line px-4 py-4 last:border-0 sm:grid-cols-[24px_1fr_auto] sm:items-center"><Icon name="circle-check" size={17} className="text-accent-ink" /><div><div className="flex flex-wrap items-center gap-2"><h3 className="text-xs font-semibold text-ink">{role.company} · {role.role}</h3><SourceBadge kind="official" label={role.source} /></div><p className="mt-1 text-micro text-ink-subtle">{role.location} · {role.observedAt}</p></div><a href={role.applyUrl} target="_blank" rel="noreferrer" className="focus-ring inline-flex min-h-touch items-center gap-1 text-caption font-semibold text-accent-ink hover:underline sm:min-h-0">Opened {role.openedAt}<Icon name="arrow-up-right" size={12} /></a></article>)}</div>
-      )}
-    </section>
+    <ol className="grid gap-3">
+      {programs.map((program) => (
+        <li key={program.id} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-5 sm:p-5">
+          <p className="flex shrink-0 items-center gap-3 sm:w-28 sm:flex-col sm:items-start sm:gap-0.5">
+            <span className="text-micro font-semibold uppercase tracking-label text-ink-subtle">Opened</span>
+            {program.openedOn
+              ? <time dateTime={program.openedOn} className="heading-display text-xl tabular text-ink">{program.openedLabel}</time>
+              : <span className="heading-display text-xl tabular text-ink">{program.openedLabel}</span>}
+          </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-ink-muted">{program.company}</p>
+            <h2 className="mt-0.5 text-base font-semibold leading-snug text-ink">
+              {program.roleId
+                ? <Link href={`/roles/${program.roleId}`} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{program.role}</Link>
+                : program.role}
+            </h2>
+            <p className="mt-1 text-caption text-ink-subtle">{program.details}</p>
+          </div>
+          {program.applyUrl && (
+            <a href={program.applyUrl} target="_blank" rel="noreferrer" className="focus-ring inline-flex min-h-touch shrink-0 items-center justify-center gap-1.5 self-start rounded-chip bg-accent px-4 text-sm font-semibold text-ink-inverse hover:bg-accent-hover sm:self-center">
+              See the posting<Icon name="arrow-up-right" size={14} />
+            </a>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }

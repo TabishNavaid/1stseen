@@ -209,7 +209,18 @@ export function Dialog({
  * hoverable), and Escape dismisses it without moving focus (dismissible). It carries a description only: never
  * the trigger's accessible name and never anything interactive. The trigger must be a single focusable element.
  */
-export function Tooltip({ content, children, side = "top" }: { content: ReactNode; children: ReactElement; side?: "top" | "bottom" }) {
+export function Tooltip({
+  content,
+  children,
+  side = "top",
+  align = "center",
+}: {
+  content: ReactNode;
+  children: ReactElement;
+  side?: "top" | "bottom";
+  /** Where the tooltip lines up with its trigger; "start" or "end" keeps one near a screen edge on the screen. */
+  align?: "center" | "start" | "end";
+}) {
   const id = useId();
   const [focused, setFocused] = useState(false);
   const [pointerOver, setPointerOver] = useState(false);
@@ -265,7 +276,8 @@ export function Tooltip({ content, children, side = "top" }: { content: ReactNod
         hidden={!open}
         onPointerEnter={enter}
         className={cn(
-          "absolute left-1/2 z-50 w-max max-w-64 -translate-x-1/2 rounded-control bg-ink px-2.5 py-1.5 text-caption text-ink-inverse shadow-popover",
+          "absolute z-50 w-max max-w-64 rounded-control bg-ink px-3 py-2 text-left text-caption font-normal leading-5 text-ink-inverse shadow-popover",
+          align === "center" ? "left-1/2 -translate-x-1/2" : align === "start" ? "left-0" : "right-0",
           side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
         )}
       >

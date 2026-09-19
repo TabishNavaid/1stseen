@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
-import { roleMeta, evidenceSummary } from "@/components/role-meta";
+import { roleMeta } from "@/components/role-meta";
 import type { DashboardListItem } from "@/lib/dashboard-query";
-import { noForecastReason } from "@/lib/forecast-gap";
+import { plainNoForecastReason } from "@/lib/forecast-gap";
 
 function initials(company: string): string {
   const parts = company.trim().split(/\s+/);
@@ -10,12 +10,12 @@ function initials(company: string): string {
 }
 
 /**
- * An in-scope role the model did not forecast. It is listed and counted like every other role, with the reason
- * there is no window (`lib/forecast-gap`) and the evidence that does exist.
+ * An in-scope role the model did not forecast. It is listed and counted like every other role, with the plain reason
+ * there is no window (`lib/forecast-gap`); its role page lists the openings that do exist.
  */
 export function InsufficientRoleCard({ item }: { item: DashboardListItem }) {
   return (
-    <article className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1.2fr)_minmax(180px,.8fr)_auto] sm:items-center sm:p-5">
+    <article className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(190px,1fr)] sm:items-center sm:p-5">
       <div className="flex min-w-0 items-start gap-3">
         <div className="grid size-11 shrink-0 place-items-center rounded-control bg-surface-sunken text-xs font-bold text-ink-muted">{initials(item.company)}</div>
         <div className="min-w-0">
@@ -28,9 +28,8 @@ export function InsufficientRoleCard({ item }: { item: DashboardListItem }) {
       </div>
       <div>
         <p className="label-caps flex items-center gap-1.5 text-ink-subtle"><Icon name="circle-dashed" size={12} />No forecast yet</p>
-        <p className="mt-1.5 text-caption leading-5 text-ink-muted">{noForecastReason(item.exactEvents + item.boundedEvents + item.observedEvents)}</p>
+        <p className="mt-1.5 text-caption leading-5 text-ink-muted">{plainNoForecastReason(item.exactEvents + item.boundedEvents + item.observedEvents)}</p>
       </div>
-      <p className="text-caption text-ink-subtle sm:max-w-40 sm:text-right">{evidenceSummary(item)}</p>
     </article>
   );
 }

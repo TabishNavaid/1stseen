@@ -7,7 +7,7 @@ import { appliedFilterKeys, fixtureDashboardView, parseDashboardFilters } from "
 import { fixtureBasis, forecastRoles as fixtureRoles } from "@/lib/demo-data";
 import { firstRunPending, parsePlanOutcome } from "@/lib/onboarding";
 import { loadOnboardingState } from "@/lib/onboarding-data";
-import { hasServiceRoleConfig, loadRealDashboard, loadRecentAgentActivity } from "@/lib/real-data";
+import { hasServiceRoleConfig, loadRealDashboard } from "@/lib/real-data";
 import { currentSession } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -45,9 +45,8 @@ export default async function RolesPage({
 
   if (hasServiceRoleConfig()) {
     const session = await currentSession();
-    const [data, activity, onboarding] = await Promise.all([
+    const [data, onboarding] = await Promise.all([
       loadRealDashboard(session?.userId ?? null, filters),
-      loadRecentAgentActivity(),
       // The first-run offer is optional, so a failed read of it hides the offer rather than the dashboard.
       session ? loadOnboardingState(session.userId).catch(() => null) : Promise.resolve(null),
     ]);
@@ -64,7 +63,6 @@ export default async function RolesPage({
           openings={data.recentOpenings}
           openingsTotal={data.recentOpeningsTotal}
           changes={data.recentChanges}
-          agentActivity={activity}
           signedInAs={session?.email ?? null}
           firstRun={onboarding ? firstRunPending(onboarding) : false}
           welcome={session && parsePlanOutcome(params.welcome) === "none" ? "none" : null}

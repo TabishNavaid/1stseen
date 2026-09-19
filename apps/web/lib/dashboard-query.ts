@@ -424,6 +424,10 @@ export type DashboardListItem = Omit<DashboardRoleFacts, "searchText" | "confide
   companyRank: number;
   companyTotal: number;
   forecast: ForecastRole | null;
+  /** The plain-language date: the expected opening and its window, when the forecast carries them. */
+  outlook: { expected: string; start: string; end: string } | null;
+  /** forecasting.py's score, 0 to 100, for the confidence word; null without a forecast. */
+  confidence: number | null;
   /** Whether the window rests mainly on the program's own openings or on comparable programs (`lib/forecast-basis`). */
   basis: ForecastBasis | null;
 };
@@ -501,11 +505,11 @@ export function buildDashboardView(
   });
   const offset = (filters.page - 1) * DASHBOARD_PAGE_SIZE;
   const items = shown.slice(offset, offset + DASHBOARD_PAGE_SIZE).map(({ role, rank }) => {
-    const { searchText: _searchText, confidence: _confidence, daysUntil: _daysUntil, ...facts } = role;
+    const { searchText: _searchText, confidence, daysUntil: _daysUntil, ...facts } = role;
     void _searchText;
-    void _confidence;
     void _daysUntil;
-    return { ...facts, companyRank: rank, companyTotal: totals.get(role.companyId) ?? 0, forecast: role.forecastable ? forecastFor(role) : null, basis: null };
+    // Fixtures carry a window but no expected date, so they have no "likely around" date to show.
+    return { ...facts, companyRank: rank, companyTotal: totals.get(role.companyId) ?? 0, forecast: role.forecastable ? forecastFor(role) : null, outlook: null, confidence: role.forecastable ? confidence : null, basis: null };
   });
   const exclusions = Object.fromEntries(
     FILTER_KEYS.map((key) => [

@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { ConfidenceIndicator } from "@/components/confidence-indicator";
-import { ForecastBasisChip } from "@/components/forecast-basis-chip";
-import { PrecisionChip } from "@/components/precision-chip";
+import { ConfidenceWord } from "@/components/confidence-word";
+import { LikelyWindow } from "@/components/likely-window";
 import { Icon } from "@/components/ui/icon";
 import { formatDay } from "@/lib/dates";
-import { noForecastReason } from "@/lib/forecast-gap";
-import type { LandingPreview } from "@/lib/landing-data";
+import { plainNoForecastReason } from "@/lib/forecast-gap";
+import type { LandingOpening, LandingPreview } from "@/lib/landing-data";
 
 export function sourceHost(url: string): string {
   try {
@@ -21,9 +20,21 @@ export function companyInitials(company: string): string {
 }
 
 /**
- * The landing page's product preview: one real program, the openings recorded for it with where each was seen, and
- * its next predicted window. With no forecast behind two or more cycles yet, the same card shows a role's observed
- * history and says plainly why it has no window, rather than drawing one.
+ * A past opening in words that keep what is known apart without naming evidence classes: a date the board published
+ * ("Opened"), a range between two archive captures ("Opened between"), or a date it was only seen by ("Seen open by").
+ */
+export function openingWords(opening: Pick<LandingOpening, "precision" | "openedOn" | "windowStart">): string {
+  if (opening.precision === "observed_by") return `Seen open by ${formatDay(opening.openedOn)}`;
+  if (opening.precision === "bounded") {
+    return opening.windowStart ? `Opened between ${formatDay(opening.windowStart)} and ${formatDay(opening.openedOn)}` : `Opened by ${formatDay(opening.openedOn)}`;
+  }
+  return `Opened ${formatDay(opening.openedOn)}`;
+}
+
+/**
+ * The landing page's product preview: one real program, when it opened before with where each date was seen, and when it
+ * is likely to open next. With no forecast behind two or more cycles yet, the same card shows a role's history and
+ * says plainly why it has no date yet, rather than drawing one.
  */
 export function RolePreviewCard({ preview }: { preview: LandingPreview }) {
   const { forecast } = preview;
@@ -43,14 +54,22 @@ export function RolePreviewCard({ preview }: { preview: LandingPreview }) {
         </div>
       </div>
 
+      {forecast ? (
+        <div className="mt-5 flex flex-wrap items-end justify-between gap-4 rounded-card bg-surface-sunken p-4">
+          <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
+          <ConfidenceWord value={forecast.confidence} align="end" />
+        </div>
+      ) : (
+        <p className="mt-5 rounded-card bg-surface-sunken p-4 text-caption leading-5 text-ink-muted">No date yet. {plainNoForecastReason(preview.openingsRecorded)}</p>
+      )}
+
       {preview.openings.length > 0 && (
         <div className="mt-5">
-          <h3 className="label-caps text-ink-subtle">Opened before</h3>
-          <ol className="mt-2 grid gap-2">
+          <h3 className="label-caps text-ink-subtle">Before</h3>
+          <ol className="mt-2 grid gap-1.5">
             {preview.openings.map((opening) => (
-              <li key={opening.id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 rounded-control bg-surface-sunken px-3 py-2">
-                <span className="text-sm font-semibold tabular text-ink">{formatDay(opening.openedOn)}</span>
-                <PrecisionChip variant="plain" precision={opening.precision} />
+              <li key={opening.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <span className="font-semibold tabular text-ink">{openingWords(opening)}</span>
                 <a href={opening.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring ml-auto inline-flex min-h-touch items-center gap-1 text-caption sm:min-h-0">
                   {sourceHost(opening.sourceUrl)}{opening.archive ? " (archive)" : ""}<Icon name="arrow-up-right" size={11} />
                 </a>
@@ -59,28 +78,6 @@ export function RolePreviewCard({ preview }: { preview: LandingPreview }) {
           </ol>
         </div>
       )}
-
-      <div className="mt-5 border-t border-dashed border-line-strong pt-4">
-        <h3 className="label-caps text-ink-subtle">Next window</h3>
-        {forecast ? (
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="inline-flex items-center rounded-control border border-dashed border-date-predicted-line bg-date-predicted-surface px-2.5 py-1 text-base font-semibold tabular text-date-predicted-ink">
-                {formatDay(forecast.windowStart)} – {formatDay(forecast.windowEnd)}
-              </p>
-              <p className="mt-1.5 text-caption text-ink-muted">
-                Expected {formatDay(forecast.expectedOpening)} · from {forecast.cycles} recruiting {forecast.cycles === 1 ? "cycle" : "cycles"}
-              </p>
-              {forecast.basis && <p className="mt-2"><ForecastBasisChip basis={forecast.basis} /></p>}
-            </div>
-            <ConfidenceIndicator value={forecast.confidence} compact />
-          </div>
-        ) : (
-          <p className="mt-2 text-caption leading-5 text-ink-muted">
-            No window yet. {noForecastReason(preview.openingsRecorded)}
-          </p>
-        )}
-      </div>
 
       <Link href={`/roles/${preview.roleId}`} className="link-accent focus-ring mt-5 inline-flex min-h-touch items-center gap-1 text-sm">
         See this program<Icon name="arrow-right" size={14} />

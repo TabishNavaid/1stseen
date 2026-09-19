@@ -21,7 +21,7 @@ a hex value. New surfaces use tokens only; an arbitrary `[#hex]` value in new co
 | Forecast basis | `basis-own-*`, `basis-borrowed-*` | Whether a window rests mainly on the program's own openings or on comparable programs |
 | Date kinds | `date-confirmed-*`, `date-predicted-*`, `date-preparation-*` (plus `-mark`) | Calendar entries |
 | Sources | `source-official-*`, `source-archive-*`, `source-signal-*`, `source-community-*` | Where evidence came from |
-| Confidence | `confidence-strong`, `confidence-moderate`, `confidence-limited`, `confidence-track` | The ring around forecasting.py's number |
+| Confidence | `confidence-strong`, `confidence-moderate`, `confidence-limited`, `confidence-track` | The confidence word's dot, and Replay's ring around forecasting.py's number |
 | Type | `text-micro` (10px), `text-caption` (11px), then Tailwind's `xs` and up; `tracking-label`, `tracking-title` | Dense evidence tables, labels, titles |
 | Spacing | `control` (36px), `control-sm` (32px), `touch` (44px), `gutter`, `gutter-wide` | `h-control`, `min-h-touch`, `size-touch`, `p-gutter` |
 | Warm accent | `warm`, `warm-soft`, `warm-line`, `warm-ink` | Highlights and celebration moments only; never an evidence class or a status. `warm` is a fill that only sits behind `ink` |
@@ -65,18 +65,16 @@ order.
 
 Icons render from `apps/web/public/icons.svg` with `<Icon name="calendar-days" />` (`components/ui/icon.tsx`). An
 inline lucide-react component put each icon's paths into every render: 43.6 KiB of the dashboard's HTML before the single sprite.
-A sprite reference costs about 130 bytes and the sprite (61 icons, 12.8 KB) is fetched once.
+A sprite reference costs about 130 bytes and the sprite (81 icons, 18.6 KB) is fetched once.
 
 To add an icon, add its lucide-react export name to `scripts/build-icon-sprite.mjs`, run the script, and commit the
 sprite and `components/ui/icon-names.ts`. `icon-sprite.test.mjs` fails if either is stale, and ESLint forbids importing
 `lucide-react` in `app`, `components`, or `lib`. Icons are decorative by default; pass `label` only when the icon alone
 carries meaning.
 
-The landing page and the first run draw a few larger pictograms (field chips, program types, the how-it-works steps)
-from a second sprite, `apps/web/public/pictograms.svg`, with `<Pictogram name="code-xml" />`
-(`components/ui/pictogram.tsx`). It is built the same way by `apps/web/tools/build-pictograms.mjs` and checked by
-`pictogram-sprite.test.mjs`. Illustrations are a handful of self-hosted Open Doodles SVGs in
-`apps/web/public/illustrations`, recoloured to the palette; `docs/credits.md` records their source and license.
+The landing page's steps and the first run's choice cards use the same sprite at a larger size; there is no second
+sprite. Illustrations are a handful of self-hosted Open Doodles SVGs in `apps/web/public/illustrations`, recoloured to
+the palette; `docs/credits.md` records their source and license, and `illustrations.test.mjs` checks both.
 
 ## Primitives
 
@@ -121,14 +119,16 @@ Every product surface now uses tokens only: no `[#hex]` class or inline hex colo
   - `locationLabel` ("Location not stated");
   - `contributionLabel` ("An opening of this program").
 
-  A role's "Model details" keeps the exact field names.
+  A role's "Model details" names each field in words too. No user page shows an identifier, a hash, a timing, a tool
+  name, or a field name: `tests/support/page-language.mjs` scans the rendered text, in `rendered-html.test.mjs` for the
+  development pages and in `integration/page-language.test.mjs` for real ones.
 
 ### Frames
 
 | Frame | File | Used by |
 | --- | --- | --- |
-| Site header | `site-header.tsx`, `site-header-bar.tsx` | Every app page (roles, a role, calendar, replay, digests): the mark, the navigation from `lib/site-nav.ts`, the page's action, the account. A guest sees account-only items locked, each with its one-line reason in a popover (and inline in the phone menu) |
-| Landing page | `landing/landing-page.tsx` | `/` for a first-time visitor: its own light header, no app navigation |
+| Site header | `site-header.tsx`, `site-header-bar.tsx` | Every app page and the landing page: the mark, the navigation from `lib/site-nav.ts`, the page's action, the account. A guest sees Explore, Just opened, and Ask, with Sign in and Get started; a signed-in user also sees Watchlist and Calendar. Replay and digests are not in the navigation |
+| Landing page | `landing/landing-page.tsx` | `/` for a first-time visitor: the site header, a hero with a real role's forecast, the Just opened strip, how it works, and Opening soon |
 | First run | `onboarding/onboarding-flow.tsx` | `/welcome`: full screen, progress dots, a sticky action bar, "Skip, just browse" on every step |
 | Focused shell | `focused-shell.tsx` | Single-purpose pages: settings, sign-in, confirmation, password reset |
 | Document page | `document-page.tsx` | Pages that are read rather than used: methodology and accuracy, terms, privacy, data sources, contact |
@@ -167,14 +167,20 @@ them.
   month's entries follow as a day-by-day list.
 - **Role pages:** the section navigation scrolls sideways within itself; the page does not.
 
-### Help
+### Reading a forecast
 
-The dashboard's help button opens `ForecastGuide`, a `Dialog` titled "How to read a forecast". It covers:
+A forecast reads the same everywhere it is shown in brief (a card, the landing page, the first run, an agent answer):
 
-- the window;
-- the confidence score, in `CONFIDENCE_MEANING` (`lib/confidence.ts`);
-- the three evidence classes, as their chips;
-- what "no forecast yet" means.
+- `LikelyWindow` (`components/likely-window.tsx`): "Likely around", the expected date large, and the window's range
+  small underneath. The date is never shown without its range.
+- `ConfidenceWord` (`components/confidence-word.tsx`): one word, Low, Medium, or High (`confidenceWord` in
+  `lib/confidence.ts`), with a tooltip that gives its meaning and the score out of 100 (`confidenceExplanation`).
+- `EvidenceMark` (`components/evidence-mark.tsx`): a date's evidence class as its icon with a tooltip. It appears only
+  in a role page's History section. Everywhere else an opening is plain words: "Opened Jul 3", "Opened between Jul 1
+  and Jul 9", "Seen open by Jul 3".
+
+The forecast's basis, its factors, and the score itself are one step away: in the card's "Why this date" drawer and in
+the role page's "How this forecast was made". `/methodology` explains all of it at length.
 
 ## Uncertainty and disclosure
 
@@ -184,9 +190,10 @@ Two different things, kept apart:
   public posting history, their accuracy is not yet validated, and 1stSeen is not affiliated with or endorsed by any
   company it lists. It links `/methodology`, which carries the detail and the live backtest position. No card, header,
   panel, or empty state repeats it, and `rendered-html.test.mjs` fails if one of the old repetitions returns.
-- **Uncertainty that belongs to one forecast** is data and stays on it: the prediction interval, each date's evidence
-  class, the recruiting cycles behind it, and the confidence score with what the number means. A bare date without its
-  interval would be a false claim, not a cleaner page.
+- **Uncertainty that belongs to one forecast** is data and stays with it: the prediction interval is always under the
+  date, and the confidence word always beside it, with its meaning one hover or tap away. The evidence class of each
+  past date, the recruiting cycles behind the window, and its basis are on the role page and in the card's drawer. A
+  bare date without its interval would be a false claim, not a cleaner page.
 
 A role the model did not forecast is a plain panel stating why (`lib/forecast-gap.ts`), not a warning. Development
 fixtures keep their own label, because that says which data is on screen, not how reliable a forecast is.
@@ -196,7 +203,6 @@ fixtures keep their own label, because that says which data is on screen, not ho
 `ForecastBasisChip` (`components/forecast-basis-chip.tsx`, `lib/forecast-basis.ts`) shows which evidence a forecast's
 window mainly rests on: **Own history** (the `history` icon, `basis-own`) or **Borrowed timing** (the `git-merge` icon,
 `basis-borrowed`), always with that basis's share of the window's weight. The weights are forecasting.py's, summed in
-SQL by `forecast_basis`. It appears on every forecast: the dashboard card and drawer, the role page, the landing forecast,
-calendar boundaries (and so the synced Google Calendar event), the first-run proposals, the digest, the agent's forecast,
-and a replayed forecast. It is a kind of evidence, like a date's precision, so it is never folded into the confidence
-ring or coloured like an evidence class.
+SQL by `forecast_basis`. It is one step away from every forecast rather than on its face: in the card's drawer, the role
+page's "How this forecast was made", a calendar boundary's drawer, and a replayed forecast. It is a kind of evidence,
+like a date's precision, so it is never folded into the confidence word or coloured like an evidence class.

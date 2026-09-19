@@ -1,8 +1,22 @@
 # Guest access
 
-A signed-out visitor gets a real, read-only 1stSeen: the landing page, the roles view of every in-scope role, the
-first run and its payoff, role pages with their evidence and provenance, Forecast Replay's candidate list, and the agent. Nothing a guest does writes
-anything, and nothing user-owned is reachable. This page is the contract.
+A signed-out visitor gets a real, read-only 1stSeen: the landing page, the roles view of every in-scope role, Just
+opened, the first run and its payoff, role pages with their evidence and provenance, Forecast Replay's candidate list,
+and the agent's Ask page. Nothing a guest does writes anything, and nothing user-owned is reachable. This page is the
+contract.
+
+## What a guest sees
+
+The navigation (`lib/site-nav.ts`) shows a guest three items: **Explore** (`/roles`), **Just opened** (`/opened`), and
+**Ask** (`/ask`), with Sign in and Get started beside them. Watchlist and Calendar appear only after sign-in; nothing is
+shown locked. Forecast Replay is linked from `/methodology` and digests from settings; neither is in the navigation.
+
+- **Just opened** lists every in-scope program with an exact opening date in the last 45 days, newest first, 30 to a
+  page, each linking its role page and the posting. The landing page shows the newest eight as a strip, one per
+  company, and the roles view's tile ("N programs opened in the last 45 days") links to it.
+- **Ask** is the agent's own page: a question box, three suggested questions, and the guest limit said plainly. A role
+  page asks the same agent about that program.
+- The roles view never draws a tile whose number is zero (`lib/dashboard-tiles.ts`).
 
 ## The boundary
 
@@ -12,8 +26,9 @@ anything, and nothing user-owned is reachable. This page is the contract.
 **Every read of non-user data goes through one allowlist.** `apps/web/lib/public-read-policy.ts` lists the relations,
 columns, and functions a guest render may read, and `lib/public-read.ts` refuses anything else before a request is made:
 
-- **Relations:** companies, canonical roles, opening events, observations (no raw text or payload), observation role
-  matches, forecasts, the provenance view, forecast changes, signals, and backtest run totals.
+- **Relations:** companies, canonical roles, role aliases (a role's recorded titles, read so a title keeps the
+  company's accents and punctuation), opening events, observations (no raw text or payload), observation role matches,
+  forecasts, the provenance view, forecast changes, signals, and backtest run totals.
 - **Functions:** the dashboard and replay read paths, plus `public_agent_activity`. Any argument naming a user must be
   null.
 - **Selects:** a select is checked column by column at every level of embedding. `*`, JSON paths, casts, spreads, and
@@ -33,9 +48,9 @@ integrations) are read with the service role and an explicit user filter, and on
 integration all require a session. Each surface prompts to create an account rather than failing: the watch button,
 the readiness panel, the calendar and digest pages, the replay and integration messages, and the agent's limit message.
 
-**Agent activity shown on the dashboard is never tied to a user.** `public_agent_activity` returns only the latest
-recruiting-agent run that no user started (`agent_runs.initiated_by`, now recorded at run start) and whose stored
-state names no actor.
+**Agent activity is never tied to a user.** No page shows agent activity now; `public_agent_activity` stays in the
+allowlist and returns only the latest recruiting-agent run that no user started (`agent_runs.initiated_by`, recorded at
+run start) and whose stored state names no actor.
 
 ## The agent for guests
 
@@ -70,10 +85,11 @@ through two limits, each a sliding 60-second window counted exactly by the `Gues
 
 ## The edge cache
 
-Every guest sees the same dashboard and role pages, so the Worker entry serves them from the Cloudflare Cache API
-(`apps/web/cloudflare/guest-cache.ts`).
+Every guest sees the same landing page, roles view, Just opened, methodology, and role pages, so the Worker entry serves
+them from the Cloudflare Cache API (`apps/web/cloudflare/guest-cache.ts`).
 
-- **What is cached:** a whole-document GET with no Supabase session cookie, to `/` or `/roles/<uuid>`. A signed-in
+- **What is cached:** a whole-document GET with no Supabase session cookie, to `/`, `/roles`, `/opened`,
+  `/methodology`, or `/roles/<uuid>`. A signed-in
   request, an RSC navigation, and every other method or path always render. Only a 200 HTML response without Set-Cookie
   is stored.
 - **The key:** the canonical path plus the public data version. The dashboard's query is canonicalised (unknown
@@ -96,9 +112,10 @@ anything renders. One idea per section:
 
 - **The promise and two actions:** "Get started" opens the first run; "Just browse" opens the roles view as a guest.
   Beside them, one real program (`lib/landing-data.ts`), chosen by a stated rule: the highest confidence score among
-  current forecasts resting on two or more of its own cycles, shown with the openings behind it, where each was seen,
-  and its next window. With no such forecast, the role with the most dated openings is shown as its observed history,
-  with the plain reason it has no window.
+  current forecasts resting on two or more of its own cycles, shown with its likely date, its window, its confidence
+  word, and the openings behind it with where each was seen. With no such forecast, the role with the most dated
+  openings is shown as its observed history, with the plain reason it has no date.
+- **Just opened:** the newest programs that opened, one per company, and a link to all of them. Hidden when none opened.
 - **How it works**, in three plain steps.
 - **Opening soon:** every current forecast, soonest window first, one per company, up to six; "Next to open" when the
   first window is more than 90 days away. Hidden when there is none.

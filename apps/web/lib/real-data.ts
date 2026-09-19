@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { AgentActivityView } from "@/components/agent-activity";
 import type { CalendarEvent } from "@/lib/calendar-data";
 import { createPublicReader, type PublicReader } from "@/lib/public-read";
 import { basisPhrase, forecastBasis, type ForecastBasis } from "@/lib/forecast-basis";
@@ -16,6 +15,7 @@ import type {
   RoleView,
 } from "@/lib/role-view";
 import { formatDay, utcDate as isoDate } from "@/lib/dates";
+import { displayCompany, displayPlace, displayTitle, tidyTitle, type RecordedTitle } from "@/lib/display-names";
 import {
   DASHBOARD_PAGE_SIZE,
   FILTER_KEYS,
@@ -23,6 +23,7 @@ import {
   emptyFilterOptions,
   filterRpcArgs,
   perCompanyLimit,
+  programTypeLabel,
   type DashboardFilterOptions,
   type DashboardFilters,
   type DashboardListItem,
@@ -31,7 +32,6 @@ import {
   type FilterKey,
 } from "@/lib/dashboard-query";
 import { fetchAll, fetchAllIn } from "@/lib/supabase/paging";
-import { agentToolName, forecastProduced } from "@/lib/agent-audit";
 import type { ForecastRole } from "@firstseen/shared";
 import { factorLabel, factorTone } from "@/lib/presentation";
 import { REPLAY_PAGE_SIZE, type ReplayFilters, type ReplayOutcome } from "@/lib/replay-query";
@@ -67,6 +67,9 @@ export type RealOpening = {
   roleId: string;
   company: string;
   role: string;
+  /** Program type and place, in words (lib/dashboard-query, lib/display-names). */
+  programType: string;
+  place: string;
   openedOn: string;
   observedAt: string | null;
   applyUrl: string | null;
@@ -114,6 +117,7 @@ type DashboardPageRow = {
   location_scope: string;
   level: string;
   forecastable: boolean;
+  point_date: string | null;
   window_start: string;
   window_end: string;
   confidence: number | string;
@@ -141,14 +145,14 @@ type SummaryRow = Record<SummaryCount, number | string> & {
 
 type FilterOptionRow = { facet: string; value: string; label: string; roles: number | string };
 
-function toForecastRole(row: DashboardPageRow): ForecastRole {
+function toForecastRole(row: DashboardPageRow, names: { company: string; role: string }): ForecastRole {
   const cycles = row.cycles ?? [];
   const factors = (row.confidence_factors ?? {}) as Record<string, number>;
   return {
     id: row.role_id,
-    company: row.company_name,
-    companyMark: initials(row.company_name),
-    role: row.canonical_title,
+    company: names.company,
+    companyMark: initials(names.company),
+    role: names.role,
     track: row.program_type === "new_grad" || row.program_type === "graduate_program" ? "New grad" : "Internship",
     location: row.location_scope || "unspecified",
     window: `${formatDay(row.window_start)} – ${formatDay(row.window_end)}`,
@@ -157,7 +161,8 @@ function toForecastRole(row: DashboardPageRow): ForecastRole {
     // Readiness is only real once planner milestones exist for a signed-in user.
     readiness: 0,
     status: "quiet",
-    historicalCycles: cycles.map((item) => `${formatDay(item.opened_on)} (${item.date_precision})`),
+    // Dates only: what each date's evidence class means is the role page's History section, not a label on a list.
+    historicalCycles: cycles.map((item) => formatDay(item.opened_on)),
     signalSummary: `${cycles.length} opening event${cycles.length === 1 ? "" : "s"} on record; the forecast uses ${row.history_count} recruiting cycle${row.history_count === 1 ? "" : "s"}.`,
     nextDeadline: "Sign in to generate a readiness plan",
     deadlines: [],
@@ -169,8 +174,9 @@ function toForecastRole(row: DashboardPageRow): ForecastRole {
         tone: factorTone(key, Number(value)),
       })),
     evidence: cycles.slice(0, 6).map((item) => ({
-      label: item.date_precision,
-      detail: `Historical opening recorded with ${item.date_precision} precision.`,
+      // Plain words that keep the classes apart: a date the board published, a range, or a date it was seen open by.
+      label: item.date_precision === "observed_by" ? "Seen open by" : item.date_precision === "bounded" ? "Opened by" : "Opened",
+      detail: item.source_type === "wayback" ? "Seen in an archived copy of the careers page." : "Published on the company's job board.",
       date: formatDay(item.opened_on),
       // Archive captures and live postings are different evidence classes.
       kind: item.source_type === "wayback" ? ("archive" as const) : ("posting" as const),
@@ -178,12 +184,13 @@ function toForecastRole(row: DashboardPageRow): ForecastRole {
   } satisfies ForecastRole;
 }
 
-function toListItem(row: DashboardPageRow): DashboardListItem {
+function toListItem(row: DashboardPageRow, recorded: ReadonlyMap<string, RecordedTitle[]> = new Map()): DashboardListItem {
+  const names = { company: displayCompany(row.company_name), role: displayTitle(row.canonical_title, recorded.get(row.role_id)) };
   return {
     id: row.role_id,
     companyId: row.company_id,
-    company: row.company_name,
-    role: row.canonical_title,
+    company: names.company,
+    role: names.role,
     discipline: row.discipline,
     programType: row.program_type,
     season: row.season,
@@ -200,9 +207,32 @@ function toListItem(row: DashboardPageRow): DashboardListItem {
     companyTotal: row.company_total,
     // Every stored forecast is shown with the cycles behind it (migration 202608140035); only a role forecasting.py
     // refused has no window.
-    forecast: row.forecastable ? toForecastRole(row) : null,
+    forecast: row.forecastable ? toForecastRole(row, names) : null,
+    // The plain-language date: "Likely around" the expected opening, with its window underneath.
+    outlook: row.forecastable && row.point_date ? { expected: row.point_date, start: row.window_start, end: row.window_end } : null,
+    confidence: row.forecastable ? Number(row.confidence) : null,
     basis: null,
   };
+}
+
+/**
+ * Each role's titles as companies published them (role_aliases), for showing a title with its accents and punctuation
+ * (lib/display-names.ts). Every alias of the listed roles, paged to exhaustion.
+ */
+export async function loadRecordedTitles(reader: PublicReader, roleIds: string[]): Promise<Map<string, RecordedTitle[]>> {
+  const titles = new Map<string, RecordedTitle[]>();
+  if (roleIds.length === 0) return titles;
+  const rows = await fetchAllIn<Record<string, unknown>>(
+    (ids) => reader.from("role_aliases", "id,canonical_role_id,alias_title,last_seen_at").in("canonical_role_id", ids),
+    [...new Set(roleIds)],
+    "role_aliases",
+    "id",
+  );
+  for (const row of rows) {
+    const roleId = String(row.canonical_role_id);
+    titles.set(roleId, [...(titles.get(roleId) ?? []), { title: String(row.alias_title), lastSeenAt: String(row.last_seen_at) }]);
+  }
+  return titles;
 }
 
 /**
@@ -274,7 +304,7 @@ function toOptions(rows: FilterOptionRow[]): DashboardFilterOptions {
   const options: DashboardFilterOptions = { discipline: [], type: [], season: [], year: [], company: [], location: [] };
   for (const row of rows) {
     if (row.facet in options) {
-      options[row.facet as keyof DashboardFilterOptions].push({ value: row.value, label: row.label, roles: Number(row.roles) });
+      options[row.facet as keyof DashboardFilterOptions].push({ value: row.value, label: row.facet === "company" ? displayCompany(row.label) : row.label, roles: Number(row.roles) });
     }
   }
   options.company.sort((a, b) => a.label.localeCompare(b.label));
@@ -334,8 +364,12 @@ export async function loadRealDashboard(
   if (page.error || summary.error || options.error) {
     throw new Error("dashboard_read_failed");
   }
-  const items = ((page.data ?? []) as DashboardPageRow[]).map(toListItem);
-  const basis = await loadForecastBasis(reader, items.filter((item) => item.forecast).map((item) => item.id));
+  const rows = (page.data ?? []) as DashboardPageRow[];
+  const [basis, recorded] = await Promise.all([
+    loadForecastBasis(reader, rows.filter((row) => row.forecastable).map((row) => row.role_id)),
+    loadRecordedTitles(reader, rows.map((row) => row.role_id)),
+  ]);
+  const items = rows.map((row) => toListItem(row, recorded));
 
   return {
     mode: "real",
@@ -356,7 +390,7 @@ type EmbeddedRoleIdentity = {
 function roleIdentity(value: unknown): { role: string; company: string } | null {
   const role = embeddedOne(value as EmbeddedRoleIdentity | EmbeddedRoleIdentity[] | null);
   const company = role ? embeddedOne(role.companies) : null;
-  return role && company ? { role: role.canonical_title, company: company.name } : null;
+  return role && company ? { role: tidyTitle(role.canonical_title), company: displayCompany(company.name) } : null;
 }
 
 function daysAgo(days: number): string {
@@ -372,8 +406,19 @@ function daysAgo(days: number): string {
  * timestamp, so it is the only one that may be presented as a real opening date.
  * Archive `observed_by` evidence proves visibility, never an opening event.
  */
-async function loadRecentOpenings(reader: PublicReader): Promise<{ openings: RealOpening[]; total: number }> {
-  const since = daysAgo(45);
+/** How many openings the Just opened page lists at a time, and how far back it looks. */
+export const JUST_OPENED_PAGE_SIZE = 30;
+export const JUST_OPENED_DAYS = 45;
+
+/**
+ * Programs that opened in the last 45 days, newest first: only exact openings, the job board's own publication dates, so
+ * "opened" is never an inference. One page of them with the total over all of them, both read from the same filtered set.
+ */
+export async function loadJustOpened(
+  reader: PublicReader = createPublicReader(),
+  { limit = JUST_OPENED_PAGE_SIZE, offset = 0 }: { limit?: number; offset?: number } = {},
+): Promise<{ openings: RealOpening[]; total: number }> {
+  const since = daysAgo(JUST_OPENED_DAYS);
   // Out-of-scope roles stay as evidence; no product surface lists them, nor a retired or
   // withdrawn one (migration 202608140036). The list and its total read the same filtered set.
   const exactOpenings = <Query extends { eq: (column: string, value: unknown) => Query; gte: (column: string, value: string) => Query }>(query: Query) =>
@@ -383,29 +428,39 @@ async function loadRecentOpenings(reader: PublicReader): Promise<{ openings: Rea
       .eq("date_precision", "exact")
       .gte("opened_on", since);
   const [result, counted] = await Promise.all([
-    // bounded: the newest 12, shown as "the most recent 12" beside the total counted below.
-    exactOpenings(reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at),canonical_roles!inner(canonical_title,scope_status,companies(name))"))
+    // bounded: one page of at most `limit` (JUST_OPENED_PAGE_SIZE), beside the total counted below.
+    exactOpenings(reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,companies(name))"))
       .order("opened_on", { ascending: false })
       .order("id", { ascending: true })
-      .limit(12),
+      .range(offset, offset + limit - 1),
     exactOpenings(reader.count("historical_opening_events", "id,canonical_roles!inner(scope_status)")),
   ]);
   if (result.error || counted.error || counted.count == null) throw new Error("recent_openings_read_failed");
-  const openings = (result.data ?? []).flatMap((row) => {
-    const identity = roleIdentity(row.canonical_roles);
-    if (!identity) return [];
+  const rows = result.data ?? [];
+  const recorded = await loadRecordedTitles(reader, rows.map((row) => String(row.canonical_role_id)));
+  const openings = rows.flatMap((row) => {
+    const role = embeddedOne(row.canonical_roles as EmbeddedRoleIdentity | EmbeddedRoleIdentity[] | null) as (EmbeddedRoleIdentity & { early_career_type?: string | null; location_scope?: string | null }) | null;
+    const company = role ? embeddedOne(role.companies) : null;
+    if (!role || !company) return [];
     const observation = embeddedOne(row.raw_job_observations as Record<string, unknown> | Record<string, unknown>[] | null);
     return [{
       id: row.id as string,
       roleId: row.canonical_role_id as string,
-      company: identity.company,
-      role: identity.role,
+      company: displayCompany(company.name),
+      role: displayTitle(role.canonical_title, recorded.get(String(row.canonical_role_id))),
+      programType: programTypeLabel(role.early_career_type ?? null),
+      place: displayPlace(role.location_scope),
       openedOn: row.opened_on as string,
       observedAt: (observation?.observed_at as string | null) ?? null,
       applyUrl: (observation?.apply_url as string | null) ?? (observation?.source_url as string | null) ?? null,
     }];
   });
   return { openings, total: counted.count };
+}
+
+async function loadRecentOpenings(reader: PublicReader): Promise<{ openings: RealOpening[]; total: number }> {
+  // The roles view states only the total; it links to Just opened for the list.
+  return loadJustOpened(reader, { limit: 1 });
 }
 
 /** Material forecast revisions, read from the immutable before/after lineage. */
@@ -472,7 +527,7 @@ export async function loadRealRoleIdentity(roleId: string): Promise<{ company: s
   if (error) throw new Error("role_read_failed");
   if (!data) return null;
   const company = embeddedOne(data.companies as { name: string } | { name: string }[] | null);
-  return company ? { company: company.name, role: String(data.canonical_title) } : null;
+  return company ? { company: displayCompany(company.name), role: tidyTitle(String(data.canonical_title)) } : null;
 }
 
 /**
@@ -514,6 +569,9 @@ export async function loadRealRoleView(
 
   // Every cycle and every linked observation: the page counts both ("Linked observations", the cycle list), so a capped
   // read would show a capped count as the total.
+  // Read beside the evidence; awaited where the title is built, and never left as an unhandled rejection meanwhile.
+  const recordedTitles = loadRecordedTitles(reader, [roleId]);
+  recordedTitles.catch(() => undefined);
   const [forecastsResult, eventsResult, signalsResult, matchesResult] = await Promise.all([
     fetchAll(
       () =>
@@ -722,12 +780,12 @@ export async function loadRealRoleView(
   return {
     origin: "real",
     id: roleId,
-    company: company.name,
-    companyMark: initials(company.name),
+    company: displayCompany(company.name),
+    companyMark: initials(displayCompany(company.name)),
     companyId: company.id,
     companyDomain: company.domain,
     careersUrl: company.careers_url,
-    role: String(role.canonical_title),
+    role: displayTitle(String(role.canonical_title), (await recordedTitles).get(roleId)),
     track: String(role.track),
     level: String(role.level ?? "unknown"),
     roleFamily: String(role.role_family ?? "unknown"),
@@ -791,63 +849,6 @@ export async function loadRealRoleView(
     isFollowed: userId ? Boolean(watchResult.data) : null,
     watchlistItemId: (watchResult.data as { id?: string } | null)?.id ?? null,
     observationCount: (matchesResult.data ?? []).length,
-  };
-}
-
-/**
- * The most recent RecruitingAgent run, from persisted redacted audit rows.
- *
- * Only tool names, redacted summaries, and durations are read. Prompts, model
- * inputs, and reasoning are never persisted and therefore never surfaced.
- */
-export async function loadRecentAgentActivity(): Promise<AgentActivityView | null> {
-  if (!hasServiceRoleConfig()) return null;
-  // Guests and every signed-in user see this panel, so it shows only a run no user started and whose stored state has
-  // no actor (public_agent_activity, migration 202608140031), never an audit row tied to someone.
-  // bounded: maybeSingle, one row describing the latest public agent run. Its calls are capped at 20 in SQL, above the
-  // 11 a run can make (each RecruitingAgent tool runs at most once), so toolCount is every call.
-  const { data } = await createPublicReader().rpc("public_agent_activity").maybeSingle();
-  if (!data) return null;
-  const run = data as {
-    run_id: string;
-    status: string;
-    started_at: string;
-    finished_at: string | null;
-    calls: { tool_name: string; status: string; output_redacted: unknown; started_at: string; finished_at: string | null }[] | null;
-  };
-  let evidenceCount = 0;
-  let forecastReady = false;
-  const calls = (run.calls ?? []).map((row) => {
-    const output = (row.output_redacted ?? {}) as Record<string, unknown>;
-    const summary = typeof output.summary === "string"
-      ? output.summary
-      : `${row.status} · ${Object.keys(output).length} recorded field(s)`;
-    if (typeof output.evidence_count === "number") {
-      evidenceCount = Math.max(evidenceCount, output.evidence_count);
-    }
-    const tool = agentToolName(row.tool_name);
-    if (tool === "generate_forecast" && forecastProduced(row.status, output)) forecastReady = true;
-    const started = Date.parse(row.started_at);
-    const finished = row.finished_at ? Date.parse(row.finished_at) : started;
-    return {
-      tool,
-      summary: summary.slice(0, 160),
-      durationMs: Math.max(0, finished - started),
-    };
-  });
-  const started = Date.parse(run.started_at);
-  const finished = run.finished_at ? Date.parse(run.finished_at) : started;
-  return {
-    runId: run.run_id,
-    status: run.status,
-    startedAt: run.started_at,
-    toolCount: calls.length,
-    evidenceCount,
-    durationMs: Math.max(0, finished - started),
-    forecastReady,
-    // The agent contains no LLM call, so a null provider is accurate, not a stub.
-    modelProvider: null,
-    calls,
   };
 }
 
@@ -962,8 +963,8 @@ export async function loadRealCalendar(userId: string | null): Promise<RealCalen
     const company = role ? embeddedOne(role.companies as { name: string } | { name: string }[] | null) : null;
     return {
       roleId,
-      role: (role?.canonical_title as string) ?? "Watched role",
-      company: (company?.name as string) ?? "Company",
+      role: role?.canonical_title ? tidyTitle(role.canonical_title as string) : "Watched role",
+      company: company?.name ? displayCompany(company.name as string) : "Company",
       roleFamily: (role?.role_family as string) ?? "unknown",
       href: `/roles/${roleId}`,
     };
@@ -1250,8 +1251,8 @@ export async function loadReplayCandidates(filters: ReplayFilters): Promise<Repl
       key: `${row.role_id}-${row.target_event_id}`,
       roleId: row.role_id,
       targetEventId: row.target_event_id,
-      company: row.company_name,
-      role: row.canonical_title,
+      company: displayCompany(row.company_name),
+      role: tidyTitle(row.canonical_title),
       targetYear: Number(row.opened_on.slice(0, 4)),
       openedOn: row.opened_on,
       precision: row.date_precision as "exact" | "bounded",
@@ -1275,7 +1276,7 @@ export async function loadReplayCandidates(filters: ReplayFilters): Promise<Repl
       matching: Number(totals.matching),
     },
     companies: ((companies.data ?? []) as { company_name: string; candidates: number | string }[]).map((row) => ({
-      name: row.company_name,
+      name: displayCompany(row.company_name),
       candidates: Number(row.candidates),
     })),
     backtest,

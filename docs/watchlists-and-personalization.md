@@ -28,12 +28,17 @@ skipped it and follows nothing. It is one question per screen, every question op
 every screen:
 
 1. What are you looking for: Internship, New grad (every full-time early-career type: new grad, graduate program,
-   rotational, apprenticeship), or Co-op.
-2. Which fields: ten chips, each exactly one discipline of docs/role-scope.md (SWE, ML/AI, Data, Infra, Security,
-   Hardware, Robotics, Quant, PM, Design). None means every field.
+   rotational, apprenticeship), or Co-op, or "Show me all three". One choice, so tapping it goes straight on; there is
+   no Continue button on this screen.
+2. Which fields: eleven chips. Ten are exactly one discipline of docs/role-scope.md (SWE, ML/AI, Data, Infra,
+   Security, Hardware, Robotics, Quant, PM, Design); "Other engineering" covers the rest (mechanical, aerospace,
+   manufacturing, materials, chemical, civil, biomedical). None means every field. Several can be picked, so this
+   screen keeps Continue.
 3. Any companies you are watching: a search over every company with an in-scope role, and the six with the most
-   in-scope roles as suggestions ("most programs tracked").
-4. The payoff, `/welcome?step=ready&…` with the answers in the URL: "Here are N programs to watch".
+   in-scope roles as suggestions ("most programs tracked"). Continue, as on step 2.
+4. The payoff, `/welcome?step=ready&…` with the answers in the URL: "Your top 6 to watch", with the answers and the
+   number of matching programs in the subtitle ("Internships in software engineering. 143 programs match, and 88 have a
+   likely date so far.").
 
 `apps/web/lib/onboarding.ts` turns the answers into the roles view's own filters (program types and disciplines), and
 `lib/onboarding-data.ts` reads the payoff through the public reader: N is `dashboard_role_summary` for those filters,
@@ -44,12 +49,12 @@ forecast are not left out.
 
 A guest's answers stay in the browser's local storage (`lib/guest-onboarding.ts`, key `firstseen:onboarding`); nothing
 about a guest reaches the server. They personalize what the guest browses through the URL ("Keep browsing as guest"
-opens the roles view filtered to them, and the landing page and the roles view offer them back). Choosing "Save these
-and get alerts" marks them to carry over and opens sign-up; the first signed-in visit to `/welcome` then saves them
+opens the roles view filtered to them, and the landing page and the roles view offer them back). Choosing "Save to my
+watchlist" marks them to carry over and opens sign-up; the first signed-in visit to `/welcome` then saves them
 without asking again and clears the mark. Another device, or cleared storage, simply has no answers.
 
-Saving (`POST /api/onboarding`, the same call a signed-in visitor's "Watch these" makes) writes
-`recruiting_preferences.target_disciplines` and one `canonical_role` follow per listed in-scope role, plus one `company`
+Saving (`POST /api/onboarding`, the same call a signed-in visitor's "Save to my watchlist" makes) writes
+`recruiting_preferences.target_disciplines` (every discipline of each chosen field; "Other engineering" stores its seven) and one `canonical_role` follow per listed in-scope role, plus one `company`
 follow per picked company, with the user's own client, so RLS applies to every write. The program type has no column:
 the follows carry it. Answers an earlier version of the first run stored (graduation year, season, places) are left as
 they are and still shown in settings. It then asks the worker for a readiness plan for the first chosen role with a

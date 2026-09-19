@@ -119,7 +119,8 @@ test("guest mode's boundary against the local rig", async (t) => {
       const pages = [
         "/", "/roles", "/roles?watched=1", "/roles?discipline=quantitative&sort=confidence&page=2", "/?discipline=data",
         `/roles/${forecastable}`, `/roles/${insufficient}`, "/replay", "/calendar", "/digests", "/settings", "/welcome",
-        "/welcome?step=ready&for=internship&field=software_engineering&field=data", "/signin", "/auth/forgot", "/design-system", "/methodology",
+        "/welcome?step=ready&for=internship&field=software_engineering&field=data&field=other_engineering", "/opened", "/opened?page=2", "/ask",
+        "/signin", "/auth/forgot", "/design-system", "/methodology",
       ];
       let total = 0;
       for (const path of pages) {
@@ -132,9 +133,10 @@ test("guest mode's boundary against the local rig", async (t) => {
       assert.match(home.text, /Know when internships open,/, "the landing page renders for a guest");
       assert.ok(home.calls.some((call) => call.path === "/rest/v1/rpc/dashboard_role_page"), "its preview and forecasts are read through the public reader");
       const roles = await guest("/roles");
-      assert.ok(roles.calls.some((call) => call.path === "/rest/v1/rpc/public_agent_activity"));
+      assert.ok(roles.calls.some((call) => call.path === "/rest/v1/rpc/dashboard_role_page"));
+      assert.ok(roles.calls.some((call) => call.path === "/rest/v1/role_aliases"), "titles are read from the allowlisted aliases, for their accents and punctuation");
       const payoff = await guest("/welcome?step=ready&for=internship&field=software_engineering");
-      assert.match(payoff.text, /programs? to watch|Nothing fits all of that yet/, "a guest reaches the first run's payoff without an account");
+      assert.match(payoff.text, /Your top \d+ to watch|Nothing fits all of that yet/, "a guest reaches the first run's payoff without an account");
       t.diagnostic(`${pages.length} guest pages made ${total} Supabase requests, all inside the allowlist`);
     });
 

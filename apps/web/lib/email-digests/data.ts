@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAll, fetchAllIn } from "@/lib/supabase/paging";
 import { getEmailDigestPublicUrl } from "./config";
 import type { DigestSourceData } from "./digest";
+import { displayCompany, tidyTitle } from "@/lib/display-names";
 
 type RoleRow = { id: string; company_id: string; canonical_title: string; forecast_refused_at: string | null; companies: { name: string } | Array<{ name: string }> | null };
 type ForecastRow = { id: string; canonical_role_id: string; as_of: string; window_start: string; window_end: string; confidence: number; forecasted_at: string };
@@ -95,7 +96,7 @@ export async function loadDigestSourceData(userId: string, asOf = new Date().toI
   const origin = getEmailDigestPublicUrl();
   const identity = (roleId: string) => {
     const role = roleById.get(roleId)!;
-    return { roleId, company: companyName(role), role: role.canonical_title, href: `${origin}/roles/${roleId}` };
+    return { roleId, company: displayCompany(companyName(role)), role: tidyTitle(role.canonical_title), href: `${origin}/roles/${roleId}` };
   };
   return {
     asOf,

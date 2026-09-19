@@ -1,35 +1,34 @@
 /**
- * The app's navigation: one list, so the header, its phone menu, and the tests agree on what a guest can open and
- * why the rest asks for an account.
+ * The app's navigation: one list, so the header, its phone menu, and the tests agree on what each visitor sees.
  *
- * A guest sees every item. One that needs an account carries a lock and a single line saying what signing in gives;
- * it still links to its page, which explains itself to a guest rather than failing.
+ * A guest sees three items: Explore, Just opened, and Ask. A signed-in user also sees their Watchlist and Calendar.
+ * Forecast Replay is reached from the methodology page and email digests from settings; neither is in the navigation.
  *
  * Kept free of React so the tests read it directly.
  */
 
 import type { IconName } from "@/components/ui/icon-names";
 
-export type NavKey = "explore" | "watchlist" | "calendar" | "replay" | "digests";
+export type NavKey = "explore" | "opened" | "ask" | "watchlist" | "calendar";
 
 export type NavItem = {
   key: NavKey;
   label: string;
   href: string;
   icon: IconName;
-  /** Null when a guest can use the page fully; otherwise the one line a guest reads beside the lock. */
-  lockedReason: string | null;
+  /** Shown only to a signed-in user. */
+  account: boolean;
 };
 
 export const SITE_NAV: readonly NavItem[] = [
-  { key: "explore", label: "Explore", href: "/roles", icon: "radar", lockedReason: null },
-  { key: "watchlist", label: "Watchlist", href: "/roles?watched=1", icon: "bell", lockedReason: "Sign in to save roles and get alerts" },
-  { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar-days", lockedReason: "Sign in to plan around the roles you watch" },
-  { key: "replay", label: "Replay", href: "/replay", icon: "calendar-clock", lockedReason: "Sign in to replay a past forecast" },
-  { key: "digests", label: "Digests", href: "/digests", icon: "mail", lockedReason: "Sign in to get a weekly email of changes" },
+  { key: "explore", label: "Explore", href: "/roles", icon: "radar", account: false },
+  { key: "opened", label: "Just opened", href: "/opened", icon: "door-open", account: false },
+  { key: "ask", label: "Ask", href: "/ask", icon: "message-circle-question-mark", account: false },
+  { key: "watchlist", label: "Watchlist", href: "/roles?watched=1", icon: "bell", account: true },
+  { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar-days", account: true },
 ];
 
-/** Whether an item is locked for this visitor. */
-export function navLocked(item: NavItem, signedIn: boolean): boolean {
-  return !signedIn && item.lockedReason !== null;
+/** The items this visitor sees, in order. */
+export function navItems(signedIn: boolean): NavItem[] {
+  return SITE_NAV.filter((item) => signedIn || !item.account);
 }

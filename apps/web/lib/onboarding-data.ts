@@ -1,7 +1,6 @@
 import "server-only";
 
 import { filterRpcArgs, programTypeLabel, disciplineLabel, type DashboardFilterOptions } from "@/lib/dashboard-query";
-import type { ForecastBasis } from "@/lib/forecast-basis";
 import {
   PAYOFF_ROLES,
   POPULAR_COMPANIES,
@@ -11,8 +10,9 @@ import {
   type LegacyPreferences,
   type OnboardingAnswers,
 } from "@/lib/onboarding";
+import { displayCompany, displayPlace, displayTitle } from "@/lib/display-names";
 import { createPublicReader } from "@/lib/public-read";
-import { loadDashboardFilterOptions, loadForecastBasis } from "@/lib/real-data";
+import { loadDashboardFilterOptions, loadRecordedTitles } from "@/lib/real-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type OnboardingState = {
@@ -56,6 +56,7 @@ export type CompanyChoice = { id: string; name: string; roles: number };
  */
 export async function loadCompanyChoices(options?: DashboardFilterOptions): Promise<{ all: CompanyChoice[]; popular: CompanyChoice[] }> {
   const facets = options ?? (await loadDashboardFilterOptions());
+  // The facet labels are already display names (lib/real-data.ts), so "Imc" reads as IMC here too.
   const all = facets.company.map((option) => ({ id: option.value, name: option.label, roles: option.roles }));
   const popular = [...all].sort((a, b) => b.roles - a.roles || a.name.localeCompare(b.name)).slice(0, POPULAR_COMPANIES);
   return { all, popular };
@@ -72,7 +73,7 @@ export type PayoffRole = {
   /** The location split, when the role states one; it tells apart two programs with the same title. */
   location: string | null;
   atWatchedCompany: boolean;
-  window: { start: string; end: string; confidence: number; cycles: number; basis: ForecastBasis | null } | null;
+  window: { expected: string; start: string; end: string; confidence: number } | null;
   openingsRecorded: number;
 };
 
@@ -92,6 +93,7 @@ type PageRow = {
   program_type: string | null;
   location_scope: string | null;
   forecastable: boolean;
+  point_date: string | null;
   window_start: string | null;
   window_end: string | null;
   confidence: number | string | null;
@@ -138,8 +140,8 @@ export async function loadOnboardingPayoff(answers: OnboardingAnswers, now: Date
   const rows = [...((watched.data ?? []) as PageRow[]), ...((general.data ?? []) as PageRow[])]
     .filter((row) => (seen.has(row.role_id) ? false : (seen.add(row.role_id), true)))
     .slice(0, PAYOFF_ROLES);
-  const current = (row: PageRow) => row.forecastable && row.window_start !== null && row.window_end !== null && row.window_end >= today && row.confidence !== null;
-  const basis = await loadForecastBasis(reader, rows.filter(current).map((row) => row.role_id));
+  const current = (row: PageRow) => row.forecastable && row.point_date !== null && row.window_start !== null && row.window_end !== null && row.window_end >= today && row.confidence !== null;
+  const recorded = await loadRecordedTitles(reader, rows.map((row) => row.role_id));
   const watchedIds = new Set(answers.companies);
   const counts = summary.data as SummaryRow;
 
@@ -148,15 +150,15 @@ export async function loadOnboardingPayoff(answers: OnboardingAnswers, now: Date
     matchingForecasts: Number(counts.matching_forecastable),
     roles: rows.map((row) => ({
       id: row.role_id,
-      company: row.company_name,
+      company: displayCompany(row.company_name),
       companyId: row.company_id,
-      title: row.canonical_title,
+      title: displayTitle(row.canonical_title, recorded.get(row.role_id)),
       programType: programTypeLabel(row.program_type),
       discipline: disciplineLabel(row.discipline),
-      location: row.location_scope && row.location_scope !== "unspecified" ? row.location_scope : null,
+      location: row.location_scope && row.location_scope !== "unspecified" ? displayPlace(row.location_scope) : null,
       atWatchedCompany: watchedIds.has(row.company_id),
       window: current(row)
-        ? { start: row.window_start!, end: row.window_end!, confidence: Number(row.confidence), cycles: Number(row.history_count ?? 0), basis: basis.get(row.role_id) ?? null }
+        ? { expected: row.point_date!, start: row.window_start!, end: row.window_end!, confidence: Number(row.confidence) }
         : null,
       openingsRecorded: Number(row.exact_events) + Number(row.bounded_events) + Number(row.observed_events),
     })),

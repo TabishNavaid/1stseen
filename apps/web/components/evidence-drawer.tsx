@@ -1,7 +1,8 @@
 import { Icon, type IconName } from "@/components/ui/icon";
 import Link from "next/link";
 import type { ForecastRole } from "@firstseen/shared";
-import { ConfidenceIndicator } from "@/components/confidence-indicator";
+import { ConfidenceWord } from "@/components/confidence-word";
+import { LikelyWindow, type Outlook } from "@/components/likely-window";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { BASIS, type ForecastBasis } from "@/lib/forecast-basis";
 import { ReadinessChecklist } from "@/components/readiness-checklist";
@@ -14,7 +15,7 @@ import { locationLabel } from "@/lib/presentation";
  * A forecast's evidence, behind a click: the drawer slides over the list at every width, so the list stays clean and
  * the detail (the interval, why this confidence, the signal, the work-back plan, and the evidence) is one tap away.
  */
-export function EvidenceDrawer({ role, basis = null, programType, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; programType?: string; open: boolean; onClose: () => void }) {
+export function EvidenceDrawer({ role, basis = null, programType, outlook = null, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; programType?: string; outlook?: Outlook | null; open: boolean; onClose: () => void }) {
   const panelRef = useOffCanvas<HTMLElement>(open, onClose, "all");
   return (
     <>
@@ -27,9 +28,10 @@ export function EvidenceDrawer({ role, basis = null, programType, open, onClose 
         <div className="space-y-7 p-5">
           <Link href={`/roles/${role.id}`} className="focus-ring flex min-h-touch items-center justify-between rounded-control border border-line bg-surface-selected px-4 py-2.5 text-xs font-semibold text-accent-ink hover:border-accent">Open the full role page <Icon name="arrow-up-right" size={14} /></Link>
           <section className="rounded-card border border-line bg-surface-sunken p-4">
-            <div className="flex items-center justify-between gap-4"><div><p className="label-caps text-ink-subtle">Predicted opening interval</p><p className="mt-2 text-xl font-semibold tracking-[-0.035em] tabular">{role.window}</p><p className="mt-1 text-caption text-ink-subtle">Expected opening falls inside this statistical interval.</p></div><ConfidenceIndicator value={role.confidence} /></div>
+            <div className="flex flex-wrap items-start justify-between gap-4"><LikelyWindow outlook={outlook} window={role.window} /><ConfidenceWord value={role.confidence} align="end" /></div>
             {basis && <div className="mt-4 flex flex-wrap items-center gap-2"><ForecastBasisChip basis={basis} /><span className="text-micro text-ink-subtle">{BASIS[basis.kind].meaning}</span></div>}
-            <div className="mt-5 grid grid-cols-4 gap-1" aria-label="Historical opening cycles compared with forecast">
+            <p className="mt-5 label-caps text-ink-subtle">Past openings</p>
+            <div className="mt-2 grid grid-cols-4 gap-1" aria-label="Past openings behind this prediction">
               {role.historicalCycles.map((date, index) => <div key={date}><div className="relative h-7 border-t border-line-strong"><span className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-accent-ink" style={{ opacity: 0.55 + index * 0.12 }} /></div><p className="text-center text-micro tabular text-ink-subtle">{date}</p></div>)}
             </div>
           </section>

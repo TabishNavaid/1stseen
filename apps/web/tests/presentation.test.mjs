@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CONFIDENCE_MEANING, confidenceOutOf, confidencePhrase, confidenceTone, formatConfidence } from "../lib/confidence.ts";
+import { CONFIDENCE_MEANING, confidenceExplanation, confidenceOutOf, confidencePhrase, confidenceTone, confidenceWord, formatConfidence } from "../lib/confidence.ts";
 import { contributionLabel, factorLabel, factorLowersConfidence, factorTone, locationLabel } from "../lib/presentation.ts";
 
 test("a confidence score is written out of 100 and never with a percent sign", () => {
@@ -32,7 +32,7 @@ test("factors that lower confidence are colored by what they do to the score", (
 test("locations and contributions read as plain words", () => {
   assert.equal(locationLabel("unspecified"), "Location not stated");
   assert.equal(locationLabel(null), "Location not stated");
-  assert.equal(locationLabel("new york ny"), "New York NY");
+  assert.equal(locationLabel("new york ny"), "New York, NY");
   assert.equal(contributionLabel("role_history"), "An opening of this program");
   assert.equal(contributionLabel("company_prior"), "This company's other programs");
   assert.doesNotMatch(contributionLabel("role_family_prior"), /_/);
@@ -43,4 +43,13 @@ test("the confidence score's meaning says what it measures and that it is not th
   assert.match(CONFIDENCE_MEANING, /not the chance that the window is right/);
   // The score is never a calibrated probability, and never written as a percentage.
   assert.doesNotMatch(CONFIDENCE_MEANING, /calibrat|probabilit|%/i);
+});
+
+test("a card shows the score as one word, and its explanation gives the score out of 100, never a percentage", () => {
+  assert.deepEqual([confidenceWord(80), confidenceWord(75), confidenceWord(74.9), confidenceWord(60), confidenceWord(59.9)], ["High", "High", "Medium", "Medium", "Low"]);
+  const text = confidenceExplanation(48);
+  assert.match(text, /^Low confidence\./);
+  assert.match(text, /confidence score 48 of 100/);
+  assert.match(text, /not the chance the window is right/);
+  assert.doesNotMatch(text, /%/);
 });

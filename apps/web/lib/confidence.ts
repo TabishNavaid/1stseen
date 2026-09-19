@@ -29,3 +29,23 @@ export function confidenceOutOf(value: number, digits = 0): string {
 export function confidencePhrase(value: number, digits = 0): string {
   return `confidence score ${formatConfidence(value, digits)} of 100`;
 }
+
+export type ConfidenceWord = "Low" | "Medium" | "High";
+
+/** The one word a card shows for the score, from the same bands as its tone: 75 and up is High, 60 to 74 Medium. */
+export function confidenceWord(value: number): ConfidenceWord {
+  const tone = confidenceTone(value);
+  return tone === "strong" ? "High" : tone === "moderate" ? "Medium" : "Low";
+}
+
+const WORD_MEANING: Record<ConfidenceWord, string> = {
+  High: "Plenty of consistent evidence backs this window.",
+  Medium: "A fair amount of consistent evidence backs this window.",
+  Low: "Only a little consistent evidence backs this window so far, so treat it as a rough guide.",
+};
+
+/** What the word means, for its tooltip: the band, then the score in its own words, never as a percentage. */
+export function confidenceExplanation(value: number): string {
+  const word = confidenceWord(value);
+  return `${word} confidence. ${WORD_MEANING[word]} It is a ${confidencePhrase(value)}, which measures the evidence, not the chance the window is right.`;
+}

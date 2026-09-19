@@ -17,14 +17,17 @@ import { loadDotEnv, sqlClient } from "../../../../scripts/lib/db.mjs";
 loadDotEnv();
 
 let workerModule;
-async function page(path) {
+async function rawPage(path) {
   workerModule ??= (await import(new URL(`../../dist/server/index.js?displayed-numbers=${randomUUID()}`, import.meta.url).href)).default;
   const response = await workerModule.fetch(
     new Request(`http://localhost${path}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
     { waitUntil() {}, passThroughOnException() {} },
   );
-  const html = await response.text();
+  return response.text();
+}
+async function page(path) {
+  const html = await rawPage(path);
   return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "").replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ")
     .replace(/&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ");
 }
@@ -56,8 +59,9 @@ test("every number the product displays matches a direct query", async () => {
     const tile = (re, label) => num(dash, re) ?? (dash.includes(label) ? null : 0);
     check("/roles tiles", "likely in 30 days", tile(/Likely in 30 days ([\d,]+) of/, "Likely in 30 days"), soon.n);
     if (dash.includes("Likely in 30 days")) check("/roles tiles", "of N forecasts", num(dash, /Likely in 30 days [\d,]+ of ([\d,]+) forecast/), withForecast.n);
-    check("/roles tiles", "confirmed openings, last 45 days", tile(/Confirmed openings ([\d,]+) exact source dates/, "Confirmed openings"), opened.n);
-    check("/roles timeline", "most recent of", num(dash, /The \d+ most recent of ([\d,]+)/), opened.n);
+    check("/roles tiles", "programs opened, last 45 days", tile(/Just opened ([\d,]+) programs? opened in the last 45 days/, "programs opened in the last 45 days"), opened.n);
+    const justOpened = await page("/opened");
+    check("/opened", "programs opened in the last 45 days", num(justOpened, /([\d,]+) programs? opened in the last 45 days, newest first/), opened.n);
     check("/roles list", "all in-scope roles", num(dash, /All ([\d,]+) in-scope roles:/), roles.n);
     check("/roles list", "with a forecast", num(dash, /in-scope roles: ([\d,]+) with a forecast/), withForecast.n);
     check("/roles list", "without a forecast", num(dash, /listed first, and ([\d,]+) without/), roles.n - withForecast.n);
@@ -77,8 +81,19 @@ test("every number the product displays matches a direct query", async () => {
       if (shown !== null) check("/roles facets", `program ${v}`, shown, n);
     }
 
-    // Each listed card: "N cycles behind it · a exact, b observed by" against the latest forecast and current events.
-    const cards = [...dash.matchAll(/(\d+) cycles? behind it · ([^·]*?)(?= (?:Own history|Borrowed timing|\d+ ))/g)];
+    // Each listed card's "Likely around" date against its role's latest forecast.
+    const strip = (html) => html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const cards = (await rawPage("/roles")).split("<article").slice(1).flatMap((chunk) => {
+      const id = /href="\/roles\/([0-9a-f-]{36})"/.exec(chunk)?.[1];
+      const date = /Likely around ([A-Z][a-z]{2} \d{1,2}, \d{4})/.exec(strip(chunk))?.[1];
+      return id && date ? [{ id, date }] : [];
+    });
+    const expected = await all(`select l.canonical_role_id::text id, l.point_date::text d from (${latest}) l where l.canonical_role_id = any($1::uuid[])`, [cards.map((card) => card.id)]);
+    const day = (iso) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    const expectedById = new Map(expected.map((row) => [row.id, day(row.d)]));
+    const mismatched = cards.filter((card) => expectedById.get(card.id) !== card.date);
+    check("/roles cards", "cards whose likely date is not the latest forecast's expected date", mismatched.length, 0);
+    results.push({ surface: "/roles cards", claim: "cards with a likely date read", shown: cards.length, truth: "-", ok: cards.length > 0 });
     const incoherent = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id
       left join (select canonical_role_id, count(*) n from public.historical_opening_events group by 1) e on e.canonical_role_id = l.canonical_role_id
       where ${inScope} and l.history_count > coalesce(e.n, 0)`);
@@ -90,8 +105,8 @@ test("every number the product displays matches a direct query", async () => {
     const fits = `${inScope} and r.discipline = 'software_engineering' and r.early_career_type = 'internship'`;
     const fitting = await one(`select count(*)::int n from public.canonical_roles r where ${fits}`);
     const fittingForecasts = await one(`select count(*)::int n from (${latest}) l join public.canonical_roles r on r.id = l.canonical_role_id where ${fits}`);
-    check("/welcome payoff", "programs to watch", num(payoff, /Here are ([\d,]+) programs? to watch/), fitting.n);
-    check("/welcome payoff", "with a predicted window", num(payoff, /([\d,]+) (?:has|have) a predicted window/), fittingForecasts.n);
+    check("/welcome payoff", "programs that match", num(payoff, /([\d,]+) programs? match/), fitting.n);
+    check("/welcome payoff", "with a likely date", num(payoff, /([\d,]+) (?:has|have) a likely date/), fittingForecasts.n);
 
     // ---------------------------------------------------------------- methodology
     const meth = await page("/methodology");
@@ -121,10 +136,9 @@ test("every number the product displays matches a direct query", async () => {
       const counts = await one(`select count(*) filter (where date_precision = 'exact')::int exact, count(*) filter (where date_precision = 'bounded')::int bounded, count(*) filter (where date_precision = 'observed_by')::int observed from public.historical_opening_events where canonical_role_id = $1`, [id]);
       const observations = await one(`select count(*)::int n from public.observation_role_matches where canonical_role_id = $1 and evidence_kind = 'observation_resolution'`, [id]);
       const provenance = await one(`select count(*)::int n from public.forecast_provenance where forecast_id = (select id from public.forecasts where canonical_role_id = $1 order by forecasted_at desc, id limit 1)`, [id]);
-      const m = /(\d+) exact · (\d+) bounded · (\d+) observed-by/.exec(text);
-      check(`/roles/${id.slice(0, 8)}`, "exact openings", m ? Number(m[1]) : null, counts.exact);
-      check(`/roles/${id.slice(0, 8)}`, "bounded openings", m ? Number(m[2]) : null, counts.bounded);
-      check(`/roles/${id.slice(0, 8)}`, "observed-by openings", m ? Number(m[3]) : null, counts.observed);
+      check(`/roles/${id.slice(0, 8)}`, "exact openings", num(text, /Exact dates: (\d+)/), counts.exact);
+      check(`/roles/${id.slice(0, 8)}`, "bounded openings", num(text, /Bounded dates: (\d+)/), counts.bounded);
+      check(`/roles/${id.slice(0, 8)}`, "observed-by openings", num(text, /Observed by dates: (\d+)/), counts.observed);
       check(`/roles/${id.slice(0, 8)}`, "linked observations", num(text, /Linked observations ([\d,]+)/), observations.n);
       check(`/roles/${id.slice(0, 8)}`, "contributions", num(text, /over all ([\d,]+) contributions/), provenance.n);
     }

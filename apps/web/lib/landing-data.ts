@@ -3,11 +3,12 @@ import "server-only";
 import { defaultDashboardFilters, filterRpcArgs, programTypeLabel, type DashboardFilters } from "@/lib/dashboard-query";
 import { createPublicReader, type PublicReader } from "@/lib/public-read";
 import type { ForecastBasis } from "@/lib/forecast-basis";
-import { hasServiceRoleConfig, loadForecastBasis } from "@/lib/real-data";
+import { displayCompany, displayTitle } from "@/lib/display-names";
+import { hasServiceRoleConfig, loadForecastBasis, loadJustOpened, loadRecordedTitles, type RealOpening } from "@/lib/real-data";
 import type { DatePrecision } from "@/lib/role-view";
 
-/** One recorded opening of the preview role, with where it was seen. */
-export type LandingOpening = { id: string; openedOn: string; precision: DatePrecision; sourceUrl: string; archive: boolean };
+/** One recorded opening of the preview role, with where it was seen. `windowStart` is a bounded date's earlier end. */
+export type LandingOpening = { id: string; openedOn: string; windowStart: string | null; precision: DatePrecision; sourceUrl: string; archive: boolean };
 
 export type LandingForecastWindow = {
   windowStart: string;
@@ -42,7 +43,15 @@ export type OpeningSoonRole = {
   forecast: LandingForecastWindow;
 };
 
-export type LandingData = { preview: LandingPreview | null; openingSoon: OpeningSoonRole[] };
+export type LandingData = {
+  preview: LandingPreview | null;
+  openingSoon: OpeningSoonRole[];
+  /** The newest programs that opened in the last 45 days, and how many opened in all. */
+  justOpened: { openings: RealOpening[]; total: number };
+};
+
+/** How many just-opened programs the landing strip shows. */
+export const JUST_OPENED_STRIP = 8;
 
 type PageRow = {
   role_id: string;
@@ -87,7 +96,7 @@ function windowOf(row: PageRow, basis: ForecastBasis | null): LandingForecastWin
 async function openingsOf(reader: PublicReader, roleId: string): Promise<LandingOpening[]> {
   // bounded: the 12 newest openings of one role, from which the card lists PREVIEW_OPENINGS with a source.
   const events = await reader
-    .from("historical_opening_events", "id,opened_on,date_precision,raw_job_observations(source_url,source_type)")
+    .from("historical_opening_events", "id,opened_on,opening_window_start,date_precision,raw_job_observations(source_url,source_type)")
     .eq("canonical_role_id", roleId)
     .order("opened_on", { ascending: false })
     .order("id", { ascending: true })
@@ -101,6 +110,7 @@ async function openingsOf(reader: PublicReader, roleId: string): Promise<Landing
     return [{
       id: String(event.id),
       openedOn: String(event.opened_on),
+      windowStart: event.opening_window_start ? String(event.opening_window_start) : null,
       precision: precision as DatePrecision,
       sourceUrl: observation.source_url,
       archive: observation.source_type === "wayback",
@@ -115,6 +125,7 @@ async function openingsOf(reader: PublicReader, roleId: string): Promise<Landing
  * resting on two or more of the program's own cycles; when there is none, the role with the most recorded dated
  * openings, shown as its observed history with no window. "Opening soon" is every current forecast, soonest window
  * first, one role per company, up to six; a window that has already ended is not a coming opening and is left out.
+ * "Just opened" is the newest exact openings of the last 45 days, the same read as the Just opened page, one per company.
  */
 export async function loadLandingData(now: Date = new Date()): Promise<LandingData | null> {
   if (!hasServiceRoleConfig()) return null;
@@ -122,13 +133,15 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const today = now.toISOString().slice(0, 10);
   const withForecast: DashboardFilters = { ...defaultDashboardFilters, confidence: ["strong", "moderate", "limited"] };
 
-  const [featured, byEvidence, soonest] = await Promise.all([
+  const [featured, byEvidence, soonest, justOpened] = await Promise.all([
     // bounded: p_limit 1, the single featured forecast.
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, minCycles: 2 }, now, "confidence", 3, 1)),
     // bounded: p_limit 1, the role with the most dated openings, for when no forecast qualifies.
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, precision: "exact_or_bounded" }, now, "evidence", 3, 1)),
     // bounded: p_limit 12, from which at most OPENING_SOON_LIMIT current windows are shown.
     reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "window", 1, 12)),
+    // bounded: the newest 60, from which the strip keeps the first opening of each company, up to JUST_OPENED_STRIP.
+    loadJustOpened(reader, { limit: 60 }),
   ]);
   if (featured.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
 
@@ -138,16 +151,17 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const soonRows = ((soonest.data ?? []) as PageRow[]).filter((row) => row.forecastable && (row.window_end ?? "") >= today).slice(0, OPENING_SOON_LIMIT);
 
   const basisIds = [...new Set([...(featuredRow ? [featuredRow.role_id] : []), ...soonRows.map((row) => row.role_id)])];
-  const [basis, openings] = await Promise.all([
+  const [basis, openings, recorded] = await Promise.all([
     basisIds.length ? loadForecastBasis(reader, basisIds) : Promise.resolve(new Map<string, ForecastBasis>()),
     previewRow ? openingsOf(reader, previewRow.role_id) : Promise.resolve([]),
+    loadRecordedTitles(reader, [...(previewRow ? [previewRow.role_id] : []), ...soonRows.map((row) => row.role_id)]),
   ]);
 
   const preview: LandingPreview | null = previewRow
     ? {
         roleId: previewRow.role_id,
-        company: previewRow.company_name,
-        role: previewRow.canonical_title,
+        company: displayCompany(previewRow.company_name),
+        role: displayTitle(previewRow.canonical_title, recorded.get(previewRow.role_id)),
         programType: programTypeLabel(previewRow.program_type),
         openingsRecorded: Number(previewRow.exact_events) + Number(previewRow.bounded_events) + Number(previewRow.observed_events),
         openings,
@@ -158,9 +172,12 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const openingSoon = soonRows.flatMap((row): OpeningSoonRole[] => {
     const forecast = windowOf(row, basis.get(row.role_id) ?? null);
     return forecast
-      ? [{ roleId: row.role_id, company: row.company_name, role: row.canonical_title, programType: programTypeLabel(row.program_type), forecast }]
+      ? [{ roleId: row.role_id, company: displayCompany(row.company_name), role: displayTitle(row.canonical_title, recorded.get(row.role_id)), programType: programTypeLabel(row.program_type), forecast }]
       : [];
   });
 
-  return { preview, openingSoon };
+  // One program per company, so a company that posts a batch on one day does not fill the strip.
+  const companies = new Set<string>();
+  const strip = justOpened.openings.filter((opening) => (companies.has(opening.company) ? false : (companies.add(opening.company), true))).slice(0, JUST_OPENED_STRIP);
+  return { preview, openingSoon, justOpened: { openings: strip, total: justOpened.total } };
 }

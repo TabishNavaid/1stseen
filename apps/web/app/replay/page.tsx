@@ -24,7 +24,7 @@ export default async function ReplayPage({
   // Keyed by the URL so the selected target and cutoff reset with each page or filter.
   return (
     <>
-      <SiteHeader active="replay" contentId="replay-content" />
+      <SiteHeader contentId="replay-content" />
       <ForecastReplay key={replayHref(filters)} data={data} />
     </>
   );

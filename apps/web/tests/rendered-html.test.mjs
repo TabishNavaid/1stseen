@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { publishedSitePages } from "../lib/site-links.ts";
+import { pageLanguageLeaks } from "./support/page-language.mjs";
 
 // The dashboard renders fixtures only under an explicit opt-in, so these
 // development-data assertions must request demo mode deliberately.
@@ -51,15 +52,17 @@ test("renders canonical role intelligence with explicit uncertainty semantics", 
   assert.match(html, /The source supplied this publication date/);
   assert.match(html, /A complete earlier capture proved absence/);
   assert.match(html, /The role was visible by this date\. It may have opened earlier/);
-  assert.match(html, /Investigate with 1stSeen Agent/);
-  assert.match(html, /Watch the agent operate over tools and evidence/);
-  assert.match(html, /Identified recruiting system/);
-  assert.match(html, /Resolved role aliases/);
-  assert.match(html, /Retrieved historical cycles/);
-  assert.match(html, /Inspected archived evidence/);
-  assert.match(html, /Generated statistical forecast/);
-  assert.match(html, /Calculated readiness timeline/);
-  assert.match(html, /Each step is a tool the agent ran and what it returned/);
+  // The agent check lists its steps in plain words, never by tool name.
+  assert.match(html, /Check the latest evidence/);
+  assert.match(html, /Check now/);
+  assert.match(html, /Found the company(?:&#x27;|')s job board/);
+  assert.match(html, /Matched the program(?:&#x27;|')s past titles/);
+  assert.match(html, /Looked up past openings/);
+  assert.match(html, /Checked archived copies/);
+  assert.match(html, /Worked out the likely date/);
+  assert.match(html, /Built a prep plan/);
+  // Evidence classes appear only in History, as an icon whose tooltip names the class and says what it means.
+  assert.match(html, /role="tooltip"[^>]*>(?:<[^>]+>)*Exact(?:<!-- -->)?\./);
 });
 
 test("role intelligence distinguishes signals, reliability, and model ownership", async () => {
@@ -68,10 +71,10 @@ test("role intelligence distinguishes signals, reliability, and model ownership"
   assert.match(html, /source reliability/i);
   assert.match(html, /hierarchical-circular-shrinkage-v2/);
   // The forecast's own uncertainty stays on it: the interval, the cycles behind it, the confidence and what it means.
-  assert.match(html, /80% prediction interval, computed by/);
+  assert.match(html, /The window holds 80% of the likely dates/);
   assert.match(html, /Recruiting cycles used/);
   assert.match(html, /not the chance that it is right/);
-  assert.match(html, /Signals carry zero date weight/i);
+  assert.match(html, /News about hiring never moves the date/i);
   // Confidence is a 0 to 100 evidence score, never a probability, so it is never written with a percent sign.
   assert.match(html, /Confidence score<\/dt><dd[^>]*>[\d.]+ \/ 100</);
   assert.doesNotMatch(html, /confidence[^<]{0,40}\d%|\d(?:\.\d)?%\s*(?:<[^>]+>\s*)*confidence/i);
@@ -83,7 +86,7 @@ test("a role without enough cycles states the gap instead of showing a window", 
   const html = await (await render("/roles/meridian-apm")).text();
   // A statement about the history, not a warning.
   assert.match(html, /Too little history to forecast this role/);
-  assert.match(html, /Not forecastable yet/);
+  assert.match(html, /No date yet/);
   // The rule forecasting.py applies, not the "two cycles" the product used to claim (lib/forecast-gap).
   assert.match(html, /fewer than three distinct recruiting cycles is forecast only when a comparable program/i);
   assert.doesNotMatch(html, /two (?:distinct )?recruiting cycles|a forecast needs two/i);
@@ -159,10 +162,32 @@ test("renders evidence and preparation language", async () => {
   const html = await (await render("/roles")).text();
   assert.match(html, /Forecast evidence/);
   assert.match(html, /Work-back plan/);
-  assert.match(html, /Roles that opened/);
   assert.match(html, /Forecast changes/);
-  assert.match(html, /Agent activity/);
   assert.match(html, /Archive dates show when content existed/);
+  // The count of openings links to Just opened; the list itself lives there.
+  assert.match(html, /href="\/opened"[^>]*>[\s\S]*?Just opened/);
+  assert.match(html, /programs opened in the last 45 days/);
+});
+
+test("Just opened lists programs by the date they were posted, labelled as fixtures here", async () => {
+  const response = await render("/opened");
+  assert.equal(response.status, 200);
+  const html = visible(await response.text());
+  assert.match(html, /<title>Just opened · 1stSeen<\/title>|Just opened/);
+  assert.match(html, /programs opened in the last 45 days, newest first/);
+  assert.match(html, /Development fixture/);
+  assert.match(html, /Opened/);
+  const unconfigured = visible(await (await render("/opened", { demo: false })).text());
+  assert.doesNotMatch(unconfigured, /Pioneer|Lumen/, "no fixture without the opt-in");
+});
+
+test("Ask is open to guests, with its limit stated in words", async () => {
+  const response = await render("/ask");
+  assert.equal(response.status, 200);
+  const html = visible(await response.text());
+  assert.match(html, /Ask about any program/);
+  assert.match(html, /Without an account you can ask 5 questions a minute\./);
+  assert.match(html, /Which companies open their internships earliest\?/);
 });
 
 test("labels fixture provenance and derives visible portfolio counts", async () => {
@@ -251,13 +276,17 @@ test("no surface repeats the product-wide disclosure; only the methodology page 
   for (const hedge of REMOVED_HEDGES) assert.doesNotMatch(unconfigured, hedge, `unconfigured: ${hedge}`);
 });
 
-// Every forecast says what its window rests on, the program's own openings or comparable programs' timing, as
-// data beside the evidence classes (lib/forecast-basis). Fixtures carry labelled fixture weights so both bases render.
-test("a forecast shows its basis wherever it appears", async () => {
+// A card shows "Likely around" a date, its window, and one confidence word. What the window rests on, the program's own
+// openings or comparable programs' timing, is one step away: the evidence drawer and the role page's "How this forecast
+// was made" (lib/forecast-basis). Fixtures carry labelled fixture weights so the basis renders.
+test("a forecast's basis is one step away, never on its card", async () => {
   const dashboard = visible(await (await render("/roles")).text());
-  assert.match(dashboard, /Own history 74%/, "the dashboard card of a forecast resting on its own openings");
-  assert.match(dashboard, /Borrowed timing 58%/, "and of one borrowing comparable programs' timing");
-  assert.match(dashboard, /of the weight from comparable programs/, "the chip says what its share is of, to a screen reader");
+  const drawerStart = dashboard.indexOf("forecast detail");
+  const cards = dashboard.slice(0, dashboard.lastIndexOf("<aside", drawerStart));
+  assert.doesNotMatch(cards, /Own history \d+%|Borrowed timing \d+%/, "no basis chip on a card");
+  assert.match(cards, /Low confidence|Medium confidence|High confidence/, "the card shows one confidence word");
+  assert.doesNotMatch(cards, /\d+ days to interval|cycles? behind it/, "no model arithmetic on a card");
+  assert.match(dashboard.slice(drawerStart), /Own history \d+%|Borrowed timing \d+%/, "the drawer states the basis");
 
   const role = visible(await (await render("/roles/northstar-swe-intern")).text());
   assert.match(role, /What the window rests on/);
@@ -317,18 +346,26 @@ test("a guest's roles view renders no zero tile and no watched tile", async () =
   assert.doesNotMatch(unconfigured, /data-stat-tile/, "an empty deployment draws no tiles at all");
 });
 
-test("a guest sees account-only navigation locked, each with its reason", async () => {
-  const html = visible(await (await render("/roles")).text());
-  for (const [label, reason] of [
-    ["Watchlist", "Sign in to save roles and get alerts"],
-    ["Calendar", "Sign in to plan around the roles you watch"],
-    ["Replay", "Sign in to replay a past forecast"],
-    ["Digests", "Sign in to get a weekly email of changes"],
-  ]) {
-    assert.match(html, new RegExp(`${label}(?:<!-- -->)? needs a free account`), label);
-    assert.match(html, new RegExp(reason), reason);
+test("a guest's navigation is Explore, Just opened, and Ask, and nothing else", async () => {
+  for (const path of ["/", "/roles", "/opened", "/ask"]) {
+    const html = visible(await (await render(path)).text());
+    const header = html.slice(html.indexOf("<header"), html.indexOf("</header>"));
+    for (const label of ["Explore", "Just opened", "Ask"]) assert.match(header, new RegExp(`>${label}<`), `${path}: ${label}`);
+    for (const label of ["Watchlist", "Calendar", "Replay", "Digests"]) assert.doesNotMatch(header, new RegExp(`>${label}<`), `${path}: no ${label}`);
   }
-  assert.match(html, /aria-current="page"[^>]*>(?:<svg[\s\S]*?<\/svg>)?Explore/);
+  assert.match(visible(await (await render("/roles")).text()), /aria-current="page"[^>]*>(?:<svg[\s\S]*?<\/svg>)?Explore/);
+  // Replay is still reached from the methodology page.
+  assert.match(visible(await (await render("/methodology")).text()), /href="\/replay"/);
+});
+
+test("user pages show no identifiers, fingerprints, timings, tool names, or words from inside the machine", async () => {
+  // A development page must say it is one and may show its reserved .example sources, and a deployment without live
+  // data names the two settings its operator must set (Replay has no fixtures, so it shows that here); nothing else.
+  const allow = ["Development fixture", "development fixture", "Development fixtures are never shown in production", "reserved .example sources", "the fixture records on this page", ".example", "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"];
+  for (const path of ["/", "/roles", "/roles/northstar-swe-intern", "/roles/meridian-apm", "/opened", "/ask", "/methodology", "/replay", "/signin"]) {
+    const leaks = pageLanguageLeaks(await (await render(path)).text(), { allow });
+    assert.deepEqual(leaks, [], path);
+  }
 });
 
 test("the first run renders for a guest, and says so plainly when live data is not configured", async () => {

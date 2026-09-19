@@ -1,3 +1,5 @@
+import { displayPlace } from "./display-names.ts";
+
 /**
  * Plain labels for the model fields a product surface shows. The exact field name stays visible in a role's
  * "Model details", so nothing is hidden; a heading just never reads like a column name.
@@ -38,13 +40,9 @@ export function factorTone(key: string, value: number): FactorTone {
   return good >= 0.66 ? "positive" : good >= 0.33 ? "neutral" : "warning";
 }
 
-/** A normalized location scope as a place name; most postings state none. */
+/** A normalized location scope as a place name (lib/display-names.ts); most postings state none. */
 export function locationLabel(scope: string | null | undefined): string {
-  if (!scope || scope === "unspecified") return "Location not stated";
-  return scope
-    .split(" ")
-    .map((word) => (word.length <= 2 ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)))
-    .join(" ");
+  return displayPlace(scope);
 }
 
 const CONTRIBUTIONS: Record<string, string> = {

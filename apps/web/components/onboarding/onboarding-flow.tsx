@@ -4,14 +4,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransiti
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
-import { ForecastBasisChip } from "@/components/forecast-basis-chip";
-import { Icon } from "@/components/ui/icon";
-import { Pictogram, type PictogramName } from "@/components/ui/pictogram";
+import { ConfidenceWord } from "@/components/confidence-word";
+import { LikelyWindow } from "@/components/likely-window";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { Chip } from "@/components/ui/status";
 import { REDUCED_MOTION_QUERY, confettiPieces } from "@/lib/celebration";
-import { confidenceOutOf } from "@/lib/confidence";
-import { formatDay, formatShortDay } from "@/lib/dates";
-import { noForecastReason } from "@/lib/forecast-gap";
+import { plainNoForecastReason } from "@/lib/forecast-gap";
 import {
   GUEST_ONBOARDING_KEY,
   browserStorage,
@@ -90,7 +88,7 @@ function ChoiceCard({
   value,
   checked,
   onChange,
-  pictogram,
+  icon,
   label,
   hint,
   compact = false,
@@ -100,7 +98,7 @@ function ChoiceCard({
   value: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
-  pictogram: PictogramName;
+  icon: IconName;
   label: ReactNode;
   hint?: string;
   compact?: boolean;
@@ -115,7 +113,7 @@ function ChoiceCard({
     >
       <input type={type} name={name} value={value} checked={checked} onChange={(event) => onChange(event.target.checked)} className="sr-only" />
       <span className={cn("grid shrink-0 place-items-center rounded-control", compact ? "size-10" : "size-12", checked ? "bg-accent text-ink-inverse" : "bg-surface-sunken text-accent-ink")}>
-        <Pictogram name={pictogram} size={compact ? 20 : 24} />
+        <Icon name={icon} size={compact ? 20 : 24} />
       </span>
       <span className="min-w-0 flex-1">
         <span className={cn("block font-semibold text-ink", compact ? "text-sm" : "text-base")}>{label}</span>
@@ -197,15 +195,12 @@ function PayoffRoleRow({ role }: { role: OnboardingPayoff["roles"][number] }) {
         </p>
         <p className="mt-0.5 text-caption text-ink-subtle">{[role.programType, role.discipline, role.location].filter(Boolean).join(" · ")}</p>
         {role.window ? (
-          <p className="mt-1.5 flex flex-wrap items-center gap-2 text-caption text-ink-muted">
-            <span className="inline-flex rounded-control border border-dashed border-date-predicted-line bg-date-predicted-surface px-2 py-0.5 font-semibold tabular text-date-predicted-ink">
-              Predicted {formatShortDay(role.window.start)} – {formatDay(role.window.end)}
-            </span>
-            <span className="tabular">Confidence {confidenceOutOf(role.window.confidence)}</span>
-            {role.window.basis && <ForecastBasisChip basis={role.window.basis} variant="plain" />}
-          </p>
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+            <LikelyWindow outlook={role.window} size="sm" />
+            <ConfidenceWord value={role.window.confidence} align="end" />
+          </div>
         ) : (
-          <p className="mt-1.5 text-caption leading-5 text-ink-subtle">No window yet. {noForecastReason(role.openingsRecorded)}</p>
+          <p className="mt-2 text-caption leading-5 text-ink-subtle">{plainNoForecastReason(role.openingsRecorded)}</p>
         )}
       </div>
     </li>
@@ -217,7 +212,7 @@ function PayoffRoleRow({ role }: { role: OnboardingPayoff["roles"][number] }) {
  *
  * Steps one to three live in the browser; the payoff is `/welcome?step=ready&…`, a server render of exactly those
  * answers from the same read path as the roles page. "Skip, just browse" is on every screen. A guest's answers are kept
- * in local storage (lib/guest-onboarding.ts); a guest who chooses "Save these" signs up, and the next signed-in visit
+ * in local storage (lib/guest-onboarding.ts); a guest who chooses "Save to my watchlist" signs up, and the next signed-in visit
  * here saves the answers into the account without asking again. Focus moves to each new question's heading.
  */
 export function OnboardingFlow({
@@ -340,8 +335,7 @@ export function OnboardingFlow({
   }
 
   function next() {
-    if (step === 1) setLocalStep(2);
-    else if (step === 2) setLocalStep(3);
+    if (step === 2) setLocalStep(3);
     else if (step === 3) startTransition(() => router.push(welcomeHref(answers, "ready")));
   }
 
@@ -352,7 +346,11 @@ export function OnboardingFlow({
     } else if (step > 1) setLocalStep((step - 1) as 1 | 2);
   }
 
-  const setLookingFor = (value: LookingFor) => setAnswers((current) => ({ ...current, lookingFor: value }));
+  // Step one moves on as soon as a choice is made (or "all three"), the way a single tap should.
+  const choose = (value: LookingFor | null) => {
+    setAnswers((current) => ({ ...current, lookingFor: value }));
+    setLocalStep(2);
+  };
   const toggleField = (value: FieldValue, on: boolean) =>
     setAnswers((current) => ({ ...current, fields: on ? [...new Set([...current.fields, value])] : current.fields.filter((field) => field !== value) }));
   const toggleCompany = (id: string, on: boolean) =>
@@ -386,11 +384,33 @@ export function OnboardingFlow({
 
       <main id="welcome-content" className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-8 md:px-6 md:pt-14">
         {step === 1 && (
-          <Question key="q1" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Pick one, or continue to see all three.">
-            <div className="grid gap-3" role="radiogroup" aria-labelledby="q-looking-for">
+          <Question key="q1" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Tap one to go on.">
+            {/* Buttons, not radios: choosing one is the action that moves on, and a keyboard can reach and press each. */}
+            <div className="grid gap-3" role="group" aria-labelledby="q-looking-for">
               {LOOKING_FOR.map((option) => (
-                <ChoiceCard key={option.value} type="radio" name="looking-for" value={option.value} checked={answers.lookingFor === option.value} onChange={() => setLookingFor(option.value)} pictogram={option.pictogram} label={option.label} hint={option.hint} />
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={answers.lookingFor === option.value}
+                  onClick={() => choose(option.value)}
+                  className={cn(
+                    "focus-ring relative flex min-h-20 items-center gap-3 rounded-card border-2 bg-surface px-4 py-4 text-left shadow-raised transition-colors sm:px-5",
+                    answers.lookingFor === option.value ? "border-accent bg-accent-soft" : "border-line hover:border-line-strong hover:bg-surface-hover",
+                  )}
+                >
+                  <span className={cn("grid size-12 shrink-0 place-items-center rounded-control", answers.lookingFor === option.value ? "bg-accent text-ink-inverse" : "bg-surface-sunken text-accent-ink")}>
+                    <Icon name={option.icon} size={24} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-base font-semibold text-ink">{option.label}</span>
+                    <span className="mt-0.5 block text-caption leading-5 text-ink-muted">{option.hint}</span>
+                  </span>
+                  <Icon name="arrow-right" size={18} className="shrink-0 text-ink-subtle" />
+                </button>
               ))}
+              <button type="button" onClick={() => choose(null)} className="focus-ring inline-flex min-h-touch items-center justify-center rounded-chip px-4 text-sm font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">
+                Show me all three
+              </button>
             </div>
           </Question>
         )}
@@ -407,7 +427,7 @@ export function OnboardingFlow({
                   value={field.value}
                   checked={answers.fields.includes(field.value)}
                   onChange={(on) => toggleField(field.value, on)}
-                  pictogram={field.pictogram}
+                  icon={field.icon}
                   label={<>{field.label}<span className="sr-only">: {field.name}</span></>}
                 />
               ))}
@@ -475,21 +495,23 @@ export function OnboardingFlow({
               {payoff.matchingRoles > 0 ? <Celebration reducedMotion={reducedMotion} /> : <img src="/illustrations/reading-side.svg" alt="" width={978} height={615} className="w-56" />}
               <h1 id="payoff-title" ref={headingRef} tabIndex={-1} className="heading-display mt-6 text-3xl leading-tight text-ink outline-none sm:text-4xl">
                 {saved
-                  ? `Saved. You're watching ${plural(saved.watching, "program")}${companyPhrase(answers.companies.map((id) => byId.get(id)?.name))}.`
-                  : payoff.matchingRoles > 0
-                    ? `Here are ${plural(payoff.matchingRoles, "program")} to watch`
+                  ? "Saved to your watchlist"
+                  : payoff.roles.length > 0
+                    ? `Your top ${payoff.roles.length} to watch`
                     : "Nothing fits all of that yet"}
               </h1>
               <p className="mt-3 max-w-xl text-base leading-7 text-ink-muted">
-                {payoff.matchingRoles > 0
-                  ? <>{answersSummary(answers, (id) => byId.get(id)?.name)}. {plural(payoff.matchingForecasts, "has a predicted window", "have a predicted window")} so far.</>
-                  : "Try fewer fields or another program type. Leaving a question blank includes everything for it."}
+                {saved
+                  ? `You're watching ${plural(saved.watching, "program")}${companyPhrase(answers.companies.map((id) => byId.get(id)?.name))}.`
+                  : payoff.roles.length > 0
+                    ? <>{answersSummary(answers, (id) => byId.get(id)?.name)}. {plural(payoff.matchingRoles, "program matches", "programs match")}, and {plural(payoff.matchingForecasts, "has", "have")} a likely date so far.</>
+                    : "Try fewer fields or another program type. Leaving a question blank includes everything for it."}
               </p>
             </div>
 
             {payoff.roles.length > 0 && (
               <>
-                <h2 className="mt-10 label-caps text-ink-subtle">{payoff.matchingRoles > payoff.roles.length ? `The first ${payoff.roles.length}, soonest window first` : "Soonest window first"}</h2>
+                <h2 className="sr-only">Your top {payoff.roles.length}, soonest first</h2>
                 <ul className="mt-3 grid gap-3">
                   {payoff.roles.map((role) => <PayoffRoleRow key={role.id} role={role} />)}
                 </ul>
@@ -510,7 +532,7 @@ export function OnboardingFlow({
             </button>
           ) : <span />}
 
-          {step < 4 && (
+          {(step === 2 || step === 3) && (
             <button type="button" onClick={next} disabled={pending} aria-busy={pending} className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse hover:bg-accent-hover disabled:opacity-70">
               {pending ? <><Icon name="loader-circle" size={17} className="animate-spin" />Finding your programs…</> : step === 3 ? <>Show my programs<Icon name="arrow-right" size={17} /></> : <>Continue<Icon name="arrow-right" size={17} /></>}
             </button>
@@ -524,11 +546,11 @@ export function OnboardingFlow({
               {payoff.roles.length > 0 && (
                 signedIn ? (
                   <button type="button" onClick={() => void save()} disabled={saving} aria-busy={saving} className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-6 text-base font-semibold text-ink-inverse hover:bg-accent-hover disabled:opacity-70">
-                    <Icon name="bell-ring" size={17} />Watch these and get alerts
+                    <Icon name="bell" size={17} />Save to my watchlist
                   </button>
                 ) : (
                   <button type="button" onClick={saveAsGuest} className="focus-ring inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-6 text-base font-semibold text-ink-inverse hover:bg-accent-hover">
-                    <Icon name="bell-ring" size={17} />Save these and get alerts
+                    <Icon name="bell" size={17} />Save to my watchlist
                   </button>
                 )
               )}

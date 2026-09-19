@@ -2,14 +2,12 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { AgentActivity, type AgentActivityView } from "@/components/agent-activity";
 import { DashboardFiltersForm } from "@/components/dashboard-filters";
 import { EvidenceDrawer } from "@/components/evidence-drawer";
 import { ForecastCard } from "@/components/forecast-card";
 import { ForecastChange } from "@/components/forecast-change";
 import { InsufficientRoleCard } from "@/components/insufficient-role-card";
 import { SkipFirstRunButton } from "@/components/onboarding/skip-first-run-button";
-import { RecruitingTimeline } from "@/components/recruiting-timeline";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/status";
 import { forecastChanges, forecastRoles as fixtureRoles, openedRoles } from "@/lib/demo-data";
@@ -46,7 +44,6 @@ export type ForecastDashboardProps = {
   /** Every exact opening in the window; `openings` is only its newest rows. */
   openingsTotal?: number;
   changes?: RealForecastChange[];
-  agentActivity?: AgentActivityView | null;
   signedInAs?: string | null;
   /** A signed-in account that has not finished or skipped the first run and follows nothing. */
   firstRun?: boolean;
@@ -55,21 +52,6 @@ export type ForecastDashboardProps = {
   /** A guest's own first-run picks, offered back on the default view (rendered from their browser's storage). */
   picks?: ReactNode;
 };
-
-function toTimelineRoles(openings: RealOpening[]) {
-  return openings.map((opening) => ({
-    id: opening.id,
-    company: opening.company,
-    role: opening.role,
-    location: "",
-    openedAt: formatShortDay(opening.openedOn),
-    observedAt: opening.observedAt
-      ? `First observed ${formatShortDay(opening.observedAt)}`
-      : "Source-supplied publication date",
-    source: "Official ATS" as const,
-    applyUrl: opening.applyUrl ?? `/roles/${opening.roleId}`,
-  }));
-}
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
@@ -113,17 +95,24 @@ function ViewStatement({ filters, summary }: { filters: DashboardFilters; summar
   );
 }
 
-/** A count worth stating. A tile is drawn only when its number is not zero: an empty tile reads as a broken one. */
-function StatTile({ icon, label, value, detail, tone = "accent" }: { icon: IconName; label: string; value: number; detail: ReactNode; tone?: "accent" | "warm" }) {
-  return (
-    <div className="card p-5" data-stat-tile>
+/**
+ * A count worth stating. A tile is drawn only when its number is not zero: an empty tile reads as a broken one. With an
+ * href, the whole tile is the link to what it counts.
+ */
+function StatTile({ icon, label, value, detail, tone = "accent", href }: { icon: IconName; label: string; value: number; detail: ReactNode; tone?: "accent" | "warm"; href?: string }) {
+  const body = (
+    <>
       <p className="flex items-center gap-2 text-caption font-semibold text-ink-muted">
         <span className={`grid size-7 place-items-center rounded-full ${tone === "warm" ? "bg-warm-soft text-warm-ink" : "bg-accent-soft text-accent-ink"}`}><Icon name={icon} size={14} /></span>
         {label}
+        {href && <Icon name="arrow-right" size={14} className="ml-auto text-accent-ink" />}
       </p>
       <div className="mt-3 flex items-baseline gap-2"><strong className="heading-display text-3xl tabular">{value}</strong><span className="text-caption text-ink-subtle">{detail}</span></div>
-    </div>
+    </>
   );
+  return href
+    ? <Link href={href} className="card lift focus-ring block p-5" data-stat-tile>{body}</Link>
+    : <div className="card p-5" data-stat-tile>{body}</div>;
 }
 
 export function ForecastDashboard({
@@ -135,7 +124,6 @@ export function ForecastDashboard({
   openings = [],
   openingsTotal,
   changes = [],
-  agentActivity = null,
   signedInAs = null,
   firstRun = false,
   welcome = null,
@@ -144,9 +132,8 @@ export function ForecastDashboard({
   // Real data never falls back to fixtures; an unconfigured deployment shows an
   // empty, clearly-labelled workspace instead of demo forecasts.
   const isDemo = mode === "demo";
-  const timelineRoles = isDemo ? openedRoles : toTimelineRoles(openings);
-  // The tile counts every opening; the timeline lists the newest few and says so. Never the list's length as a total.
-  const confirmedOpenings = isDemo ? timelineRoles.length : openingsTotal ?? timelineRoles.length;
+  // The tile counts every exact opening of the last 45 days, the count the loader read, never a list's length.
+  const confirmedOpenings = isDemo ? openedRoles.length : openingsTotal ?? openings.length;
   const changeRecords = isDemo
     ? forecastChanges.map((change) => ({
         id: change.roleId,
@@ -185,25 +172,19 @@ export function ForecastDashboard({
   const relax = relaxSuggestion(filters, summary);
   const applied = appliedFilterKeys(filters);
   const emptyWatchlist = watchedOnly && summary.followedRoles === 0;
-  const showActivity = isDemo || (agentActivity?.calls.length ?? 0) > 0;
   // Each tile only when its number is not zero; a guest follows nothing, so never sees the watched tile (lib/dashboard-tiles).
   const tiles = dashboardTiles({ openingWithin30Days: summary.openingWithin30Days, followedRoles: summary.followedRoles, confirmedOpenings, signedIn: signedInAs !== null }).map((tile) =>
     tile.key === "soon" ? <StatTile key="soon" icon="calendar-clock" label="Likely in 30 days" value={tile.value} detail={<>of {plural(summary.matchingForecastable, "forecast")} in this view</>} tone="warm" />
       : tile.key === "watched" ? <StatTile key="watched" icon="bell" label="Watched roles" value={tile.value} detail={`${summary.followedForecastable} with a forecast`} />
-        : <StatTile key="opened" icon="radar" label="Confirmed openings" value={tile.value} detail={mode === "real" ? "exact source dates in the last 45 days" : "verified in fixture sources"} />,
+        : <StatTile key="opened" icon="door-open" label="Just opened" value={tile.value} detail={tile.value === 1 ? "program opened in the last 45 days" : "programs opened in the last 45 days"} href="/opened" />,
   );
-  // The secondary panels, each only when it has something to show: an empty panel beside the list reads as broken.
-  const secondary = [
-    timelineRoles.length > 0 && <RecruitingTimeline key="opened" roles={timelineRoles} total={confirmedOpenings} />,
-    changeRecords.length > 0 && (
-      <section key="changes" className="panel" aria-labelledby="changes-title">
-        <div className="border-b border-line px-5 py-4"><p className="label-caps text-warning-ink">Since last run</p><h2 id="changes-title" className="mt-1 text-sm font-semibold">Forecast changes</h2></div>
-        <div className="px-5">{changeRecords.map((change) => <ForecastChange key={change.id} change={change} roleName={change.role} />)}</div>
-      </section>
-    ),
-    showActivity && <AgentActivity key="agent" mode={mode} activity={agentActivity} />,
-  ].filter(Boolean);
-
+  // Forecast changes, only when there are any: an empty panel beside the list reads as broken.
+  const secondary = changeRecords.length > 0 ? (
+    <section className="panel" aria-labelledby="changes-title">
+      <div className="border-b border-line px-5 py-4"><p className="label-caps text-warning-ink">Since last run</p><h2 id="changes-title" className="mt-1 text-sm font-semibold">Forecast changes</h2></div>
+      <div className="px-5">{changeRecords.map((change) => <ForecastChange key={change.id} change={change} roleName={change.role} />)}</div>
+    </section>
+  ) : null;
   return (
     <div className="flex-1 text-ink">
       <main id="dashboard-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8 focus:outline-none md:px-6 md:py-10">
@@ -332,7 +313,7 @@ export function ForecastDashboard({
           )}
         </section>
 
-        {secondary.length > 0 && <div className={`mt-12 grid items-start gap-5 ${secondary.length > 1 ? "lg:grid-cols-2" : ""}`}>{secondary}</div>}
+        {secondary && <div className="mt-12 max-w-2xl">{secondary}</div>}
 
         {/* Development fixtures stay labelled as such; what is true of every forecast is said once, in the site footer. */}
         {isDemo && (
@@ -343,7 +324,7 @@ export function ForecastDashboard({
         )}
       </main>
       {/* The shared contract's track knows only Internship and New grad, so the role's own program type names it. */}
-      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} outlook={selectedItem.outlook} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }

@@ -3,29 +3,32 @@ import { Icon } from "@/components/ui/icon";
 import { PROVENANCE_PAGE_SIZE } from "@/lib/role-view";
 import type { DatePrecision, RoleView } from "@/lib/role-view";
 import { AgentInvestigation } from "@/components/agent-investigation";
-import { ConfidenceIndicator } from "@/components/confidence-indicator";
+import { ConfidenceWord } from "@/components/confidence-word";
+import { EvidenceMark } from "@/components/evidence-mark";
+import { LikelyWindow } from "@/components/likely-window";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
-import { PrecisionChip } from "@/components/precision-chip";
 import { GenerateReadinessButton } from "@/components/generate-readiness-button";
 import { SourceBadge } from "@/components/source-badge";
 import { confidenceOutOf, formatConfidence } from "@/lib/confidence";
 import { formatDay, formatStamp } from "@/lib/dates";
 import { BASIS } from "@/lib/forecast-basis";
-import { PRECISION_ORDER } from "@/lib/precision";
 import { PLAN_OUTCOME_MESSAGES, type PlanOutcome } from "@/lib/onboarding";
 import { contributionLabel, humanize, locationLabel } from "@/lib/presentation";
 
 /**
  * Evidence precision must never blur. `exact` requires a source-supplied publication timestamp, `bounded` requires an
- * absence→presence transition, and `observed_by` means only that the role was visible by that date. Each class has its
- * own semantic utility (a border style as well as colors) and always carries its label.
+ * absence→presence transition, and `observed_by` means only that the role was visible by that date. On this page each
+ * class is a small icon with its name and meaning in a tooltip (EvidenceMark), shown in the History section only; the
+ * date beside it is written in plain words ("Seen open by …").
  */
-/** What each class means, in this page's words. The label, colour and icon come from `lib/precision`. */
-const precisionMeaning: Record<DatePrecision, string> = {
-  exact: "The source supplied this publication date.",
-  bounded: "A complete earlier capture proved absence and a later one proved presence.",
-  observed_by: "The role was visible by this date. It may have opened earlier.",
-};
+/** A past opening in plain words; the icon beside it names its evidence class. */
+function historyWords(cycle: RoleView["cycles"][number]): string {
+  if (cycle.precision === "observed_by") return `Seen open by ${day(cycle.openedOn)}`;
+  if (cycle.precision === "bounded" && cycle.windowStart) return `Opened between ${day(cycle.windowStart)} and ${day(cycle.openedOn)}`;
+  return `Opened ${day(cycle.openedOn)}`;
+}
+
+const PRECISION_COUNT_LABEL: Record<DatePrecision, string> = { exact: "Exact dates", bounded: "Bounded dates", observed_by: "Observed by dates" };
 
 const milestoneLabels: Record<string, string> = {
   networking: "Start networking",
@@ -66,10 +69,10 @@ function WindowVisualization({ view }: { view: RoleView }) {
   return (
     <figure
       className="rounded-card border border-line bg-surface-sunken p-4"
-      aria-label={`Predicted opening window ${day(forecast.windowStart)} to ${day(forecast.windowEnd)}, expected ${day(forecast.expectedOpening)}`}
+      aria-label={`Likely window ${day(forecast.windowStart)} to ${day(forecast.windowEnd)}, most likely ${day(forecast.expectedOpening)}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="label-caps text-ink-subtle">Prediction interval</span>
+        <span className="label-caps text-ink-subtle">Likely window</span>
         <span className="text-micro tabular text-ink-subtle">
           {forecast.daysUntilWindow >= 0 ? `${forecast.daysUntilWindow} days until it starts` : "The interval has started"}
         </span>
@@ -79,7 +82,7 @@ function WindowVisualization({ view }: { view: RoleView }) {
         <div className="absolute left-[14%] top-[7px] h-3 w-[72%] rounded-full border border-dashed border-date-predicted-line bg-date-predicted-surface" />
         <div className="absolute left-1/2 top-0 h-7 w-px bg-accent">
           <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-micro font-semibold text-accent-ink">
-            expected {day(forecast.expectedOpening)}
+            most likely {day(forecast.expectedOpening)}
           </span>
         </div>
         <span className="absolute left-0 top-6 whitespace-nowrap text-micro font-medium tabular text-ink-muted">{day(forecast.windowStart)}</span>
@@ -87,7 +90,7 @@ function WindowVisualization({ view }: { view: RoleView }) {
       </div>
       <figcaption className="mt-4 flex gap-2 text-micro text-ink-subtle">
         <Icon name="info" size={12} className="mt-0.5" />
-        <span>80% prediction interval, computed by <span className="font-mono">{forecast.modelVersion}</span>.</span>
+        <span>The window holds 80% of the likely dates; the line marks the single most likely one.</span>
       </figcaption>
     </figure>
   );
@@ -105,23 +108,14 @@ function InsufficientEvidence({ view }: { view: RoleView }) {
       </div>
       <div className="p-4 md:p-5">
         <p className="text-xs leading-6 text-ink">{view.insufficientEvidence}</p>
-        <dl className="mt-4 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
-          {[
-            ["Opening events", String(view.cycles.length)],
-            ["Exact dates", String(view.precisionCounts.exact)],
-            ["Bounded", String(view.precisionCounts.bounded)],
-            ["Observed by", String(view.precisionCounts.observed_by)],
-          ].map(([label, value]) => (
-            <div key={label} className="bg-surface p-3">
-              <dt className="label-caps text-ink-subtle">{label}</dt>
-              <dd className="mt-1 text-sm font-semibold tabular text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        <p className="mt-3 text-sm text-ink">
+          <span className="font-semibold tabular">{view.cycles.length === 1 ? "One past opening" : `${view.cycles.length.toLocaleString("en-US")} past openings`}</span> on record.{" "}
+          {view.cycles.length > 0 && <a href="#history" className="link-accent focus-ring">See when</a>}
+        </p>
         <div className="mt-4 border-t border-line pt-4">
           <h3 className="text-xs font-semibold text-ink">What to do now</h3>
           <p className="mt-1 text-xs leading-5 text-ink-muted">
-            Watch this role to keep it on your watchlist and calendar; it gets a window as soon as the model can compute one. Until
+            Watch this role to keep it on your watchlist and calendar; it gets a likely date as soon as the model can compute one. Until
             then, the roles at {view.company} that have a forecast show when the company tends to open.
           </p>
           {view.companyId && (
@@ -157,9 +151,9 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
       : "No opening observed yet";
   const sections: Array<[string, string]> = [
     ["#forecast", "Forecast"],
-    ["#history", "Evidence"],
-    ["#evidence", "Provenance"],
-    ["#readiness", "Readiness"],
+    ["#history", "History"],
+    ["#evidence", "Sources"],
+    ["#readiness", "Prep plan"],
     ["#signals", "Signals"],
     ["#metadata", "Model details"],
   ];
@@ -185,7 +179,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
         <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
             <p className="label-caps text-ink-subtle">
-              {[humanize(view.track), humanize(view.roleFamily), `${humanize(view.recruitingSeason)} season`, locationLabel(view.locationScope)].join(" · ")}
+              {[humanize(view.track), view.recruitingSeason === "unknown" ? null : `${humanize(view.recruitingSeason)} season`, locationLabel(view.locationScope)].filter(Boolean).join(" · ")}
             </p>
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
             <h1 id="role-title" className="heading-display mt-1 text-3xl leading-tight sm:text-4xl md:text-5xl">{view.role}</h1>
@@ -195,18 +189,19 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               {livePosting?.applyUrl && <a href={livePosting.applyUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-xs">Open current posting<Icon name="arrow-up-right" size={13} /></a>}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-5 rounded-card bg-surface-sunken p-4 sm:p-5">
-            <div>
-              <p className="label-caps text-ink-subtle">Predicted window</p>
-              <p className={forecast ? "mt-1.5 inline-flex rounded-control border border-dashed border-date-predicted-line bg-date-predicted-surface px-2.5 py-1 text-xl font-semibold tabular text-date-predicted-ink" : "mt-1 text-xl font-semibold tracking-title"}>
-                {forecast ? `${day(forecast.windowStart)} – ${day(forecast.windowEnd)}` : "Not forecastable yet"}
-              </p>
-              <p className="mt-1 text-micro text-ink-subtle">
-                {forecast ? `Expected ${day(forecast.expectedOpening)}` : "Insufficient recruiting cycles"}
-              </p>
-              {basis && <p className="mt-1.5"><ForecastBasisChip basis={basis} /></p>}
-            </div>
-            {forecast && <ConfidenceIndicator value={forecast.confidence} />}
+          <div className="flex flex-wrap items-end gap-5 rounded-card bg-surface-sunken p-4 sm:p-5">
+            {forecast ? (
+              <>
+                <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
+                <ConfidenceWord value={forecast.confidence} align="end" />
+              </>
+            ) : (
+              <div>
+                <p className="text-caption font-semibold text-ink-subtle">Likely around</p>
+                <p className="heading-display mt-0.5 text-2xl text-ink">No date yet</p>
+                <p className="mt-1 text-caption text-ink-muted">Not enough history to predict the next opening.</p>
+              </div>
+            )}
           </div>
         </section>
 
@@ -227,16 +222,22 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   </div>
                   <span className="text-micro tabular text-ink-subtle">Forecasted {stamp(forecast.forecastedAt)}</span>
                 </div>
-                {basis && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3 md:px-5">
-                    <span className="label-caps text-ink-subtle">What the window rests on</span>
-                    <ForecastBasisChip basis={basis} />
-                    <span className="text-caption text-ink-muted">{BASIS[basis.kind].meaning} <a href="#evidence" className="link-accent focus-ring">See the weights</a></span>
-                  </div>
-                )}
-                <div className="grid gap-5 p-4 md:grid-cols-[minmax(0,1fr)_220px] md:p-5">
+                <div className="p-4 md:p-5">
                   <WindowVisualization view={view} />
-                  <dl className="grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line md:grid-cols-1">
+                </div>
+                <details className="group border-t border-line px-4 py-3 md:px-5" id="how-made">
+                  <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 rounded-control [&::-webkit-details-marker]:hidden">
+                    <h3 className="text-sm font-semibold text-ink">How this forecast was made</h3>
+                    <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
+                  </summary>
+                  {basis && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <span className="label-caps text-ink-subtle">What the window rests on</span>
+                      <ForecastBasisChip basis={basis} />
+                      <span className="text-caption text-ink-muted">{BASIS[basis.kind].meaning} <a href="#evidence" className="link-accent focus-ring">See the weights</a></span>
+                    </div>
+                  )}
+                  <dl className="mt-3 grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line sm:grid-cols-4">
                     {[
                       ["Expected date", day(forecast.expectedOpening)],
                       ["Confidence score", confidenceOutOf(forecast.confidence, 1)],
@@ -249,13 +250,8 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                       </div>
                     ))}
                   </dl>
-                </div>
-                <details className="group border-t border-line px-4 py-3 md:px-5">
-                  <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 rounded-control [&::-webkit-details-marker]:hidden">
-                    <h3 className="label-caps text-ink-subtle">Why this confidence</h3>
-                    <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
-                  </summary>
-                  <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line lg:grid-cols-3">
+                  <h4 className="mt-4 label-caps text-ink-subtle">Why this confidence</h4>
+                  <dl className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line lg:grid-cols-3">
                     {forecast.confidenceFactors.map((factor) => (
                       <div key={factor.label} className="bg-surface p-3">
                         <dt className="text-micro text-ink-subtle">{factor.label}</dt>
@@ -265,8 +261,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   </dl>
                   <p className="mt-3 text-micro text-ink-subtle">
                     Each factor runs from 0 to 1. Signals against and signal conflict lower the score; every other factor raises it.
-                    Sparse recruiting history is capped: {forecast.historyCount} recruiting cycle{forecast.historyCount === 1 ? "" : "s"} with
-                    {" "}{view.precisionCounts.exact} exact and {view.precisionCounts.observed_by} observed-by opening date{view.precisionCounts.observed_by === 1 ? "" : "s"}.
+                    Sparse recruiting history is capped: {forecast.historyCount} recruiting cycle{forecast.historyCount === 1 ? "" : "s"} behind this window.
                     The score measures how much consistent evidence backs the window, not the chance that it is right.
                   </p>
                 </details>
@@ -275,49 +270,46 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               <InsufficientEvidence view={view} />
             )}
 
-            <Section id="history" eyebrow="Recruiting record" title="Historical opening evidence">
+            <Section id="history" eyebrow="History" title="When it opened before">
               {view.cycles.length === 0 ? (
-                <p className="p-5 text-xs text-ink-muted">No historical opening event has been reconstructed for this role yet.</p>
+                <p className="p-5 text-xs text-ink-muted">No past opening of this program has been recorded yet.</p>
               ) : (
                 <ol className="divide-y divide-line">
                   {view.cycles.slice(0, 24).map((cycle) => (
-                    <li key={cycle.id} className="grid gap-3 px-4 py-4 md:grid-cols-[54px_190px_minmax(0,1fr)] md:px-5">
-                      <span className="text-sm font-semibold tabular text-ink-muted">{cycle.openedOn.slice(0, 4)}</span>
-                      <div>
-                        <p className="text-sm font-semibold tabular">
-                          {cycle.precision === "bounded" && cycle.windowStart
-                            ? `${day(cycle.windowStart)} – ${day(cycle.openedOn)}`
-                            : day(cycle.openedOn)}
-                        </p>
-                        <div className="mt-1.5"><PrecisionChip precision={cycle.precision} /></div>
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                    <li key={cycle.id} className="flex items-start gap-3 px-4 py-4 md:px-5">
+                      <EvidenceMark precision={cycle.precision} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold tabular text-ink">{historyWords(cycle)}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-ink-muted">
                           <SourceBadge kind={cycle.sourceKind === "archive" ? "archive" : "official"} />
                           {cycle.sourceUrl && (
-                            <a href={cycle.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-micro sm:min-h-0">
-                              source<Icon name="arrow-up-right" size={10} />
+                            <a href={cycle.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 sm:min-h-0">
+                              Source<Icon name="arrow-up-right" size={11} />
                             </a>
                           )}
-                          {cycle.uncertaintyDays !== null && <span className="text-micro tabular text-ink-subtle">±{cycle.uncertaintyDays} days</span>}
-                        </div>
-                        <p className="mt-1 text-caption text-ink-muted">{precisionMeaning[cycle.precision]}</p>
-                        <p className="mt-1 flex items-start gap-1.5 text-micro text-ink-subtle"><Icon name="info" size={11} className="mt-0.5" />{cycle.uncertaintyReason}</p>
+                          {cycle.uncertaintyDays ? <span className="tabular text-ink-subtle">give or take {cycle.uncertaintyDays} days</span> : null}
+                        </p>
+                        {cycle.uncertaintyReason && <p className="mt-1 text-micro text-ink-subtle">{cycle.uncertaintyReason}</p>}
                       </div>
                     </li>
                   ))}
                 </ol>
               )}
-              <div className="border-t border-line bg-surface-sunken px-4 py-3 text-micro text-ink-subtle md:px-5">
-                {view.precisionCounts.exact} exact · {view.precisionCounts.bounded} bounded · {view.precisionCounts.observed_by} observed-by
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-sunken px-4 py-3 text-caption text-ink-muted md:px-5">
+                {(["exact", "bounded", "observed_by"] as const).map((precision) => (
+                  <span key={precision} className="inline-flex items-center gap-2">
+                    <EvidenceMark precision={precision} />
+                    <span><span className="sr-only">{PRECISION_COUNT_LABEL[precision]}: </span><span className="tabular font-semibold text-ink">{view.precisionCounts[precision]}</span></span>
+                  </span>
+                ))}
               </div>
             </Section>
 
             <section id="evidence" className="scroll-mt-32 overflow-clip rounded-panel border border-source-official-line bg-surface shadow-raised" aria-labelledby="evidence-title">
               <div className="border-b border-line bg-source-official-surface px-4 py-4 md:px-5">
-                <p className="label-caps flex items-center gap-1.5 text-source-official-ink"><Icon name="shield-check" size={12} />Provenance</p>
+                <p className="label-caps flex items-center gap-1.5 text-source-official-ink"><Icon name="shield-check" size={12} />Sources</p>
                 <h2 id="evidence-title" className="mt-1 text-lg font-semibold tracking-title">Exactly what contributed to this forecast</h2>
-                <p className="mt-1 text-caption text-ink-muted">Every row is a stored observation linked to this forecast version, with the hash of the content it was read from.</p>
+                <p className="mt-1 text-caption text-ink-muted">Every row is a record the model read, with the page it came from and how much it counted.</p>
               </div>
               {view.provenanceTotal === 0 ? (
                 <p className="p-5 text-xs text-ink-muted">
@@ -368,13 +360,12 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-xs font-semibold">{contributionLabel(item.contribution)}</h3>
                           <SourceBadge kind={item.signalKind ? "signal" : item.extractionMethod === "archive" ? "archive" : "official"} />
-                          {item.precision && <PrecisionChip precision={item.precision} variant="plain" />}
                         </div>
                         {ownRationale.has(item.contribution) && <p className="mt-1 text-caption text-ink-muted">{item.rationale}</p>}
-                        <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring mt-1 flex min-h-touch max-w-full items-center gap-1 text-micro font-medium sm:min-h-0">
+                        {/* The content fingerprint stays on the record, and in the link's title for anyone tracing it; it is not page text. */}
+                        <a href={item.sourceUrl} target="_blank" rel="noreferrer" title={`Content fingerprint ${item.contentHash}`} className="link-accent focus-ring mt-1 flex min-h-touch max-w-full items-center gap-1 text-micro font-medium sm:min-h-0">
                           <span className="truncate">{item.sourceUrl}</span><Icon name="arrow-up-right" size={10} />
                         </a>
-                        <p className="mt-1 break-all font-mono text-micro text-ink-subtle"><span className="sr-only">Content hash </span>{item.contentHash.slice(0, 32)}… · {item.extractionMethod}</p>
                       </div>
                       <div className="flex items-baseline gap-2 md:block md:text-right">
                         <p className="text-xs font-semibold tabular">{(item.weight * 100).toFixed(1)}%</p>
@@ -403,9 +394,9 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               )}
             </section>
 
-            <Section id="signals" eyebrow="Supporting evidence" title="Current recruiting signals" note="Signals carry zero date weight. They may only move confidence.">
+            <Section id="signals" eyebrow="Supporting evidence" title="Recruiting news" note="News about hiring never moves the date. It can only raise or lower confidence.">
               {view.signals.length === 0 ? (
-                <p className="p-5 text-xs text-ink-muted">No recruiting signal has been recorded for this role.</p>
+                <p className="p-5 text-xs text-ink-muted">No recruiting news has been recorded for this program.</p>
               ) : (
                 <ol className="divide-y divide-line">
                   {view.signals.map((signal) => (
@@ -474,7 +465,12 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               {view.isFollowed === true && forecast && !fixture && <GenerateReadinessButton roleId={view.id} />}
             </section>
 
-            <Section eyebrow="Version history" title="Forecast history">
+            <details className="panel group">
+              <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
+                <span><span className="block label-caps text-ink-subtle">Version history</span><span className="mt-1 block text-sm font-semibold">Forecast history</span></span>
+                <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-line">
               {view.forecastRefusal && (
                 <p className="border-b border-line px-4 py-3 text-caption leading-5 text-ink-muted">
                   The model declined this role on {day(view.forecastRefusal.refusedAt)}, after its evidence changed:
@@ -492,7 +488,6 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                         <div>
                           <p className="text-caption font-semibold tabular">{day(version.windowStart)} – {day(version.windowEnd)}</p>
                           <p className="mt-0.5 text-micro text-ink-subtle">expected {day(version.expectedOpening)}</p>
-                          {version.basis && <p className="mt-1"><ForecastBasisChip basis={version.basis} variant="plain" /></p>}
                         </div>
                         <div className="text-right">
                           <p className="text-caption font-semibold tabular" aria-label={`confidence score ${formatConfidence(version.confidence)} of 100`}>{formatConfidence(version.confidence)}<span className="text-micro font-medium text-ink-subtle"> / 100</span></p>
@@ -510,7 +505,8 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   ))}
                 </ol>
               )}
-            </Section>
+              </div>
+            </details>
 
             {view.currentPostings.length > 0 && (
               <Section eyebrow="Observed now" title="Current postings">
@@ -540,40 +536,23 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               </summary>
               <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-micro">
                 {[
-                  ["Model version", forecast?.modelVersion ?? "none", true],
-                  ["Method", forecast?.method ?? "none", true],
+                  ["Model version", forecast?.modelVersion ?? "None", true],
+                  ["Method", forecast?.method ? humanize(forecast.method) : "None", false],
                   ["Forecasted", forecast ? stamp(forecast.forecastedAt) : "—", false],
-                  ["Input fingerprint", forecast ? `${forecast.inputFingerprint.slice(0, 16)}…` : "—", true],
-                  ["Probability field (not calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "—", false],
-                  ["Recruiting cycles (history_count)", forecast ? String(forecast.historyCount) : "—", false],
-                  ["Prior effective sample size", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "—", false],
-                  ["Location scope", view.locationScope, true],
-                  ["Role identity", view.id, true],
+                  ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "—", false],
+                  ["Recruiting cycles", forecast ? String(forecast.historyCount) : "—", false],
+                  ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "—", false],
+                  ["Location", locationLabel(view.locationScope), false],
                   ["Linked observations", String(view.observationCount), false],
-                  ["Evidence policy", "provenance-required", true],
                 ].map(([label, value, mono]) => (
                   <div key={String(label)} className="contents">
                     <dt className="text-ink-subtle">{label}</dt>
-                    <dd className={`break-all text-right text-ink-muted ${mono ? "font-mono" : "tabular"}`} title={label === "Input fingerprint" ? forecast?.inputFingerprint : undefined}>{value}</dd>
+                    <dd className={`break-words text-right text-ink-muted ${mono ? "font-mono" : "tabular"}`}>{value}</dd>
                   </div>
                 ))}
               </dl>
             </details>
 
-            <section className="panel p-4" aria-labelledby="precision-title">
-              <div className="flex items-center gap-2"><Icon name="history" size={14} className="text-ink-subtle" /><h2 id="precision-title" className="text-sm font-semibold">Evidence precision</h2></div>
-              <ul className="mt-3 space-y-2">
-                {PRECISION_ORDER.map((precision) => (
-                  <li key={precision} className="flex items-start justify-between gap-3 border-b border-line pb-2 last:border-0">
-                    <div>
-                      <PrecisionChip precision={precision} />
-                      <p className="mt-1 text-micro text-ink-subtle">{precisionMeaning[precision]}</p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold tabular">{view.precisionCounts[precision]}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
           </aside>
         </div>
 

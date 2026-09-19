@@ -28,6 +28,12 @@ export function noForecastReason(openings: number): string {
   return `${openingsPhrase(openings)}${cycles}: too little history on its own, and no comparable program to learn its timing from.`;
 }
 
+/** The same fact for a card, in the fewest words: no cycles, no comparable programs, just what there is. */
+export function plainNoForecastReason(openings: number): string {
+  if (openings <= 0) return "No past opening on record yet, so there is nothing to predict from.";
+  return `Not enough history to predict the next opening yet: ${openings === 1 ? "one past opening" : `${openings.toLocaleString("en-US")} past openings`} on record.`;
+}
+
 /** The role page's fuller statement, with how many of the openings carry an exact date. */
 export function noForecastExplanation(openings: number, exact: number): string {
   if (openings <= 0) {

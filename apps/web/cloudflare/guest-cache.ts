@@ -1,8 +1,8 @@
 /**
  * The edge cache for guest pages.
  *
- * Every signed-out visitor sees identical content on the landing page, the roles view, the methodology page, and role
- * pages, so those documents are rendered once and served from the Cloudflare Cache API until what they show changes.
+ * Every signed-out visitor sees identical content on the landing page, the roles view, Just opened, the methodology page,
+ * and role pages, so those documents are rendered once and served from the Cloudflare Cache API until what they show changes.
  *
  * - Only a whole-document GET with no Supabase session cookie is cached. A signed-in request, an RSC navigation, and
  *   any other method or path always render.
@@ -73,6 +73,11 @@ export function guestCachePath(request: Request): string | null {
   }
   // The methodology page reads the latest backtest and forecast counts, both of which advance the public data version.
   if (url.pathname === "/methodology") return url.pathname;
+  // Just opened reads opening events, which advance the version; its only parameter is the page.
+  if (url.pathname === "/opened") {
+    const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
+    return Number.isFinite(page) && page > 1 ? `/opened?page=${Math.min(page, 1000)}` : "/opened";
+  }
   return ROLE_PAGE.test(url.pathname) ? url.pathname : null;
 }
 

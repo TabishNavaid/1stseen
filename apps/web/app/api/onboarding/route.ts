@@ -6,7 +6,9 @@ import {
   LOOKING_FOR_VALUES,
   MAX_COMPANIES,
   MAX_SEED_FOLLOWS,
+  disciplinesForFields,
   planOutcome,
+  type FieldValue,
 } from "@/lib/onboarding";
 import { requestReadinessPlan } from "@/lib/readiness-plan";
 import { hasServiceRoleConfig } from "@/lib/real-data";
@@ -41,7 +43,8 @@ type FactRow = { role_id: string; forecastable: boolean; window_end: string | nu
  * companies, asks the worker for a readiness plan on the first chosen role with a current forecast, and says where to
  * land; a plan that cannot be built is reported, never faked. A guest's answers arrive here the same way, after sign-up.
  *
- * Only the fields are stored as preferences: the program type has no column, and the roles followed carry it. Answers
+ * Only the fields are stored as preferences, as the disciplines they cover: the program type has no column, and the roles
+ * followed carry it. Answers
  * an earlier first run stored (graduation year, season, places) are left as they are.
  */
 export async function POST(request: Request) {
@@ -67,7 +70,7 @@ export async function POST(request: Request) {
   const saved = await supabase.from("recruiting_preferences").upsert(
     {
       user_id: userId,
-      target_disciplines: answers.fields,
+      target_disciplines: disciplinesForFields(answers.fields as FieldValue[]),
       onboarding_completed_at: now.toISOString(),
       onboarding_skipped_at: null,
     },

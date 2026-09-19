@@ -31,6 +31,7 @@ import {
   answersFromPreferences,
   answersSummary,
   answersToFilters,
+  disciplinesForFields,
   browseHref,
   cleanAnswers,
   emptyAnswers,
@@ -43,7 +44,7 @@ import {
   programTypesFor,
   welcomeHref,
 } from "../lib/onboarding.ts";
-import { SITE_NAV, navLocked } from "../lib/site-nav.ts";
+import { SITE_NAV, navItems } from "../lib/site-nav.ts";
 
 const COMPANY_A = "48fb2fe5-b8d0-5731-9b5a-7502252115dd";
 const COMPANY_B = "0f0e3a3c-1111-4222-8333-944455556666";
@@ -65,11 +66,13 @@ function memoryStorage() {
 const blockedStorage = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); }, removeItem() { throw new Error("blocked"); } };
 
 test("the questions map onto the scope's own program types and disciplines, each exactly once", () => {
-  const known = new Set(DISCIPLINES.map(([value]) => value));
-  assert.equal(FIELDS.length, 10);
-  assert.deepEqual(FIELDS.map((field) => field.label), ["SWE", "ML/AI", "Data", "Infra", "Security", "Hardware", "Robotics", "Quant", "PM", "Design"]);
-  for (const field of FIELDS) assert.ok(known.has(field.value), field.value);
-  assert.equal(new Set(FIELDS.map((field) => field.value)).size, FIELDS.length);
+  assert.deepEqual(FIELDS.map((field) => field.label), ["SWE", "ML/AI", "Data", "Infra", "Security", "Hardware", "Robotics", "Quant", "PM", "Design", "Other engineering"]);
+  // The eleven fields cover the seventeen scope disciplines exactly once.
+  const disciplines = FIELDS.flatMap((field) => field.disciplines);
+  assert.equal(new Set(disciplines).size, disciplines.length, "no discipline is under two fields");
+  assert.deepEqual([...disciplines].sort(), DISCIPLINES.map(([value]) => value).sort());
+  assert.deepEqual(disciplinesForFields(["other_engineering"]), ["mechanical_engineering", "aerospace_engineering", "manufacturing_engineering", "materials_engineering", "chemical_engineering", "civil_engineering", "biomedical_engineering"]);
+  assert.deepEqual(answersToFilters({ lookingFor: null, fields: ["design", "other_engineering"], companies: [] }).disciplines.length, 8);
 
   const types = new Set(PROGRAM_TYPES.map(([value]) => value));
   const covered = LOOKING_FOR.flatMap((option) => option.types);
@@ -87,8 +90,8 @@ test("answers round-trip through the welcome URL, and malformed values are dropp
   assert.deepEqual(parseOnboardingAnswers(paramsOf(href)), answers);
   assert.equal(welcomeHref(emptyAnswers), "/welcome");
   assert.deepEqual(
-    parseOnboardingAnswers({ for: "astronaut", field: ["data", "sales", "data"], company: ["not-a-uuid", COMPANY_B.toUpperCase()] }),
-    { lookingFor: null, fields: ["data"], companies: [COMPANY_B] },
+    parseOnboardingAnswers({ for: "astronaut", field: ["data", "sales", "data", "other_engineering", "mechanical_engineering"], company: ["not-a-uuid", COMPANY_B.toUpperCase()] }),
+    { lookingFor: null, fields: ["data", "other_engineering"], companies: [COMPANY_B] },
   );
   const many = Array.from({ length: 14 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`);
   assert.equal(cleanAnswers({ companies: many }).companies.length, MAX_COMPANIES);
@@ -116,7 +119,10 @@ test("the payoff's summary names at most two picked companies, and counts more",
 
 test("stored preferences prefill the fields; answers an earlier first run stored stay readable", () => {
   const row = { target_disciplines: ["software_engineering", "mechanical_engineering", "security"], graduation_year: 2028, target_recruiting_season: "summer", preferred_locations: ["London"] };
+  // "Other engineering" is chosen only when every discipline it covers is stored.
   assert.deepEqual(answersFromPreferences(row), { lookingFor: null, fields: ["software_engineering", "security"], companies: [] });
+  const all = { target_disciplines: disciplinesForFields(["other_engineering"]) };
+  assert.deepEqual(answersFromPreferences(all).fields, ["other_engineering"]);
   assert.deepEqual(legacyFromPreferences(row), { graduationYear: 2028, season: "summer", places: ["London"] });
   assert.deepEqual(legacyFromPreferences(null), { graduationYear: null, season: null, places: [] });
 });
@@ -180,6 +186,7 @@ test("the onboarding API takes exactly the answers the browser sends", () => {
   assert.match(route, /fields: z\.array\(z\.enum\(FIELD_VALUES/);
   assert.match(route, /companies: z\.array\(z\.string\(\)\.uuid\(\)\)\.max\(MAX_COMPANIES\)/);
   assert.match(route, /target_type: "company"/, "a picked company is followed");
+  assert.match(route, /target_disciplines: disciplinesForFields\(/, "a field is stored as the disciplines it covers");
   assert.doesNotMatch(route, /graduation_year: answers|preferred_locations: answers/, "answers this first run no longer asks are left as stored");
 });
 
@@ -201,12 +208,29 @@ test("zero tiles are never rendered, and a guest never sees the watched tile", (
   }
 });
 
-test("a guest sees every navigation item; those needing an account are locked with one line of reason", () => {
-  assert.deepEqual(SITE_NAV.map((item) => item.key), ["explore", "watchlist", "calendar", "replay", "digests"]);
-  const locked = SITE_NAV.filter((item) => navLocked(item, false));
-  assert.deepEqual(locked.map((item) => item.key), ["watchlist", "calendar", "replay", "digests"]);
-  for (const item of locked) assert.match(item.lockedReason, /^Sign in to [^.]+$/, `${item.key}: one short line`);
-  assert.deepEqual(SITE_NAV.filter((item) => navLocked(item, true)), [], "nothing is locked once signed in");
+test("a guest's navigation is Explore, Just opened, and Ask; an account adds its watchlist and calendar", () => {
+  assert.deepEqual(navItems(false).map((item) => item.label), ["Explore", "Just opened", "Ask"]);
+  assert.deepEqual(navItems(true).map((item) => item.label), ["Explore", "Just opened", "Ask", "Watchlist", "Calendar"]);
+  const hrefs = SITE_NAV.map((item) => item.href);
+  assert.ok(!hrefs.includes("/replay") && !hrefs.includes("/digests"), "Replay and Digests are not in the navigation");
+});
+
+test("step one moves on with a single tap; the multi-select steps keep Continue", () => {
+  const flow = readFileSync(new URL("../components/onboarding/onboarding-flow.tsx", import.meta.url), "utf8");
+  const stepOne = flow.slice(flow.indexOf("{step === 1 && ("), flow.indexOf("{step === 2 && ("));
+  assert.match(stepOne, /onClick=\{\(\) => choose\(option\.value\)\}/, "each choice is a button that chooses and advances");
+  assert.match(stepOne, /Show me all three/);
+  assert.doesNotMatch(stepOne, /type="radio"/);
+  assert.match(flow, /const choose = \(value: LookingFor \| null\) => \{[\s\S]*?setLocalStep\(2\);/);
+  assert.match(flow, /\(step === 2 \|\| step === 3\) && \(\s*<button type="button" onClick=\{next\}/, "Continue is shown for the multi-select steps only");
+});
+
+test("the payoff leads with the top six and puts the total in the subtitle; saving never promises alerts", () => {
+  const flow = readFileSync(new URL("../components/onboarding/onboarding-flow.tsx", import.meta.url), "utf8");
+  assert.match(flow, /`Your top \$\{payoff\.roles\.length\} to watch`/);
+  assert.match(flow, /plural\(payoff\.matchingRoles, "program matches", "programs match"\)/);
+  assert.equal((flow.match(/Save to my watchlist/g) ?? []).length >= 2, true, "guest and member both save to the watchlist");
+  assert.doesNotMatch(flow, /get alerts|alerts\b/i);
 });
 
 test("reduced motion: no confetti is drawn, and the stylesheet stops every movement", () => {

@@ -35,6 +35,10 @@ const ICONS = [
   "MailCheck", "Menu", "MessageCircle", "Play", "Radar", "Radio", "RefreshCw", "RotateCw", "Search",
   "SearchCheck", "Send", "ShieldCheck", "Sparkles", "Target", "TrendingUp", "TriangleAlert", "UserPlus",
   "Waypoints", "X",
+  // The landing page's and the first run's larger icons: field and program chips, the how-it-works steps, the feeds.
+  "Backpack", "Binoculars", "Bot", "BrainCircuit", "CalendarSync", "ChartColumn", "ChartLine", "CodeXml", "DoorOpen",
+  "GraduationCap", "Link2", "MessageCircleQuestionMark", "Palette", "PartyPopper", "Repeat", "SendHorizontal", "Server",
+  "Shield", "SquareKanban", "Wrench",
 ];
 
 /** The sprite id for an export: "CalendarDays" is "calendar-days", "Clock3" is "clock-3". */
