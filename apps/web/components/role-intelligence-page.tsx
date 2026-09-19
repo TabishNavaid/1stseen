@@ -115,7 +115,7 @@ function InsufficientEvidence({ view }: { view: RoleView }) {
         <div className="mt-4 border-t border-line pt-4">
           <h3 className="text-xs font-semibold text-ink">What to do now</h3>
           <p className="mt-1 text-xs leading-5 text-ink-muted">
-            Watch this role to keep it on your watchlist and calendar; it gets a likely date as soon as the model can compute one. Until
+            Save it to your watchlist to keep it on your calendar too; it gets a likely date as soon as the model can compute one. Until
             then, the roles at {view.company} that have a forecast show when the company tends to open.
           </p>
           {view.companyId && (
@@ -135,6 +135,8 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
   // What the window mainly rests on, from the forecast's own date weights (lib/forecast-basis).
   const basis = forecast?.basis ?? null;
   const livePosting = view.currentPostings[0] ?? null;
+  // The History footer counts each evidence class the role has; a class with no dates is left out.
+  const recordedPrecisions = (["exact", "bounded", "observed_by"] as const).filter((precision) => view.precisionCounts[precision] > 0);
   // The contribution receipts are paged in the URL, the way the dashboard and Replay page:
   // server-rendered, so every row is reachable by a link and none of it needs JavaScript.
   const provenancePages = Math.max(1, Math.ceil(view.provenanceTotal / PROVENANCE_PAGE_SIZE));
@@ -179,7 +181,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
         <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
             <p className="label-caps text-ink-subtle">
-              {[humanize(view.track), view.recruitingSeason === "unknown" ? null : `${humanize(view.recruitingSeason)} season`, locationLabel(view.locationScope)].filter(Boolean).join(" · ")}
+              {[humanize(view.track), view.recruitingSeason === "unknown" ? null : `${humanize(view.recruitingSeason)} season`, view.place ?? locationLabel(view.locationScope)].filter(Boolean).join(" · ")}
             </p>
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
             <h1 id="role-title" className="heading-display mt-1 text-3xl leading-tight sm:text-4xl md:text-5xl">{view.role}</h1>
@@ -295,14 +297,16 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   ))}
                 </ol>
               )}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-sunken px-4 py-3 text-caption text-ink-muted md:px-5">
-                {(["exact", "bounded", "observed_by"] as const).map((precision) => (
-                  <span key={precision} className="inline-flex items-center gap-2">
-                    <EvidenceMark precision={precision} />
-                    <span><span className="sr-only">{PRECISION_COUNT_LABEL[precision]}: </span><span className="tabular font-semibold text-ink">{view.precisionCounts[precision]}</span></span>
-                  </span>
-                ))}
-              </div>
+              {recordedPrecisions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-sunken px-4 py-3 text-caption text-ink-muted md:px-5">
+                  {recordedPrecisions.map((precision) => (
+                    <span key={precision} className="inline-flex items-center gap-2">
+                      <EvidenceMark precision={precision} />
+                      <span><span className="sr-only">{PRECISION_COUNT_LABEL[precision]}: </span><span className="tabular font-semibold text-ink">{view.precisionCounts[precision]}</span></span>
+                    </span>
+                  ))}
+                </div>
+              )}
             </Section>
 
             <section id="evidence" className="scroll-mt-32 overflow-clip rounded-panel border border-source-official-line bg-surface shadow-raised" aria-labelledby="evidence-title">
@@ -542,7 +546,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "—", false],
                   ["Recruiting cycles", forecast ? String(forecast.historyCount) : "—", false],
                   ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "—", false],
-                  ["Location", locationLabel(view.locationScope), false],
+                  ["Location", view.place ?? locationLabel(view.locationScope), false],
                   ["Linked observations", String(view.observationCount), false],
                 ].map(([label, value, mono]) => (
                   <div key={String(label)} className="contents">

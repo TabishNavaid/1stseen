@@ -524,7 +524,8 @@ export function OnboardingFlow({
         )}
       </main>
 
-      <footer className="sticky bottom-0 z-20 border-t border-line bg-surface/95 backdrop-blur">
+      {/* The first step goes on when a choice is tapped, so it has no action bar. */}
+      {step > 1 && <footer className="sticky bottom-0 z-20 border-t border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-3xl flex-col-reverse gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-6">
           {step > 1 && !saved ? (
             <button type="button" onClick={back} className="focus-ring inline-flex min-h-touch items-center justify-center gap-2 rounded-chip px-4 text-sm font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">
@@ -566,7 +567,7 @@ export function OnboardingFlow({
         {step === 4 && payoff && !saved && !signedIn && payoff.roles.length > 0 && (
           <p className="mx-auto max-w-3xl px-4 pb-3 text-center text-caption text-ink-subtle sm:text-right md:px-6">A free account keeps these on your watchlist and calendar. Your picks come with you.</p>
         )}
-      </footer>
+      </footer>}
     </div>
   );
 }

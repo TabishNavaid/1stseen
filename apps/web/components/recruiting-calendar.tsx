@@ -159,7 +159,7 @@ export function RecruitingCalendar({
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
             This calendar fills itself from the roles you watch: their predicted opening windows, confirmed
             openings, and the preparation milestones worked back from each forecast. Answer four questions
-            for a starting watchlist, or use Watch role on any role page.
+            for a starting watchlist, or use Save to my watchlist on any role page.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/welcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Set up your watchlist</Link>

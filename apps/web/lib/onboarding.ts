@@ -134,16 +134,33 @@ export function browseHref(answers: OnboardingAnswers): string {
  * The answers in a few plain words, for the payoff's subtitle: "Internship · SWE, ML/AI · Acme first". Company names
  * come from the caller, which has the list; without them the companies are counted.
  */
+/** What a program type is called in a sentence. */
+const PROGRAM_WORDS: Record<LookingFor, string> = { internship: "Internships", new_grad: "New-grad roles", co_op: "Co-ops" };
+
+/** A field in running text, where its chip label is an abbreviation. */
+const FIELD_WORDS: Partial<Record<FieldValue, string>> = {
+  software_engineering: "software engineering",
+  machine_learning: "AI/ML",
+  infrastructure: "infrastructure",
+  product_management: "product management",
+};
+
+function listWords(words: readonly string[]): string {
+  return words.length <= 2 ? words.join(" and ") : `${words.slice(0, -1).join(", ")}, and ${words[words.length - 1]}`;
+}
+
+/** The answers as a sentence: "Internships in software engineering and data, with Stripe first". */
 export function answersSummary(answers: OnboardingAnswers, companyName: (id: string) => string | undefined = () => undefined): string {
-  const lookingFor = LOOKING_FOR.find((option) => option.value === answers.lookingFor)?.label ?? "Every program type";
-  const fields = answers.fields.length ? FIELDS.filter((field) => answers.fields.includes(field.value)).map((field) => field.label).join(", ") : "every field";
+  const program = answers.lookingFor ? PROGRAM_WORDS[answers.lookingFor] : "Every program";
+  const fields = FIELDS.filter((field) => answers.fields.includes(field.value)).map((field) => FIELD_WORDS[field.value] ?? field.label.toLowerCase());
+  const where = !fields.length ? "in every field" : fields.length > 3 ? `in ${fields.length} fields` : `in ${listWords(fields)}`;
   const names = answers.companies.map(companyName).filter((name): name is string => Boolean(name));
   const companies = !answers.companies.length
     ? ""
     : names.length === answers.companies.length && names.length <= 2
-      ? ` · ${names.join(" and ")} first`
-      : ` · your ${answers.companies.length} ${answers.companies.length === 1 ? "company" : "companies"} first`;
-  return `${lookingFor} · ${fields}${companies}`;
+      ? `, with ${names.join(" and ")} first`
+      : `, with your ${answers.companies.length} ${answers.companies.length === 1 ? "company" : "companies"} first`;
+  return `${program} ${where}${companies}`;
 }
 
 export type StoredPreferences = {

@@ -1,16 +1,21 @@
 /**
  * How company names, program titles, and places read on the page.
  *
- * The stored values are keys for matching, not names for reading: collection lower-cases a title, replaces every
- * character outside a-z, 0-9 and "+" with a space (so "Stagiaire en développement" became "Stagiaire En D Veloppement"),
- * and title-cases the rest ("C++ Or Python", "Co Op"). Places are stored the same way ("new york ny"). Nothing here
- * changes a stored value; it only decides what a person reads.
+ * The stored values are keys for matching, not names for reading: collection's `normalize_title`
+ * (worker/src/firstseen/role_resolution.py) lower-cases a title, drops years and cohort words ("university", "campus",
+ * "early career", "students"), writes "internship" as "intern", replaces every character outside a-z, 0-9 and "+" with a
+ * space (so "Stagiaire en développement (été 2027)" became "Stagiaire En D Veloppement T"), and title-cases the rest
+ * ("C++ Or Python", "Co Op"). Places are stored the same way ("new york ny"). Nothing here changes a stored value; it
+ * only decides what a person reads.
  *
  * - A title is shown as the company published it whenever one of the role's recorded titles (role_aliases) folds to
- *   exactly the stored title, which brings back accents and punctuation from the source itself. Otherwise the stored
+ *   exactly the stored title under the same normalization, which brings back accents and punctuation from the source
+ *   itself. Its year is left out, as the stored title leaves it out: a program recurs every year. Otherwise the stored
  *   title is tidied: known acronyms, "Co-op", and joining words in lower case.
  * - A company name is the stored name with a few corrections the stored names need ("Imc" is IMC).
- * - A place is title-cased with its codes in capitals and commas before the region: "chicago il" is "Chicago, IL".
+ * - A place is shown as a posting wrote it whenever that posting's location folds to the stored place, which brings
+ *   back its accents ("b hl bw de" was "Bühl, BW, de"); its two-letter codes are put in capitals. Otherwise it is
+ *   title-cased with its codes in capitals and commas before the region: "chicago il" is "Chicago, IL".
  *
  * Pure, so the tests read it directly.
  */
@@ -66,9 +71,33 @@ export function tidyTitle(title: string): string {
     .join(" ");
 }
 
-/** A title as collection stored it: lower case, and every run of other characters one space. */
+/** A title as collection stores it, lower-cased: the same steps as the worker's `normalize_title`, in its order. */
 export function foldTitle(title: string): string {
-  return title.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+  return title
+    .toLowerCase()
+    .replace(/^\s*apply\s+(?:for|to|now\s+for)\s+/, " ")
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\b(?:university|campus|early career|students?)\b/g, " ")
+    .replace(/\bswe\b/g, "software engineer")
+    .replace(/\bsoftware engineering internships?\b/g, "software engineer intern")
+    .replace(/\bsoftware engineer internships?\b/g, "software engineer intern")
+    .replace(/\binternships?\b/g, "intern")
+    .replace(/\bnew[- ]grad(?:uate)?\b/g, "new grad")
+    .replace(/[^a-z0-9+]+/g, " ")
+    .trim();
+}
+
+/** A published title without its year: "2027 Summer Intern, MS/PhD" is "Summer Intern, MS/PhD", "(été 2027)" is "(été)". */
+function withoutYear(title: string): string {
+  return title
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\(\s*\)|\[\s*\]/g, " ")
+    .replace(/([([])\s+/g, "$1")
+    .replace(/\s+([)\],])/g, "$1")
+    .replace(/([,/–—-])(?:\s*[,/–—-])+/g, "$1")
+    .replace(/^[\s,/–—:-]+|[\s,/–—:-]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 export type RecordedTitle = { title: string; lastSeenAt: string };
@@ -82,7 +111,10 @@ export function displayTitle(stored: string, recorded: readonly RecordedTitle[] 
   const source = [...recorded]
     .filter((item) => item.title.trim() && foldTitle(item.title) === key)
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt))[0];
-  return source ? source.title.replace(/\s+/g, " ").trim() : tidyTitle(stored);
+  const published = source ? withoutYear(source.title) : "";
+  // A title published in capitals throughout ("DATA ANALYST INTERN") is tidied like a stored one.
+  const shouted = published && !/\p{Ll}/u.test(published) && /\p{Lu}{4}/u.test(published);
+  return (shouted ? tidyTitle(published.toLowerCase()) : published) || withoutYear(tidyTitle(stored)) || tidyTitle(stored);
 }
 
 const US_STATES = new Set([
@@ -101,9 +133,30 @@ const COUNTRIES = new Set([
   "finland", "belgium", "austria", "czech republic", "hungary", "united arab emirates",
 ]);
 
-/** A stored place as a place name; "unspecified" is a statement, not a place. */
-export function displayPlace(scope: string | null | undefined): string {
+function foldPlace(place: string): string {
+  return place.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** A posting's own location, lightly tidied: "Wernau (Neckar), BW, de" is "Wernau (Neckar), BW, DE". */
+function tidyObservedPlace(place: string): string {
+  const parts = place
+    .replace(/_/g, " ")
+    .split(",")
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((part) => (/^[a-z]{2}$/i.test(part) ? part.toUpperCase() : part));
+  return parts.filter((part, index) => index === 0 || part.toLowerCase() !== parts[index - 1].toLowerCase()).join(", ");
+}
+
+/**
+ * A stored place as a place name; "unspecified" is a statement, not a place. `observed` is the locations the role's
+ * postings gave, newest first; the first that folds to the stored place is shown as written.
+ */
+export function displayPlace(scope: string | null | undefined, observed: readonly (string | null | undefined)[] = []): string {
   if (!scope || scope.trim().toLowerCase() === "unspecified") return "Location not stated";
+  const key = foldPlace(scope);
+  const written = observed.find((place): place is string => Boolean(place?.trim()) && foldPlace(place!) === key);
+  if (written) return tidyObservedPlace(written);
   let words = scope.trim().toLowerCase().replace(/\s+/g, " ").split(" ");
   const parts: string[] = [];
   // "washington d c" is Washington, D.C.

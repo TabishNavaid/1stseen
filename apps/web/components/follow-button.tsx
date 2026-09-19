@@ -37,7 +37,7 @@ export function FollowButton({
   if (disabled) {
     return (
       <Button variant="outline" size={compact ? "sm" : "sm"} disabled title="Fixture roles cannot be followed">
-        <Icon name="bell" size={13} />Watch role
+        <Icon name="bell" size={13} />Save to my watchlist
       </Button>
     );
   }
@@ -48,7 +48,7 @@ export function FollowButton({
         href={`/signin?mode=sign_up&return_to=${encodeURIComponent(`/roles/${roleId}`)}`}
         className="focus-ring inline-flex h-9 items-center gap-1.5 rounded-chip bg-accent px-4 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch"
       >
-        <Icon name="bell" size={13} /><span className="sm:hidden">Watch</span><span className="hidden sm:inline">Watch this role</span>
+        <Icon name="bell" size={13} /><span className="sm:hidden">Save</span><span className="hidden sm:inline">Save to my watchlist</span>
       </a>
     );
   }
@@ -97,10 +97,9 @@ export function FollowButton({
         onClick={() => void toggle()}
         disabled={busy}
         className={state.following ? "gap-1.5 bg-surface-selected" : "gap-1.5"}
-        aria-pressed={state.following}
       >
         {busy ? <Icon name="loader-circle" size={13} className="animate-spin" /> : state.following ? <Icon name="bell-off" size={13} /> : <Icon name="bell" size={13} />}
-        {state.following ? "Watching" : "Watch role"}
+        {state.following ? "On your watchlist" : "Save to my watchlist"}
       </Button>
       {error && <span role="alert" className="mt-1 max-w-[220px] text-right text-micro text-warning-ink">{error}</span>}
     </span>

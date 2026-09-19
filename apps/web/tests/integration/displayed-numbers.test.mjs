@@ -136,9 +136,9 @@ test("every number the product displays matches a direct query", async () => {
       const counts = await one(`select count(*) filter (where date_precision = 'exact')::int exact, count(*) filter (where date_precision = 'bounded')::int bounded, count(*) filter (where date_precision = 'observed_by')::int observed from public.historical_opening_events where canonical_role_id = $1`, [id]);
       const observations = await one(`select count(*)::int n from public.observation_role_matches where canonical_role_id = $1 and evidence_kind = 'observation_resolution'`, [id]);
       const provenance = await one(`select count(*)::int n from public.forecast_provenance where forecast_id = (select id from public.forecasts where canonical_role_id = $1 order by forecasted_at desc, id limit 1)`, [id]);
-      check(`/roles/${id.slice(0, 8)}`, "exact openings", num(text, /Exact dates: (\d+)/), counts.exact);
-      check(`/roles/${id.slice(0, 8)}`, "bounded openings", num(text, /Bounded dates: (\d+)/), counts.bounded);
-      check(`/roles/${id.slice(0, 8)}`, "observed-by openings", num(text, /Observed by dates: (\d+)/), counts.observed);
+      check(`/roles/${id.slice(0, 8)}`, "exact openings", (num(text, /Exact dates: (\d+)/) ?? 0), counts.exact);
+      check(`/roles/${id.slice(0, 8)}`, "bounded openings", (num(text, /Bounded dates: (\d+)/) ?? 0), counts.bounded);
+      check(`/roles/${id.slice(0, 8)}`, "observed-by openings", (num(text, /Observed by dates: (\d+)/) ?? 0), counts.observed);
       check(`/roles/${id.slice(0, 8)}`, "linked observations", num(text, /Linked observations ([\d,]+)/), observations.n);
       check(`/roles/${id.slice(0, 8)}`, "contributions", num(text, /over all ([\d,]+) contributions/), provenance.n);
     }

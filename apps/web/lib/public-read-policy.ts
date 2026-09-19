@@ -22,7 +22,7 @@ export const PUBLIC_TABLE_COLUMNS = {
   ],
   raw_job_observations: [
     "id", "raw_title", "apply_url", "source_url", "published_at", "last_seen_at", "source_type", "observed_at",
-    "archive_capture_at",
+    "archive_capture_at", "location",
   ],
   observation_role_matches: ["observation_id", "canonical_role_id", "evidence_kind"],
   // A role's titles as companies published them, read only to show a title with its accents and punctuation.

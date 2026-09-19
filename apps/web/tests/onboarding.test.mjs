@@ -112,9 +112,12 @@ test("the answers make the same filters the roles view reads, and companies reor
 
 test("the payoff's summary names at most two picked companies, and counts more", () => {
   const names = { [COMPANY_A]: "Acme", [COMPANY_B]: "Bolt" };
-  assert.equal(answersSummary({ lookingFor: "internship", fields: ["software_engineering"], companies: [] }), "Internship · SWE");
-  assert.equal(answersSummary({ lookingFor: null, fields: [], companies: [COMPANY_A] }, (id) => names[id]), "Every program type · every field · Acme first");
-  assert.equal(answersSummary({ lookingFor: null, fields: [], companies: [COMPANY_A, COMPANY_B] }), "Every program type · every field · your 2 companies first");
+  assert.equal(answersSummary({ lookingFor: "internship", fields: ["software_engineering"], companies: [] }), "Internships in software engineering");
+  assert.equal(answersSummary({ lookingFor: "co_op", fields: ["machine_learning", "data"], companies: [] }), "Co-ops in AI/ML and data");
+  assert.equal(answersSummary({ lookingFor: "new_grad", fields: ["security", "hardware", "other_engineering"], companies: [] }), "New-grad roles in security, hardware, and other engineering");
+  assert.equal(answersSummary({ lookingFor: "internship", fields: ["data", "security", "hardware", "robotics"], companies: [] }), "Internships in 4 fields");
+  assert.equal(answersSummary({ lookingFor: null, fields: [], companies: [COMPANY_A] }, (id) => names[id]), "Every program in every field, with Acme first");
+  assert.equal(answersSummary({ lookingFor: null, fields: [], companies: [COMPANY_A, COMPANY_B] }), "Every program in every field, with your 2 companies first");
 });
 
 test("stored preferences prefill the fields; answers an earlier first run stored stay readable", () => {

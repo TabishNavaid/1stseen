@@ -263,7 +263,7 @@ export function ForecastDashboard({
                 title="Your watchlist is empty"
                 description={
                   signedInAs
-                    ? "Answer three quick questions and 1stSeen suggests programs to watch, or use Watch role on any role page. Watched roles collect here with their forecasts and prep plans."
+                    ? "Answer three quick questions and 1stSeen suggests programs to watch, or use Save to my watchlist on any role page. Watched roles collect here with their forecasts and prep plans."
                     : "Sign in to keep a watchlist: the roles you are preparing for, with their forecasts and prep plans in one place."
                 }
                 action={

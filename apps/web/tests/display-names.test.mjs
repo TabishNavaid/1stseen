@@ -47,6 +47,30 @@ test("the company's own title is shown when it folds to the stored one, which br
   assert.equal(displayTitle("Hardware Engineer Winter Co Op", []), "Hardware Engineer Winter Co-op");
 });
 
+test("a published title matches the stored one the way collection normalizes it, and is shown without its year", () => {
+  const seen = (title) => [{ title, lastSeenAt: "2026-09-01T00:00:00Z" }];
+  assert.equal(
+    displayTitle("Stagiaire En D Veloppement De Logiciels T Software Developer Intern Summer", seen("Stagiaire en développement de logiciels (été 2027) / Software Developer Intern (Summer 2027)")),
+    "Stagiaire en développement de logiciels (été) / Software Developer Intern (Summer)",
+  );
+  assert.equal(
+    displayTitle("Summer Intern Ms Phd Machine Learning Simulation Realism", seen("2027 Summer Intern, MS/PhD, Machine Learning, Simulation Realism")),
+    "Summer Intern, MS/PhD, Machine Learning, Simulation Realism",
+  );
+  assert.equal(
+    displayTitle("Software Engineer Immediate Start", seen("Software Engineer, Early Career — Immediate Start")),
+    "Software Engineer, Early Career — Immediate Start",
+  );
+  assert.equal(
+    displayTitle("Intern Performance Analysis And Optimization Of Python Based Verification For C++ Models", seen("Internship Performance Analysis and Optimization of Python-Based Verification for C++ Models")),
+    "Internship Performance Analysis and Optimization of Python-Based Verification for C++ Models",
+  );
+  assert.equal(displayTitle("D Veloppeur Logiciels Stagiaire Backend L T", seen("Développeur Logiciels (Stagiaire), Backend (l'été 2027)")), "Développeur Logiciels (Stagiaire), Backend (l'été)");
+  assert.equal(displayTitle("Software Engineer Intern", seen("SWE Internship 2027")), "SWE Internship");
+  // A title that is only a year falls back to the tidied stored title.
+  assert.equal(displayTitle("Intern", seen("2027")), "Intern");
+});
+
 test("accents already present are kept by every rule", () => {
   assert.equal(tidyTitle("stagiaire en développement"), "Stagiaire en Développement");
   assert.equal(displayPlace("montréal qc"), "Montréal, QC");
@@ -64,4 +88,21 @@ test("places are proper-cased, with codes in capitals and a comma before the reg
   assert.equal(displayPlace("washington d c"), "Washington, D.C.");
   assert.equal(displayPlace("san francisco"), "San Francisco");
   assert.equal(displayPlace("unspecified"), "Location not stated");
+});
+
+test("a title published in capitals throughout is tidied", () => {
+  const seen = (title) => [{ title, lastSeenAt: "2026-09-01T00:00:00Z" }];
+  assert.equal(displayTitle("Data Analyst Intern", seen("DATA ANALYST INTERN")), "Data Analyst Intern");
+  assert.equal(displayTitle("Web Developer Intern Python Automation", seen("WEB DEVELOPER INTERN (PYTHON & AUTOMATION)")), "Web Developer Intern (Python & Automation)");
+  // An acronym-led title in normal case is left as written.
+  assert.equal(displayTitle("Ejv Junior Telematics Software Engineer Embedded Android", seen("[EJV] Junior Telematics Software Engineer — Embedded Android")), "[EJV] Junior Telematics Software Engineer — Embedded Android");
+});
+
+test("a place is shown as a posting wrote it when that folds to the stored place", () => {
+  assert.equal(displayPlace("b hl bw de", ["Bühl, BW, de"]), "Bühl, BW, DE");
+  assert.equal(displayPlace("th nh ph h ch minh h ch minh vn", [null, "Thành phố Hồ Chí Minh, Hồ Chí Minh, vn"]), "Thành phố Hồ Chí Minh, Hồ Chí Minh, VN");
+  assert.equal(displayPlace("wernau neckar bw de", ["Wernau (Neckar), BW, de"]), "Wernau (Neckar), BW, DE");
+  // A posting location that is not the stored place is never used.
+  assert.equal(displayPlace("chicago il", ["New York, NY"]), "Chicago, IL");
+  assert.equal(displayPlace("unspecified", ["Remote"]), "Location not stated");
 });

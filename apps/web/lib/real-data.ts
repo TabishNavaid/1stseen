@@ -429,7 +429,7 @@ export async function loadJustOpened(
       .gte("opened_on", since);
   const [result, counted] = await Promise.all([
     // bounded: one page of at most `limit` (JUST_OPENED_PAGE_SIZE), beside the total counted below.
-    exactOpenings(reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,companies(name))"))
+    exactOpenings(reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at,location),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,companies(name))"))
       .order("opened_on", { ascending: false })
       .order("id", { ascending: true })
       .range(offset, offset + limit - 1),
@@ -449,7 +449,7 @@ export async function loadJustOpened(
       company: displayCompany(company.name),
       role: displayTitle(role.canonical_title, recorded.get(String(row.canonical_role_id))),
       programType: programTypeLabel(role.early_career_type ?? null),
-      place: displayPlace(role.location_scope),
+      place: displayPlace(role.location_scope, [observation?.location as string | null | undefined]),
       openedOn: row.opened_on as string,
       observedAt: (observation?.observed_at as string | null) ?? null,
       applyUrl: (observation?.apply_url as string | null) ?? (observation?.source_url as string | null) ?? null,
@@ -586,7 +586,7 @@ export async function loadRealRoleView(
     fetchAll(
       () =>
         reader
-          .from("historical_opening_events", "id,opened_on,closed_on,opening_window_start,opening_window_end,date_precision,uncertainty_days,uncertainty_reason,evidence_quote,raw_job_observations(id,source_type,source_url,observed_at,archive_capture_at)")
+          .from("historical_opening_events", "id,opened_on,closed_on,opening_window_start,opening_window_end,date_precision,uncertainty_days,uncertainty_reason,evidence_quote,raw_job_observations(id,source_type,source_url,observed_at,archive_capture_at,location)")
           .eq("canonical_role_id", roleId)
           .order("opened_on", { ascending: false }),
       "role_opening_events",
@@ -791,6 +791,10 @@ export async function loadRealRoleView(
     roleFamily: String(role.role_family ?? "unknown"),
     recruitingSeason: String(role.recruiting_season ?? "unknown"),
     locationScope: String(role.location_scope ?? "unspecified"),
+    place: displayPlace(role.location_scope ? String(role.location_scope) : null, (eventsResult.data ?? []).map((row) => {
+      const observation = (Array.isArray(row.raw_job_observations) ? row.raw_job_observations[0] : row.raw_job_observations) as Record<string, unknown> | null;
+      return (observation?.location as string | null | undefined) ?? null;
+    })),
     forecast: latest
       ? {
           forecastId: latest.id as string,

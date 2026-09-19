@@ -140,6 +140,8 @@ export type RoleView = {
   roleFamily: string;
   recruitingSeason: string;
   locationScope: string;
+  /** The place as a person reads it (lib/display-names), from the role's own postings when one matches; absent for a fixture. */
+  place?: string;
   /** Present when the statistical engine produced a stored forecast. */
   forecast: RoleForecastView | null;
   /** Plain-language reason a forecast is absent. Null when a forecast exists. */
