@@ -6,11 +6,11 @@ how it is kept. Everything here is a draft for the owner's review, like the poli
 
 ## Before this procedure can run
 
-- **The contact address.** Requests arrive at `FIRSTSEEN_CONTACT_EMAIL`, which every policy page reads. The intended
-  address is `firstseen@tabishnavaid.dev`, and it is **not yet confirmed to receive mail**: forwarding is being set up.
-  Until the owner confirms mail arrives and sets the variable on the Worker, `/contact` says no address is configured,
-  `/data-sources` (the public side of this procedure) is not published: it answers 404 and no page links to it
-  (`publishedSitePages`, `apps/web/lib/site-links.ts`). Setting the variable publishes it; no rebuild is needed.
+- **The contact address.** Requests arrive at `FIRSTSEEN_CONTACT_EMAIL`, which every policy page reads: in production
+  `hello@1stseen.win`, routed by Cloudflare Email Routing and confirmed to receive mail. On a deployment without the
+  variable, `/contact` says no address is configured and `/data-sources` (the public side of this procedure) is not
+  published: it answers 404 and no page links to it (`publishedSitePages`, `apps/web/lib/site-links.ts`). Setting the
+  variable publishes it; no rebuild is needed.
 - **Migration 202608140039** (`collection_takedowns` and `apply_collection_takedown`) must be applied. Every command
   below reads or writes that table, and discovery refuses to run without it.
 - **Migration 202608140036** makes every product read path skip a role with `active = false`. A withdrawal relies on it.

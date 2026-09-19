@@ -86,7 +86,7 @@ test("email link tokens are read from the fragment, and only for the expected li
 });
 
 test("session cookies are HttpOnly and SameSite=Lax, and Secure over HTTPS", () => {
-  assert.deepEqual(authCookieOptions("https://firstseen.tabishnavaid.dev"), { httpOnly: true, sameSite: "lax", secure: true, path: "/" });
+  assert.deepEqual(authCookieOptions("https://1stseen.win"), { httpOnly: true, sameSite: "lax", secure: true, path: "/" });
   assert.deepEqual(authCookieOptions("http://localhost:3000"), { httpOnly: true, sameSite: "lax", secure: false, path: "/" });
   assert.equal(authCookieOptions(undefined).httpOnly, true);
 });

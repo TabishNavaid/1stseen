@@ -20,8 +20,8 @@ You need, logged in:
 |---|---|---|
 | Supabase | database and sign-in | Free plan is fine to launch |
 | Google Cloud, with billing enabled | agent API on Cloud Run | Cloud Run needs a billing account even inside its free tier |
-| Cloudflare, holding the `tabishnavaid.dev` zone | web app on Workers | See the plan note below |
-| GitHub | scheduled collection | Repository visibility is still open; see step 7 |
+| Cloudflare, holding the `1stseen.win` zone | web app on Workers | See the plan note below |
+| GitHub | scheduled collection | The repository is public, so Actions minutes are unmetered; see step 7 |
 
 Tools on this machine:
 
@@ -71,7 +71,7 @@ npx supabase db push
 ```
 
 **Expected:** after `db push`, `migration list --linked` shows every migration on both sides, through
-`202608140033`. Three of them change what the hosted database allows, so confirm each landed:
+`202608140044`. Three of them change what the hosted database allows, so confirm each landed:
 `202608140031_guest_access` (anon loses every table grant; `npm run verify:supabase` reports
 `grants/anon-anywhere` PASS), `202608140032_scope_widening` (seven disciplines and the apprenticeship type), and
 `202608140033_role_scope_reviews` (the service-only review table and `record_role_scope_review`).
@@ -80,8 +80,8 @@ both load fixture data into the real database.
 
 4. **Authentication → Sign In / Providers:** Email on, Confirm email on, minimum password length 8,
    anonymous sign-ins off.
-5. **Authentication → URL Configuration:** Site URL `https://firstseen.tabishnavaid.dev`; Redirect URLs
-   `https://firstseen.tabishnavaid.dev/**` and `http://localhost:3000/**`.
+5. **Authentication → URL Configuration:** Site URL `https://1stseen.win`; Redirect URLs
+   `https://1stseen.win/**` and `http://localhost:3000/**`.
 6. **Authentication → Emails → Templates:** paste `supabase/templates/confirmation.html` into **Confirm signup**
    (subject `Confirm your 1stSeen account`) and `supabase/templates/recovery.html` into **Reset password**
    (subject `Reset your 1stSeen password`). With the default templates, confirmation and reset links will not
@@ -111,23 +111,23 @@ SUPABASE_URL='https://<ref>.supabase.co'
 SUPABASE_SERVICE_ROLE_KEY='<service_role key>'
 NEXT_PUBLIC_SUPABASE_URL='https://<ref>.supabase.co'
 NEXT_PUBLIC_SUPABASE_ANON_KEY='<anon key>'
-NEXT_PUBLIC_APP_URL='https://firstseen.tabishnavaid.dev'
+NEXT_PUBLIC_APP_URL='https://1stseen.win'
 FIRSTSEEN_ENV='production'
 AGENT_API_BEARER_TOKEN='<token you just generated>'
 FIRSTSEEN_AGENT_API_URL='https://placeholder.invalid'
 SUPABASE_DB_URL='<session pooler URI: project page > Connect > Session pooler>'
 SUPABASE_DB_CA_CERT='/Users/<you>/.config/firstseen/supabase-prod-ca-2021.crt'
-WEB_DOMAIN='firstseen.tabishnavaid.dev'
+WEB_DOMAIN='1stseen.win'
 PROJECT_ID='<gcp project id>'
 ```
 
 `FIRSTSEEN_AGENT_API_URL` gets its real value in step 3. Do not add `FIRSTSEEN_DEMO_MODE` at all.
 
-Add `FIRSTSEEN_CONTACT_EMAIL='<address>'` only once that address is confirmed to receive mail: it is the one address
-the terms, privacy, data-source, and contact pages give, including for takedown requests (`docs/takedown.md`).
-Preflight treats it as required in production, so without it preflight reports NOT READY on that line alone; until
-it is set, `/contact` says no contact address is configured. `ROBOTS_TXT_ENFORCED` stays out (off) until the owner
-decides to turn robots.txt enforcement on.
+Also add `FIRSTSEEN_CONTACT_EMAIL='hello@1stseen.win'` (Cloudflare Email Routing, confirmed to receive mail): it is the
+one address the terms, privacy, data-source, and contact pages give, including for takedown requests
+(`docs/takedown.md`). Preflight treats it as required in production. And add `ROBOTS_TXT_ENFORCED='true'`: collection
+checks robots.txt before each request, and `/data-sources` says so. It skips Bosch's SmartRecruiters board, which the
+owner accepted.
 
 ```bash
 git check-ignore -v .env.deploy
@@ -252,7 +252,7 @@ simulated. They are verified against the real edge here and in the smoke test (s
 
 ## 5. First look (5 min)
 
-Open <https://firstseen.tabishnavaid.dev>.
+Open <https://1stseen.win>.
 
 **Expected:** the dashboard renders with a real, empty workspace (no roles yet). It must not say "Live data
 is not configured" and must not show any company on an `.example` domain.
@@ -366,7 +366,7 @@ As a brand-new user, on the live site:
 | Step | Expected |
 |---|---|
 | Sign up with a real address | "Check your email" state; the confirmation arrives (slowly, see step 1) |
-| Click the confirmation link | Lands on `https://firstseen.tabishnavaid.dev`, signed in |
+| Click the confirmation link | Lands on `https://1stseen.win`, signed in |
 | Sign out, then **Forgot your password?** | "Check your email"; the reset link opens "Choose a new password" |
 | Save a new password | Lands on the dashboard signed in; the old password no longer works |
 | Dashboard | Real companies, filters and pages change the URL |
@@ -379,7 +379,7 @@ As a brand-new user, on the live site:
 | `/calendar` sync panel | Says Google Calendar is not configured |
 
 ```bash
-curl -sI https://firstseen.tabishnavaid.dev | grep -iE 'content-security|strict-transport|x-frame'
+curl -sI https://1stseen.win | grep -iE 'content-security|strict-transport|x-frame'
 ```
 
 **Expected:** all three headers.
@@ -433,8 +433,9 @@ Every variable, with what breaks without it: `npm run preflight`. Full inventory
 
 - Failures reach the owner as `ops-alert` issues assigned to the repository owner: keep GitHub email notifications for
   participating on, and install GitHub Mobile for pushes.
-- Add the GitHub Actions secret `SUPABASE_DB_URL` (the session pooler URL) and the variable `SUPABASE_DB_CA_CERT_PEM`
-  (the contents of `prod-ca-2021.crt`) for the weekly corpus backup, and run
+- Add the GitHub Actions secrets `SUPABASE_DB_URL` (the session pooler URL) and `BACKUP_ENCRYPTION_PASSPHRASE` (generate
+  it with `openssl rand -base64 32`, keep it in your password manager) and the variable `SUPABASE_DB_CA_CERT_PEM` (the
+  contents of `prod-ca-2021.crt`) for the weekly corpus backup, and run
   `backup-corpus.yml` once by hand: it must end with "all 20 tables … match".
 - Add the repository variables `FIRSTSEEN_WEB_URL` and `FIRSTSEEN_AGENT_API_URL`, and for Worker errors and CPU the
   variable `CLOUDFLARE_ACCOUNT_ID` and secret `CLOUDFLARE_ANALYTICS_TOKEN` (Account Analytics: Read). Run

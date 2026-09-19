@@ -5,7 +5,7 @@
 #   NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co \
 #   NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key> \
 #   FIRSTSEEN_AGENT_API_URL=https://<service>.run.app \
-#   WEB_DOMAIN=firstseen.tabishnavaid.dev \
+#   WEB_DOMAIN=1stseen.win \
 #   npm run deploy:web
 #
 # Optional: SUPABASE_URL (defaults to NEXT_PUBLIC_SUPABASE_URL) and
@@ -71,7 +71,7 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 : "${NEXT_PUBLIC_SUPABASE_URL:?set NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co}"
 : "${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set NEXT_PUBLIC_SUPABASE_ANON_KEY (Supabase: Project Settings -> API -> anon public)}"
 : "${FIRSTSEEN_AGENT_API_URL:?set FIRSTSEEN_AGENT_API_URL to the Cloud Run service URL printed by scripts/deploy-agent.sh}"
-: "${WEB_DOMAIN:?set WEB_DOMAIN, e.g. firstseen.tabishnavaid.dev}"
+: "${WEB_DOMAIN:?set WEB_DOMAIN, e.g. 1stseen.win}"
 SUPABASE_URL="${SUPABASE_URL:-$NEXT_PUBLIC_SUPABASE_URL}"
 NEXT_PUBLIC_APP_URL="${NEXT_PUBLIC_APP_URL:-https://$WEB_DOMAIN}"
 

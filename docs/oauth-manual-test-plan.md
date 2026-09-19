@@ -25,7 +25,7 @@ What is already proven without Google, and what is not:
 1. <https://console.cloud.google.com> → select or create a project.
 2. **APIs & Services → Library**: enable **Google Calendar API** and **Gmail API**.
 3. **Google Auth Platform → Branding**: app name `1stSeen`, your support email, home page
-   `https://firstseen.tabishnavaid.dev`, privacy policy URL on the same domain.
+   `https://1stseen.win`, privacy policy URL on the same domain.
 4. **Audience**: user type **External**, publishing status **Testing**, and add your own Google account
    under **Test users**. While in Testing, only listed test users can connect, and Google expires refresh
    tokens after 7 days, so a connection made today will need reconnecting next week. That is expected.
@@ -36,8 +36,8 @@ What is already proven without Google, and what is not:
 6. **Clients → Create client → Web application**. Authorized redirect URIs, both environments:
    - `http://localhost:3000/api/integrations/google-calendar/callback`
    - `http://localhost:3000/api/integrations/gmail/callback`
-   - `https://firstseen.tabishnavaid.dev/api/integrations/google-calendar/callback`
-   - `https://firstseen.tabishnavaid.dev/api/integrations/gmail/callback`
+   - `https://1stseen.win/api/integrations/google-calendar/callback`
+   - `https://1stseen.win/api/integrations/gmail/callback`
 
    Copy the client ID and secret. The same client can serve both integrations.
 
