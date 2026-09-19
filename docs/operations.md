@@ -228,6 +228,27 @@ four months. **This is the free tier's nearest limit.** Once production has run 
 `collection-health` reports added in 24 hours times 14 KB gives the daily growth, and 257 MB divided by it gives the
 days left. Supabase Pro (8 GB) is the step after.
 
+**Auth rate limits, and why they are raised.** Supabase Auth counts its limits per IP address: by default 30 sign-ups
+and sign-ins, and 30 verifications of an emailed link, every five minutes. The app's `/api/auth/*` routes call Supabase
+from the Worker, so every visitor reaches Supabase from a Cloudflare address and those buckets are shared by everyone
+at once. Supabase can count the real visitor instead, through its `Sb-Forwarded-For` header, but only for requests made
+with a new-format secret key; these routes act as the visitor with the publishable key, so that is not open to them
+without putting a full-access key on the sign-in path. Two things stand in for it:
+
+- **Each visitor's share is counted in the Worker** (`apps/web/cloudflare/auth-limits.ts`): 12 sign-in, sign-up,
+  password-reset, or resend requests, and 12 link verifications, per address per five minutes, counted exactly by the
+  same Durable Object as guest questions. A refused request answers 429 with `Retry-After`, and the panel says
+  "Too many attempts from this network." There is no site-wide limit: it would let one attacker lock everyone out.
+- **The project's own limits are raised** so that ordinary traffic cannot reach them (Authentication → Rate Limits):
+  sign-ups and sign-ins **150 per 5 minutes**, verifications **150 per 5 minutes**, token refreshes left at 150, and
+  email sending set to whatever the SMTP sender allows per hour. With one visitor bounded at 12, the project's budget
+  covers a dozen visitors all retrying at once, and hundreds behaving normally.
+
+If sign-ins ever approach that ceiling, the next step is `Sb-Forwarded-For`: create new-format API keys, enable **IP
+Address Forwarding** in the same settings page, and have the auth routes call Supabase with the secret key and the
+visitor's address. Supabase then counts each visitor, and the Worker's limits become a second line rather than the only
+one.
+
 ### Cloudflare Workers
 
 | Limit | Free | Paid ($5 a month) |

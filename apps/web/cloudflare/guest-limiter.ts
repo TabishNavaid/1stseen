@@ -78,16 +78,32 @@ export class GuestQuestionLimiter {
 /** One limit, as the `limit({ key })` shape guestAgentAllowance takes, backed by one Durable Object per key. */
 export function durableLimit(namespace: DurableObjectNamespaceLike, limit: number, periodSeconds: number) {
   return {
-    async limit({ key }: { key: string }): Promise<{ success: boolean }> {
+    async limit({ key }: { key: string }): Promise<{ success: boolean; retryAfterSeconds?: number }> {
       const stub = namespace.get(namespace.idFromName(key));
       const response = await stub.fetch(`https://guest-question-limiter/take?limit=${limit}&period_ms=${periodSeconds * 1000}`, {
         method: "POST",
       });
       // A limiter that cannot answer refuses: guest questions fail closed, never open.
       if (!response.ok) return { success: false };
-      const body = (await response.json()) as { allowed?: unknown };
-      return { success: body.allowed === true };
+      const body = (await response.json()) as { allowed?: unknown; retry_after_seconds?: unknown };
+      return {
+        success: body.allowed === true,
+        retryAfterSeconds: typeof body.retry_after_seconds === "number" ? body.retry_after_seconds : undefined,
+      };
     },
+  };
+}
+
+/** The two per-address auth limits (auth-limits.ts), counted by the same Durable Object namespace. */
+export function durableAuthLimits(
+  namespace: DurableObjectNamespaceLike,
+  attempts: number,
+  verifications: number,
+  periodSeconds: number,
+) {
+  return {
+    attempt: durableLimit(namespace, attempts, periodSeconds),
+    verification: durableLimit(namespace, verifications, periodSeconds),
   };
 }
 
