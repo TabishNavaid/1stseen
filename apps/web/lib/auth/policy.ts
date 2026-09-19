@@ -118,6 +118,25 @@ export function parseAuthFragment(hash: string, expected: AuthLinkType): { token
   return { tokenHash, type: expected };
 }
 
+/**
+ * What a page can say about a link it cannot verify itself: one Supabase already handled.
+ *
+ * With its default email templates, Supabase verifies the token on its own domain and redirects here with the result
+ * instead of the token: a session in the fragment (`#access_token=…&type=signup`), a PKCE `?code=`, or an error
+ * (`error_code=otp_expired`). Our templates send the token itself (`#token_hash=…`), which this app verifies. If the
+ * hosted templates ever drift back to the defaults, a confirmation has still succeeded, and the page should say so
+ * rather than call the link incomplete. The session in such a redirect is never used: it would have to leave the
+ * fragment, and a confirmed account can simply sign in.
+ */
+export function supabaseHandledLink(hash: string, search: string): "verified" | "expired" | null {
+  const fragment = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+  const query = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+  const errorCode = fragment.get("error_code") ?? query.get("error_code");
+  if (errorCode || fragment.get("error") || query.get("error")) return "expired";
+  if (fragment.get("access_token") || query.get("code")) return "verified";
+  return null;
+}
+
 export type AuthCookieOptions = { httpOnly: true; sameSite: "lax"; secure: boolean; path: "/" };
 
 /** Session cookies are never readable by page scripts; Secure whenever the app is served over HTTPS. */

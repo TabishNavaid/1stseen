@@ -37,6 +37,9 @@ const require = createRequire(new URL("../../package.json", import.meta.url));
 const { createClient } = require("@supabase/supabase-js");
 
 const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:55424";
+// The rig's Site URL (supabase/config.toml). Links are built from {{ .SiteURL }}, not from a redirect the app passed, so
+// they never depend on the redirect allowlist; the hosted templates must be the same (docs/PRODUCTION_CHECKLIST.md).
+const SITE_URL = "http://localhost:3000";
 const RUN = randomUUID().slice(0, 8);
 const address = (label) => `auth-${label}-${RUN}@firstseen-test.invalid`;
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
@@ -95,6 +98,7 @@ function linkFrom(message, expectedPath) {
   const href = /href="([^"]+)"/.exec(message.HTML ?? "")?.[1]?.replaceAll("&amp;", "&");
   assert.ok(href, "the email contains a link");
   const url = new URL(href);
+  assert.equal(url.origin, SITE_URL, "the link is built from the Site URL");
   assert.equal(url.pathname, expectedPath);
   assert.equal(url.search, "", "the token must not be in the query string, where request logs would record it");
   const fragment = new URLSearchParams(url.hash.slice(1));
@@ -174,6 +178,11 @@ test("authentication flows against the local rig", async (t) => {
       const signUp = await call("/api/auth/sign-up", { body: { email: newEmail, password } });
       assert.equal(signUp.response.status, 202);
       const message = await waitForEmail(newEmail, /Confirm your 1stSeen account/);
+
+      // Until the link is followed, the right password is not enough.
+      const early = await call("/api/auth/sign-in", { body: { email: newEmail, password }, jar: new Map() });
+      assert.deepEqual(await early.json(), { error: "email_not_confirmed" });
+      assert.equal(early.setCookies.length, 0, "no session before the address is confirmed");
       const link = linkFrom(message, "/auth/confirm");
       assert.equal(link.type, "email");
       assert.ok(link.tokenHash);
@@ -210,6 +219,23 @@ test("authentication flows against the local rig", async (t) => {
       const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
       const user = data.users.find((item) => item.email === newEmail);
       if (user && !created.includes(user.id)) created.push(user.id);
+    });
+
+    await t.test("an account that has been through onboarding lands on its roles when it confirms", async () => {
+      const email = address("onboarded");
+      const created_ = await admin.auth.admin.createUser({ email, password, email_confirm: false });
+      assert.ifError(created_.error);
+      created.push(created_.data.user.id);
+      const skipped = await admin
+        .from("recruiting_preferences")
+        .upsert({ user_id: created_.data.user.id, onboarding_skipped_at: new Date().toISOString() });
+      assert.ifError(skipped.error);
+
+      assert.equal((await call("/api/auth/resend", { body: { email } })).response.status, 202);
+      const link = linkFrom(await waitForEmail(email, /Confirm your 1stSeen account/), "/auth/confirm");
+      const confirm = await call("/api/auth/confirm", { body: { token_hash: link.tokenHash, type: link.type }, jar: new Map() });
+      assert.equal(confirm.response.status, 200);
+      assert.deepEqual(await confirm.json(), { status: "confirmed", redirect: "/roles" });
     });
 
     await t.test("signed in, agent-backed routes say when their service is not configured or not reachable", async () => {

@@ -16,6 +16,7 @@ import {
   publicSignInFailure,
   safeReturnTo,
   uniformDelay,
+  supabaseHandledLink,
 } from "../lib/auth/policy.ts";
 
 test("passwords need 8 characters and at most 72 bytes", () => {
@@ -83,6 +84,18 @@ test("email link tokens are read from the fragment, and only for the expected li
   assert.equal(parseAuthFragment("#type=email", "email"), null);
   assert.equal(parseAuthFragment("#token_hash=<script>&type=email", "email"), null);
   assert.equal(parseAuthFragment("", "email"), null);
+});
+
+test("a link Supabase verified itself (its default template) is told apart from a broken one", () => {
+  // The redirect after Supabase's own /verify: a session in the fragment, or a PKCE code in the query.
+  assert.equal(supabaseHandledLink("#access_token=x&expires_in=3600&refresh_token=y&token_type=bearer&type=signup", ""), "verified");
+  assert.equal(supabaseHandledLink("", "?code=0b8c"), "verified");
+  // An expired or reused default link comes back as an error.
+  assert.equal(supabaseHandledLink("#error=access_denied&error_code=otp_expired&error_description=x", ""), "expired");
+  assert.equal(supabaseHandledLink("", "?error=access_denied&error_code=otp_expired"), "expired");
+  // Nothing recognisable: the page keeps calling the link incomplete.
+  assert.equal(supabaseHandledLink("", ""), null);
+  assert.equal(supabaseHandledLink("#type=email", ""), null);
 });
 
 test("session cookies are HttpOnly and SameSite=Lax, and Secure over HTTPS", () => {
