@@ -244,8 +244,9 @@ run need the agent API. A question gets a 503 from `/api/recruiting-agent` carry
 shows in place of an answer: "Asking questions is temporarily unavailable. Forecasts, role pages, and their evidence still
 work. Please try again later." (`apps/web/lib/agent-availability.ts`). It is the same whether the paused service does not
 answer or Google's front end answers with an error page, and it is never an error page itself. A member's preparation
-plan or Replay run says the plan "could not be generated" or the replay "could not be run" (or, when the service does not
-answer at all, that it is configured but not responding): accurate, but not yet worded as a pause. Every page, the dashboard, role pages, evidence, and collection keep working: they read
+plan and Replay run say the same of their own feature ("Generating a preparation plan is temporarily unavailable. ...",
+"Running a replay is temporarily unavailable. ..."), while the service's own verdicts (a role the member does not follow,
+a replay that cannot be scored leak-free) still reach them as they are. Every page, the dashboard, role pages, evidence, and collection keep working: they read
 Supabase directly or run on GitHub Actions. The production health check reports the agent API as failing while it is
 paused, which opens one "Production health" issue.
 

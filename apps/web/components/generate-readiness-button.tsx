@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PLAN_UNAVAILABLE_MESSAGE } from "@/lib/agent-availability";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -25,14 +26,14 @@ export function GenerateReadinessButton({ roleId }: { roleId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ role_id: roleId }),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string; reason?: string };
+      const body = await response.json().catch(() => ({})) as { error?: string; reason?: string; message?: string };
       if (!response.ok) {
         throw new Error(
           body.reason
             ?? (body.error === "readiness_api_unavailable"
               ? "The readiness worker is not configured for this deployment."
-              : body.error === "readiness_api_unreachable"
-                ? "The readiness worker is configured but not responding. Try again in a moment."
+              : body.error === "readiness_api_unreachable" || body.error === "readiness_api_failed"
+                ? body.message ?? PLAN_UNAVAILABLE_MESSAGE
               : body.error === "role_not_followed"
                 ? "Follow this role before generating a preparation plan."
                 : "The preparation plan could not be generated."),

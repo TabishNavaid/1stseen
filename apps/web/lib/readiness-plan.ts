@@ -1,4 +1,5 @@
 import "server-only";
+import { PLAN_UNAVAILABLE_MESSAGE, isAgentVerdict } from "@/lib/agent-availability";
 
 export type ReadinessPlanResult = { status: number; payload: unknown };
 
@@ -11,8 +12,9 @@ export function readinessApiConfigured(): boolean {
  *
  * The readiness policy lives in `readiness.py` and is never reimplemented here. The caller passes the user id from
  * its own verified session; the worker refuses when that user does not follow the role, so the id can never write
- * into someone else's plan. Not configured is a 503 and configured but not answering is a 502, so the two stay
- * distinguishable.
+ * into someone else's plan. Not configured is a 503 with `readiness_api_unavailable`. A service that does not answer, or
+ * answers with anything but its own verdict (a paused service, whose front end may answer with an error page), is a 503
+ * with the sentence the plan button shows; its own verdicts (`role_not_followed`) are passed on as they are.
  */
 export async function requestReadinessPlan(userId: string, roleId: string): Promise<ReadinessPlanResult> {
   const apiUrl = process.env.FIRSTSEEN_AGENT_API_URL;
@@ -27,8 +29,13 @@ export async function requestReadinessPlan(userId: string, roleId: string): Prom
       cache: "no-store",
     });
   } catch {
-    return { status: 502, payload: { error: "readiness_api_unreachable" } };
+    return { status: 503, payload: { error: "readiness_api_unreachable", message: PLAN_UNAVAILABLE_MESSAGE } };
   }
-  const payload: unknown = await upstream.json().catch(() => ({ error: "readiness_plan_failed" }));
-  return { status: upstream.status, payload };
+  const payload: unknown = await upstream.json().catch(() => null);
+  if (upstream.ok) return { status: upstream.status, payload: payload ?? { error: "readiness_plan_failed" } };
+  if (isAgentVerdict(upstream.status, payload)) return { status: upstream.status, payload };
+  return {
+    status: 503,
+    payload: { error: "readiness_api_failed", upstream_status: upstream.status, message: PLAN_UNAVAILABLE_MESSAGE },
+  };
 }

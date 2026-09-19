@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { REPLAY_UNAVAILABLE_MESSAGE } from "@/lib/agent-availability";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 import { forecastReplayResultSchema, type ForecastReplayResult } from "@firstseen/shared";
@@ -82,7 +83,7 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
           forecast_cutoff: cutoff,
         }),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string; reason?: string };
+      const payload = await response.json().catch(() => ({})) as { error?: string; reason?: string; message?: string };
       if (response.status === 422 && payload.error === "replay_not_evaluable") {
         setState({ status: "not_evaluable", reason: payload.reason ?? "This case cannot be scored leak-free." });
         return;
@@ -92,8 +93,8 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
           status: "error",
           message: payload.error === "replay_api_unavailable"
             ? "The replay service is not configured for this environment."
-            : payload.error === "replay_api_unreachable"
-              ? "The replay service is configured but not responding. Try again in a moment."
+            : payload.error === "replay_api_unreachable" || payload.error === "replay_api_failed"
+              ? payload.message ?? REPLAY_UNAVAILABLE_MESSAGE
             : payload.error === "unauthorized"
               ? "Create an account or sign in to run a historical replay."
               : "The replay could not be run.",

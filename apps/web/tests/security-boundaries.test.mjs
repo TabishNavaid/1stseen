@@ -82,15 +82,18 @@ test("onboarding writes and plans only for the signed-in user", async () => {
 });
 
 test("agent-backed routes answer honestly when the configured service does not respond", async () => {
-  // Signed-in behaviour against a refusing port is exercised in tests/integration/auth-flows.test.mjs.
+  // Signed-in behaviour against a refusing port and a front end's error page is exercised in
+  // tests/integration/auth-flows.test.mjs. A service that cannot answer is temporarily unavailable (503) on every route,
+  // with the sentence that route's panel shows.
   const readiness = await read("../lib/readiness-plan.ts");
   assert.match(readiness, /try \{\s*upstream = await fetch\(/, "lib/readiness-plan.ts awaits the upstream fetch inside try");
-  assert.match(readiness, /catch \{\s*return \{ status: 502, payload: \{ error: "readiness_api_unreachable" \} \};/, "lib/readiness-plan.ts maps a failed fetch to readiness_api_unreachable");
-  const replay = await read("../app/api/forecast-replay/route.ts");
-  assert.match(replay, /try \{\s*upstream = await fetch\(/, "forecast-replay awaits the upstream fetch inside try");
-  assert.match(replay, /catch \{[\s\S]{0,160}error: "replay_api_unreachable" \}, \{ status: 502 \}/, "forecast-replay maps a failed fetch to replay_api_unreachable");
-  // A question the agent cannot take is a temporary unavailability (503) with the sentence the panel shows.
-  const agent = await read("../app/api/recruiting-agent/route.ts");
-  assert.match(agent, /try \{\s*upstream = await fetch\(/, "the agent route awaits the upstream fetch inside try");
-  assert.match(agent, /catch \{[\s\S]{0,400}error: "agent_api_unreachable", message: QUESTIONS_UNAVAILABLE_MESSAGE \}, \{ status: 503 \}/, "the agent route maps a failed fetch to a 503 with the unavailable sentence");
+  assert.match(readiness, /catch \{\s*return \{ status: 503, payload: \{ error: "readiness_api_unreachable", message: PLAN_UNAVAILABLE_MESSAGE \} \};/, "lib/readiness-plan.ts maps a failed fetch to a 503 with the plan sentence");
+  for (const [path, code, constant] of [
+    ["../app/api/forecast-replay/route.ts", "replay_api_unreachable", "REPLAY_UNAVAILABLE_MESSAGE"],
+    ["../app/api/recruiting-agent/route.ts", "agent_api_unreachable", "QUESTIONS_UNAVAILABLE_MESSAGE"],
+  ]) {
+    const source = await read(path);
+    assert.match(source, /try \{\s*upstream = await fetch\(/, `${path} awaits the upstream fetch inside try`);
+    assert.match(source, new RegExp(`catch \\{[\\s\\S]{0,400}error: "${code}", message: ${constant} \\}, \\{ status: 503 \\}`), `${path} maps a failed fetch to a 503 with its sentence`);
+  }
 });

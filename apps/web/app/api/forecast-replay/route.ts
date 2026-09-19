@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { forecastReplayResultSchema } from "@firstseen/shared";
 import { agentCaller, unauthenticatedDevAllowed } from "@/lib/agent-auth";
+import { REPLAY_UNAVAILABLE_MESSAGE, isAgentVerdict } from "@/lib/agent-availability";
 
 const requestSchema = z.object({
   role_id: z.string().uuid(),
@@ -34,11 +35,19 @@ export async function POST(request: Request) {
       cache: "no-store",
     });
   } catch {
-    // Configured but not answering: an honest 502, distinct from the 503 for "not configured".
-    return Response.json({ error: "replay_api_unreachable" }, { status: 502 });
+    // Configured but not answering, as a paused service (the Cloud Run spend cap) can be: temporarily unavailable.
+    return Response.json({ error: "replay_api_unreachable", message: REPLAY_UNAVAILABLE_MESSAGE }, { status: 503 });
   }
-  const payload: unknown = await upstream.json().catch(() => ({ error: "invalid_replay_response" }));
-  if (!upstream.ok) return Response.json(payload, { status: upstream.status });
+  const payload: unknown = await upstream.json().catch(() => null);
+  if (!upstream.ok) {
+    // The service's own verdict (a replay that cannot be scored leak-free) is passed on; anything else is unavailability.
+    if (isAgentVerdict(upstream.status, payload)) return Response.json(payload, { status: upstream.status });
+    return Response.json(
+      { error: "replay_api_failed", upstream_status: upstream.status, message: REPLAY_UNAVAILABLE_MESSAGE },
+      { status: 503 },
+    );
+  }
+  if (payload === null) return Response.json({ error: "invalid_replay_response" }, { status: 502 });
   const validated = forecastReplayResultSchema.safeParse(payload);
   if (!validated.success) return Response.json({ error: "invalid_replay_response" }, { status: 502 });
   return Response.json(validated.data);

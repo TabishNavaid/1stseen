@@ -9,6 +9,24 @@
 export const QUESTIONS_UNAVAILABLE_MESSAGE =
   "Asking questions is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
 
+/** The same sentence for the two member features that also need the agent service. */
+export const REPLAY_UNAVAILABLE_MESSAGE =
+  "Running a replay is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
+export const PLAN_UNAVAILABLE_MESSAGE =
+  "Generating a preparation plan is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
+
+/**
+ * Whether a failed answer from the agent service is its own verdict on the request, to pass on as it is, rather than
+ * the service being unavailable. Its verdicts are JSON with an `error` and a 4xx status (a replay that cannot be scored
+ * leak-free, a role the user does not follow). Anything else (no JSON, a 5xx, a 429, or a 401, which means the two
+ * services disagree about their shared token) says the service cannot answer now, as a paused service does whether it
+ * is silent or Google's front end answers for it with an error page.
+ */
+export function isAgentVerdict(status: number, payload: unknown): boolean {
+  const error = typeof payload === "object" && payload !== null ? (payload as { error?: unknown }).error : undefined;
+  return typeof error === "string" && status >= 400 && status < 500 && status !== 401 && status !== 429;
+}
+
 export type AgentErrorPayload = { error?: string; message?: string };
 
 const SIGN_UP_ERRORS = new Set(["guest_rate_limited", "guest_agent_unavailable", "sign_in_required"]);
