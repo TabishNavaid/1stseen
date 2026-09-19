@@ -1,0 +1,8 @@
+# Builds the agent API image for scripts/deploy-agent.sh. `gcloud builds submit --tag` needs a Dockerfile at the root of
+# the upload, but worker/Dockerfile builds with the repository root as its context (it copies worker/), so the build is
+# named explicitly. The upload itself is filtered by worker/.dockerignore (--ignore-file).
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "-f", "worker/Dockerfile", "-t", "${_IMAGE}", "."]
+images:
+  - "${_IMAGE}"

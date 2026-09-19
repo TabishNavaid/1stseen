@@ -171,11 +171,13 @@ done
 # ------------------------------------------------------------------ Build
 step "Build and push"
 # Context is the repository root because the Dockerfile copies worker/; the
-# .dockerignore in worker/ keeps everything else out of the upload.
+# .dockerignore in worker/ keeps everything else out of the upload. --tag would
+# need a Dockerfile at the root, so worker/cloudbuild.yaml names worker/Dockerfile.
 gcloud builds submit \
   --project "$PROJECT_ID" \
   --region "$REGION" \
-  --tag "$IMAGE" \
+  --config worker/cloudbuild.yaml \
+  --substitutions "_IMAGE=$IMAGE" \
   --ignore-file worker/.dockerignore \
   .
 
