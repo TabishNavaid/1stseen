@@ -45,7 +45,7 @@ export function ForecastCard({
             type="button"
             onClick={onSelect}
             aria-pressed={active}
-            className="focus-ring inline-flex min-h-9 items-center gap-1 rounded-chip px-3 text-caption font-semibold text-accent-ink hover:bg-surface-hover max-sm:min-h-touch"
+            className="focus-ring inline-flex min-h-9 items-center gap-1 rounded-chip px-3 text-xs font-semibold text-accent-ink hover:bg-surface-hover max-sm:min-h-touch"
           >
             Why this date<Icon name="arrow-right" size={13} />
           </button>

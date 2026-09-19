@@ -413,18 +413,32 @@
   animation: bob-once 1100ms cubic-bezier(0.3, 0.7, 0.4, 1) 150ms 1 both;
 }
 
-* { box-sizing: border-box; }
-html { background: var(--color-canvas); scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background: var(--color-canvas);
-  color: var(--color-ink);
-  font-family: var(--font-sans);
-  text-rendering: optimizeLegibility;
+/*
+ * Element defaults live in the base layer, under every utility. Outside a layer they outranked the utilities: every
+ * button and field ignored its own text size and weight classes and drew at the page's 16px regular.
+ */
+@layer base {
+  * { box-sizing: border-box; }
+  html { background: var(--color-canvas); scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+  }
+  button, input, select, textarea { font: inherit; }
+  button { cursor: pointer; }
+  ::selection { background: #c9ded3; color: #102b24; }
 }
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-::selection { background: #c9ded3; color: #102b24; }
+
+/*
+ * A phone zooms the page into any field whose text is under 16px, so below sm a field is 16px whatever its class says.
+ * Deliberately outside a layer, so it outranks the utilities.
+ */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px; }
+}
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

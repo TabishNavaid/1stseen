@@ -56,6 +56,11 @@ Do not merge these into a single "quality" scale or a single confidence color.
 
 ### Composite utilities
 
+Element defaults (box sizing, the body's colours and font, `font: inherit` on buttons and fields) are in `@layer base`,
+under every utility, so a button's or a field's own text size and weight classes apply. Outside a layer they outranked
+the utilities, and every button drew at 16px regular. Below `sm` a field is 16px whatever its class says, because a
+phone zooms into a field with smaller text; that one rule sits outside a layer on purpose.
+
 `panel`, `label-caps`, `control`, `focus-ring`, `link-accent`, `skeleton`, `icon`, `tabular`, and the
 semantic utilities above. A composite sets no property a caller would commonly override: `label-caps` sets no color
 and `control` no horizontal padding, so `label-caps text-ink-subtle` and `control pl-3 pr-8` never depend on utility

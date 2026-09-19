@@ -180,7 +180,7 @@ export function DashboardFiltersForm({ filters, options, showWatched = true }: {
           </Popover>
           <Field id="dashboard-sort" label="Sort roles" hideLabel className="min-w-0 flex-1 sm:w-60 sm:flex-none">
             {(control) => (
-              <Select {...control} name="sort" defaultValue={filters.sort} className="h-11 rounded-chip max-sm:h-touch">
+              <Select {...control} name="sort" defaultValue={filters.sort} className="h-11 rounded-chip text-sm max-sm:h-touch">
                 {SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </Select>
             )}

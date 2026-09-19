@@ -88,3 +88,26 @@ test("the warm accent is legible: its text on its own surface and the page, ink 
   expectContrast([["warm-ink", "warm-soft"], ["warm-ink", "surface"], ["warm-ink", "canvas"], ["ink", "warm"]], 4.5);
   expectContrast([["warm-line", "surface"], ["warm-line", "warm-soft"]], 3);
 });
+
+test("element defaults sit under the utilities, so a button's or a field's own type classes apply", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  // Everything outside @layer blocks: an element rule there outranks every utility class.
+  let depth = 0;
+  let inLayer = false;
+  let outside = "";
+  for (let index = 0; index < css.length; index += 1) {
+    if (!inLayer && css.startsWith("@layer base", index)) { inLayer = true; depth = 0; }
+    const char = css[index];
+    if (inLayer) {
+      if (char === "{") depth += 1;
+      if (char === "}") { depth -= 1; if (depth === 0) inLayer = false; }
+      continue;
+    }
+    outside += char;
+  }
+  assert.match(css, /@layer base \{[\s\S]*button, input, select, textarea \{ font: inherit; \}/);
+  assert.doesNotMatch(outside, /^\s*button[^{]*\{[^}]*font:/m, "no button font reset outside the base layer");
+  assert.doesNotMatch(outside, /^\s*(?:body|html)\s*\{/m, "no body or html defaults outside the base layer");
+  // The one deliberate exception: a phone zooms into a field under 16px.
+  assert.match(outside, /@media \(max-width: 639px\) \{\s*input:not\(\[type="checkbox"\]\)[^{]*\{ font-size: 16px; \}/);
+});
