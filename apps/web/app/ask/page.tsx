@@ -19,10 +19,9 @@ export default async function AskPage() {
     <>
       <SiteHeader active="ask" contentId="ask-content" />
       <main id="ask-content" className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 md:px-6 md:py-12">
-        <p className="label-caps text-accent-ink">Ask 1stSeen</p>
-        <h1 className="heading-display mt-2 text-3xl leading-tight sm:text-4xl">Ask about any program</h1>
+        <h1 className="heading-display text-3xl leading-tight sm:text-4xl">Ask about any program</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
-          Answers come from the openings and forecasts on this site, and every step taken to reach one is listed with it.
+          Answers come from the openings and forecasts on this site, with every step taken to reach them.
         </p>
         <div className="mt-8"><AskPanel signedIn={session !== null} guestLimit={GUEST_QUESTIONS_PER_ADDRESS} /></div>
       </main>

@@ -119,17 +119,23 @@ lives at `/roles`, and every filter link points there; an old `/?…` dashboard 
 `/roles`, and a signed-in visit to `/` goes to `/roles` from the Worker entry (`cloudflare/front-door.ts`) before
 anything renders. One idea per section:
 
-- **The promise and two actions:** "Get started" opens the first run; "Just browse" opens the roles view as a guest.
-  Beside them, one real program (`lib/landing-data.ts`), chosen by a stated rule: the highest confidence score among
-  current forecasts resting on two or more of its own cycles, shown with its likely date, its window, its confidence
-  word, and the openings behind it with where each was seen. With no such forecast, the role with the most dated
-  openings is shown as its observed history, with the plain reason it has no date.
+- **A status line** under the header: when collection last wrote anything, how many programs are followed, and how many
+  opened this month. It is drawn only while the newest observation is under 48 hours old (`STATUS_STALE_HOURS`); a
+  stalled deployment says nothing rather than something out of date.
+- **The promise and two actions:** "Get started" opens the first run; "Browse programs" opens the roles view as a guest.
+  Beside them, one program (`lib/landing-data.ts`), chosen by a stated rule: the highest confidence score among current
+  forecasts resting on two or more of its own cycles. Its card draws that program's own openings on a January-to-December
+  axis, one row per year, with the predicted window as a band across them (`components/landing/opening-timeline.tsx`);
+  each dot links to the page that date was seen on. With no such forecast, the role with the most dated openings is
+  shown with its dots and no band, and the plain reason it has no date.
 - **Just opened:** the newest programs that opened, one per company, and a link to all of them. Hidden when none opened.
 - **How it works**, in three plain steps.
 - **Opening soon:** every current forecast, soonest window first, one per company, up to six; "Next to open" when the
   first window is more than 90 days away. Hidden when there is none.
-- **Trust in one line:** every date links to where it was seen, and a link to the methodology page, which carries the
-  evidence model's three rules and the accuracy position.
+- **Questions**, five of them, answered on the page: whether it is free, where the dates come from, how accurate they
+  are, whether an account is needed, and which companies are covered. Each points at `/methodology` for the detail.
+- **One way in** at the end: "Start watching the programs you care about". The product-wide disclosure, and the link to
+  the methodology page, stay in the site footer, said once.
 
 ## Tests
 

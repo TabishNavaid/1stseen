@@ -122,7 +122,7 @@ export function RecruitingCalendar({
         <div>
           <p className="label-caps flex items-center gap-2 text-accent-ink"><Icon name="calendar-days" size={13} />Watched recruiting plan</p>
           <h1 id="calendar-title" className="heading-display mt-3 text-3xl md:text-4xl">Recruiting Calendar</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for preparation milestones, predicted opening windows, and openings that are actually confirmed.</p>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for preparation milestones, predicted opening windows, and confirmed openings.</p>
         </div>
         <div className="flex flex-col items-start gap-4 lg:items-end">
           <GoogleCalendarSync events={events} />
@@ -177,7 +177,7 @@ export function RecruitingCalendar({
           <ul className="mt-3 space-y-2">
             {unforecastable.map((item) => (
               <li key={item.roleId} className="text-caption text-ink-muted">
-                <Link href={`/roles/${item.roleId}`} className="font-semibold text-ink hover:underline">{item.company} — {item.role}</Link>
+                <Link href={`/roles/${item.roleId}`} className="font-semibold text-ink hover:underline">{item.company} · {item.role}</Link>
                 <span> · {item.reason}</span>
                 {item.lastObservedOn && <span> Last opening evidence {formatDate(item.lastObservedOn, { month: "short", day: "numeric", year: "numeric" })}.</span>}
               </li>

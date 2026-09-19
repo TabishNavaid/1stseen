@@ -414,6 +414,80 @@
 }
 
 /*
+ * The landing page's motion. Each is one short move that happens once, on arrival, except the Just opened strip, which
+ * drifts until a pointer or the keyboard enters it. Every one of them is switched off under prefers-reduced-motion at
+ * the end of this file; nothing here is needed to read the page.
+ */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes drop-in {
+  0% { opacity: 0; transform: translateY(-14px) scale(0.5); }
+  70% { opacity: 1; transform: translateY(2px) scale(1.06); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/** Hero text and buttons entering: the caller staggers them with an animation-delay. */
+@utility rise {
+  animation: rise 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@utility fade-in {
+  animation: fade-in 700ms ease-out both;
+}
+
+/** One opening arriving on the hero timeline. */
+@utility drop-in {
+  animation: drop-in 560ms cubic-bezier(0.2, 0.75, 0.3, 1.35) both;
+}
+
+/**
+ * The Just opened strip: its track holds the programs twice, so the drift can loop seamlessly, and the copy is hidden
+ * from assistive technology. It stops while a pointer is over the strip or the keyboard is inside it.
+ */
+@utility drift-track {
+  animation: drift 64s linear infinite;
+  .drift-strip:hover &, .drift-strip:focus-within & { animation-play-state: paused; }
+}
+
+/** Softened edges, so a strip that drifts does not end in a hard cut. */
+@utility edge-fade {
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
+/** A button that gives a little under the press. */
+@utility press {
+  transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  &:active { transform: translateY(1px) scale(0.995); }
+}
+
+/** Soft colour behind a section: a decorative, blurred radial wash. */
+@utility glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 9999px;
+  filter: blur(64px);
+}
+
+@utility glow-accent {
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent);
+}
+
+@utility glow-warm {
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-warm) 42%, transparent), transparent);
+}
+
+/*
  * Element defaults live in the base layer, under every utility. Outside a layer they outranked the utilities: every
  * button and field ignored its own text size and weight classes and drew at the page's 16px regular.
  */
@@ -430,7 +504,24 @@
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
   ::selection { background: #c9ded3; color: #102b24; }
+
+  /*
+   * A little paper grain over the page, so large flat areas are not perfectly flat. It is one inline SVG turbulence,
+   * drawn by the compositor, fixed to the viewport, and never in the way of a pointer.
+   */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
+  }
 }
+
+/* Between pages, where the browser supports it: a short cross-fade instead of a white flash. */
+@view-transition { navigation: auto; }
 
 /*
  * A phone zooms the page into any field whose text is under 16px, so below sm a field is 16px whatever its class says.
@@ -449,5 +540,9 @@
   /* No movement at all: a lifted card stays put, and celebration confetti is not drawn. */
   .lift:hover { transform: none; }
   .confetti { display: none; }
-  .bob-once { animation: none; }
+  .bob-once, .rise, .fade-in, .drop-in { animation: none; }
+  /* The strip would otherwise jump to the end of its loop. */
+  .drift-track { animation: none; }
+  .press:active { transform: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

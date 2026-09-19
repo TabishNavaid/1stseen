@@ -88,16 +88,15 @@ export default async function JustOpenedPage({ searchParams }: { searchParams: P
         {companyId && (
           <Link href="/opened" className="link-accent focus-ring mb-3 inline-flex min-h-touch items-center gap-1 text-caption"><Icon name="arrow-left" size={12} />Every company</Link>
         )}
-        <p className="label-caps text-accent-ink">Posted in the last {days} days</p>
-        <h1 className="heading-display mt-2 text-3xl leading-tight sm:text-4xl">{company ? `Just opened at ${company.name}` : "Just opened"}</h1>
+        <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{company ? `Just opened at ${company.name}` : "Just opened"}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
           {mode === "unconfigured"
             ? companyId ? `Nothing to list for this company.` : "Live data is not configured on this deployment, so there is nothing to list."
             : total === 0
               ? companyId ? `No program at this company has opened in the last ${days} days.` : `No program has opened in the last ${days} days.`
               : company
-                ? `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} at ${company.name} opened in the last ${days} days, newest first. Each date is the day the company posted it.`
-                : `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} opened in the last ${days} days. Newest first, mixed so that no one company fills the list. Each date is the day the company posted it.`}
+                ? `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} at ${company.name} opened in the last ${days} days, newest first.`
+                : `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} opened in the last ${days} days. Newest first, mixed so one company cannot fill the list.`}
         </p>
 
         {programs.length > 0 && <div className="mt-8"><RecruitingTimeline programs={programs} /></div>}

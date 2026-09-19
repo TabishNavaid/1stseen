@@ -43,12 +43,22 @@ export type OpeningSoonRole = {
   forecast: LandingForecastWindow;
 };
 
+/** The line under the header: what the corpus holds right now. Null when collection has not run recently. */
+export type LandingStatus = { updatedAt: string; programs: number; openingsThisMonth: number };
+
 export type LandingData = {
   preview: LandingPreview | null;
   openingSoon: OpeningSoonRole[];
   /** The newest programs that opened in the last 45 days, and how many opened in all. */
   justOpened: { openings: RealOpening[]; total: number };
+  status: LandingStatus | null;
 };
+
+/**
+ * Older than this and the status line is not drawn at all. Collection runs twice a day, so two days without a write is
+ * a stall, not a quiet patch; until then the line says how old it is and lets a reader judge.
+ */
+export const STATUS_STALE_HOURS = 48;
 
 /** How many just-opened programs the landing strip shows. */
 export const JUST_OPENED_STRIP = 8;
@@ -71,8 +81,8 @@ type PageRow = {
 
 const PRECISIONS: readonly string[] = ["exact", "bounded", "observed_by"];
 
-/** How many openings the preview card lists, newest first. */
-export const PREVIEW_OPENINGS = 3;
+/** How many past openings the preview card's timeline draws, newest first. */
+export const PREVIEW_OPENINGS = 6;
 
 /** "Opening soon" shows at most this many roles, one per company, and is hidden when none has a current window. */
 export const OPENING_SOON_LIMIT = 6;
@@ -133,7 +143,7 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const today = now.toISOString().slice(0, 10);
   const withForecast: DashboardFilters = { ...defaultDashboardFilters, confidence: ["strong", "moderate", "limited"] };
 
-  const [featured, byEvidence, soonest, justOpened] = await Promise.all([
+  const [featured, byEvidence, soonest, justOpened, summary, latest] = await Promise.all([
     // bounded: p_limit 1, the single featured forecast.
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, minCycles: 2 }, now, "confidence", 3, 1)),
     // bounded: p_limit 1, the role with the most dated openings, for when no forecast qualifies.
@@ -142,6 +152,10 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
     reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "window", 1, 12)),
     // The first JUST_OPENED_STRIP of the Just opened feed, in its order (no company takes more than two of six).
     loadJustOpened(reader, { limit: JUST_OPENED_STRIP }),
+    // bounded: one row of totals, for the programs the status line states.
+    reader.rpc("dashboard_role_summary", { p_now: now.toISOString(), p_user_id: null, ...filterRpcArgs(defaultDashboardFilters), p_per_company: 0 }),
+    // bounded: limit 1, the newest observation, which is when collection last wrote anything.
+    reader.from("raw_job_observations", "id,observed_at").order("observed_at", { ascending: false }).order("id", { ascending: true }).limit(1),
   ]);
   if (featured.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
 
@@ -176,5 +190,12 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
       : [];
   });
 
-  return { preview, openingSoon, justOpened: { openings: justOpened.openings, total: justOpened.total } };
+  // The status line states only what these reads returned; anything missing or stale leaves the line out.
+  const updatedAt = latest.error ? null : (latest.data?.[0]?.observed_at as string | undefined) ?? null;
+  const programs = summary.error ? 0 : Number((summary.data as { in_scope_roles?: number | string }[] | null)?.[0]?.in_scope_roles ?? 0);
+  const status: LandingStatus | null =
+    updatedAt && programs > 0 && now.getTime() - Date.parse(updatedAt) < STATUS_STALE_HOURS * 3_600_000
+      ? { updatedAt, programs, openingsThisMonth: justOpened.thisMonth }
+      : null;
+  return { preview, openingSoon, justOpened: { openings: justOpened.openings, total: justOpened.total }, status };
 }

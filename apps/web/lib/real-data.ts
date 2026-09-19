@@ -416,6 +416,8 @@ export type JustOpenedFeed = {
   openings: RealOpening[];
   /** Every program that opened in the last 45 days (for one company, when `company` is set). */
   total: number;
+  /** How many of those opened since the first of the current month. */
+  thisMonth: number;
   /** How many of them the interleaved feed lists; the rest are in `more`. */
   listed: number;
   /** Companies with more openings than the feed can place without crowding it, each linked to its own list. */
@@ -489,9 +491,11 @@ export async function loadJustOpened(
     }];
   });
   const only = companyId && rows.length ? { id: companyId, name: names.get(companyId) ?? "" } : null;
+  const month = `${new Date().toISOString().slice(0, 7)}-01`;
   return {
     openings,
     total: rows.length,
+    thisMonth: rows.filter((row) => row.opened_on >= month).length,
     listed: feed.length,
     more: overflow.map(({ company, count }) => ({ companyId: company, company: names.get(company) ?? "", count })).sort((a, b) => b.count - a.count || a.company.localeCompare(b.company)),
     company: only,

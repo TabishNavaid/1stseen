@@ -28,7 +28,8 @@ a hex value. New surfaces use tokens only; an arbitrary `[#hex]` value in new co
 | Radii | `rounded-control` (10px), `rounded-panel` (16px), `rounded-card` (20px), `rounded-overlay`, `rounded-chip` | Controls, panels, cards, popovers and dialogs, chips and pill buttons |
 | Elevation | `shadow-raised`, `shadow-card`, `shadow-lift`, `shadow-popover`, `shadow-dialog` | Panels, cards, a hovered card, floating layers |
 | Display type | `heading-display` | Page and section headings in Fraunces (self-hosted by `next/font`); body text stays Geist |
-| Motion | `lift`, `step-in`, `pop-in`, `confetti-piece` | A hovered card, a first-run step entering, the payoff's checkmark and burst. All stop under `prefers-reduced-motion`, and the burst is not drawn at all |
+| Motion | `lift`, `press`, `rise`, `fade-in`, `drop-in`, `drift-track`, `bob-once`, `step-in`, `pop-in`, `confetti-piece` | A hovered card, a pressed button, hero text entering, the hero chart's openings dropping in and its window fading in, the Just opened strip drifting, the not-found character's single bob, a first-run step entering, the payoff's checkmark and burst. Every one stops under `prefers-reduced-motion`, the burst is not drawn at all, and the strip does not move |
+| Depth | `glow` with `glow-accent` or `glow-warm`, and the page's grain | A blurred radial wash behind the hero and the closing call to action, and a fixed grain over the page background at 3.5% so large flat areas are not perfectly flat |
 
 ### Contrast
 
@@ -191,6 +192,22 @@ A forecast reads the same everywhere it is shown in brief (a card, the landing p
 
 The forecast's basis, its factors, and the score itself are one step away: in the card's "Why this date" drawer and in
 the role page's "How this forecast was made". `/methodology` explains all of it at length.
+
+## Voice
+
+The product shows the thing rather than promising that the thing is real. That rules out a set of words, and
+`tests/support/page-language.mjs` (`voiceLeaksInSource`) fails the build on them, reading the product's own source
+strings rather than rendered pages, because a company's job title may legitimately carry any of them:
+
+- reassurance: "real program", "real forecast", "real data", "honest", "evidence-first", "no language model",
+  "never fake", "actually";
+- marketing: "seamless", "unlock", "supercharge", "empower", "journey", "revolutionary", "game-changing";
+- the em dash, which these sentences are short enough not to need.
+
+The methodology and policy pages are exempt: saying that no language model picks a date, and how far the accuracy
+position has been validated, is their job. Beyond the list: at most one small caps label per page, headings that say
+what the section is ("How it works", "Opening soon", "Just opened"), second person, present tense, and no rhetorical
+questions, exclamation marks, or emoji.
 
 ## Uncertainty and disclosure
 

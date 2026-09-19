@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { publishedSitePages } from "../lib/site-links.ts";
-import { pageLanguageLeaks } from "./support/page-language.mjs";
+import { pageLanguageLeaks, voiceLeaksInSource } from "./support/page-language.mjs";
 
 // The dashboard renders fixtures only under an explicit opt-in, so these
 // development-data assertions must request demo mode deliberately.
@@ -223,7 +223,7 @@ test("Just opened lists programs by the date they were posted, labelled as fixtu
   assert.equal(response.status, 200);
   const html = visible(await response.text());
   assert.match(html, /<title>Just opened · 1stSeen<\/title>|Just opened/);
-  assert.match(html, /programs opened in the last 45 days\. Newest first, mixed so that no one company fills the list/);
+  assert.match(html, /programs opened in the last 45 days\. Newest first, mixed so one company cannot fill the list/);
   assert.match(html, /Development fixture/);
   assert.match(html, /Opened/);
   const unconfigured = visible(await (await render("/opened", { demo: false })).text());
@@ -241,7 +241,7 @@ test("Ask is open to guests, with its limit stated in words", async () => {
 
 test("labels fixture provenance and derives visible portfolio counts", async () => {
   const html = await (await render("/roles")).text();
-  assert.match(html, />2<\/strong><span[^>]*>of <!-- -->3 forecasts<!-- --> in this view/);
+  assert.match(html, />2<\/span><\/strong><span[^>]*>of <!-- -->3 forecasts<!-- --> in this view/);
   // The default view states the whole in-scope set, not only the forecasts.
   assert.match(html, /in-scope roles: /);
   assert.match(html, /reserved \.example sources/);
@@ -358,10 +358,15 @@ test("a first-time visitor lands on the landing page, not the app shell", async 
   const html = visible(await response.text());
   assert.match(html, /Know when internships open,/);
   assert.match(html, /href="\/welcome"[^>]*>Get started/);
-  assert.match(html, /href="\/roles"[^>]*>\s*Just browse/);
+  assert.match(html, /href="\/roles"[^>]*>\s*Browse programs/);
   assert.match(html, /How it works/);
-  assert.match(html, /Every date links to where we saw it\./);
+  assert.match(html, /Start watching the programs you care about/);
   assert.match(html, /href="\/methodology"/);
+  // The questions a first-time visitor asks, answered on the page itself.
+  for (const question of ["Is it free?", "Where do the dates come from?", "How accurate is it?", "Do I need an account?", "Which companies are covered?"]) {
+    assert.ok(html.includes(question), question);
+  }
+  assert.equal((html.match(/<details/g) ?? []).length, 5, "five questions, each its own disclosure");
   // No dashboard: no workspace navigation, no watchlist count, no stat tile, no debug-looking status pill.
   assert.doesNotMatch(html, /Recruiting workspace|Watchlist|Watched roles|Recruiting calendar/);
   assert.doesNotMatch(html, /data-stat-tile/);
@@ -371,7 +376,8 @@ test("a first-time visitor lands on the landing page, not the app shell", async 
   // With no data behind it the preview card and "Opening soon" are left out rather than drawn empty or from fixtures.
   assert.doesNotMatch(html, /A real program we track|Opening soon|Next to open/);
   assert.doesNotMatch(html, /Northstar|Meridian|Atlas|\.example/);
-  assert.match(html, /\/illustrations\/sprinting\.svg/);
+  // With no data there is no status line and no hero chart, rather than an empty one.
+  assert.doesNotMatch(html, /openings this month|<svg[^>]*role="group"/);
 });
 
 test("an old link to a filtered dashboard on / goes to the same view at /roles", async () => {
@@ -387,7 +393,7 @@ test("a guest's roles view renders no zero tile and no watched tile", async () =
     const html = visible(await (await render(path, { demo })).text());
     assert.doesNotMatch(html, /Watched roles/, "a guest follows nothing, so the watched tile is never drawn");
     for (const [tile] of html.matchAll(/data-stat-tile[\s\S]*?<\/strong>/g)) {
-      const value = Number(tile.match(/>(\d+)<\/strong>$/)?.[1]);
+      const value = Number(tile.match(/>([\d,]+)<\/span><\/strong>$/)?.[1]?.replace(/,/g, ""));
       assert.ok(value > 0, `a tile shows ${value}`);
     }
   }
@@ -415,6 +421,44 @@ test("user pages show no identifiers, fingerprints, timings, tool names, or word
     const leaks = pageLanguageLeaks(await (await render(path)).text(), { allow });
     assert.deepEqual(leaks, [], path);
   }
+});
+
+test("the product's own words do not reassure, sell, or reach for an em dash", async () => {
+  // The methodology and policy pages are exempt by their nature: saying that no language model picks a date is their job.
+  const exempt = /^(app\/(methodology|privacy|terms|data-sources|contact)|app\/layout)/;
+  const files = [];
+  const walk = (dir, prefix) => {
+    for (const entry of readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })) {
+      const next = `${prefix}/${entry.name}`;
+      if (entry.isDirectory()) walk(`${dir}/${entry.name}`, next);
+      else if (/\.tsx?$/.test(entry.name)) files.push([next.slice(1), `${dir}/${entry.name}`]);
+    }
+  };
+  walk("../app", "/app");
+  walk("../components", "/components");
+  assert.ok(files.length > 40, `${files.length} source files`);
+  const leaks = [];
+  for (const [name, path] of files) {
+    if (exempt.test(name)) continue;
+    for (const leak of voiceLeaksInSource(readFileSync(new URL(path, import.meta.url), "utf8"))) leaks.push(`${name} ${leak}`);
+  }
+  assert.deepEqual(leaks, []);
+});
+
+test("a landing page moves, but only with motion that can be switched off", async () => {
+  const html = await (await render("/")).text();
+  // Every animated thing on the page carries one of these, and every one of them is off under reduced motion.
+  for (const utility of ["rise", "press"]) assert.ok(html.includes(utility), utility);
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  for (const utility of ["rise", "fade-in", "drop-in", "drift-track", "press"]) {
+    assert.match(css, new RegExp(`@utility ${utility} \\{`), utility);
+  }
+  const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+  for (const selector of [".rise", ".fade-in", ".drop-in", ".drift-track", ".press:active"]) {
+    assert.ok(reduced.includes(selector), `${selector} is switched off under reduced motion`);
+  }
+  assert.match(css, /@view-transition \{ navigation: auto; \}/);
+  assert.match(reduced, /::view-transition-group\(\*\)[^}]*animation: none/);
 });
 
 test("the first run renders for a guest, and says so plainly when live data is not configured", async () => {

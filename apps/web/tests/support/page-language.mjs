@@ -19,6 +19,44 @@ const DEV_WORDS = [
   /\bcontent hash\b/i, /\btool[- ]call\b/i,
 ];
 
+/**
+ * Phrases a confident product does not need. A page that shows the thing does not also promise that the thing is real,
+ * and a product written by a person does not reach for the words every landing page reaches for.
+ *
+ * These are checked on the product's own surfaces. The methodology and policy pages are exempt by their nature: saying
+ * that no language model picks a date, or how honest the accuracy position is, is their whole job.
+ */
+const SELF_CONSCIOUS = [
+  /\breal (?:program|programs|forecast|forecasts|data)\b/i,
+  /\bhonest(?:ly)?\b/i,
+  /\bevidence[- ]first\b/i,
+  /\bno language model\b/i,
+  /\bnever fake[sd]?\b/i,
+  /\bactually\b/i,
+];
+
+const MARKETING = [/\bseamless(?:ly)?\b/i, /\bunlock\b/i, /\bsupercharge\b/i, /\bempower(?:s|ing)?\b/i, /\bjourney\b/i, /\brevolutionar/i, /\bgame[- ]chang/i];
+
+/**
+ * Every voice leak in the product's own words. This reads source files, not rendered pages: a company's job title can
+ * carry an em dash or the word "honest", and that is their copy, not ours. Comments are stripped first, so only what
+ * reaches a person is checked.
+ */
+export function voiceLeaksInSource(source) {
+  const copy = source
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+  const leaks = [];
+  const find = (kind, pattern) => {
+    for (const match of copy.matchAll(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`))) leaks.push(`${kind}: ${match[0].trim()}`);
+  };
+  for (const pattern of SELF_CONSCIOUS) find("self-conscious", pattern);
+  for (const pattern of MARKETING) find("marketing", pattern);
+  // An em dash is a writer's tic here: the product's sentences are short enough not to need one.
+  find("em dash", /\u2014/);
+  return leaks;
+}
+
 /** The text a person reads: scripts, styles, and tags removed, entities decoded. */
 export function visibleText(html) {
   return html

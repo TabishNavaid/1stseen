@@ -15,7 +15,7 @@ const SOCIAL_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
-  alt: "The 1stSeen landing page: Know when internships open, before everyone else, beside a real program's likely opening date.",
+  alt: "The 1stSeen landing page: Know when internships open, before everyone else, beside one program's likely opening date.",
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -27,12 +27,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: new URL(origin),
-    title: { default: "1stSeen — Recruiting intelligence before the opening", template: "%s · 1stSeen" },
-    description: "Evidence-backed forecasts for recurring internships, new-grad programs, and early-career roles.",
+    title: { default: "1stSeen: know when internships open", template: "%s · 1stSeen" },
+    description: "Likely opening dates for internships, new-grad programs, and co-ops, from each program's own posting history.",
     icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
     openGraph: {
-      title: "1stSeen — Recruiting intelligence before the opening",
-      description: "Evidence-backed forecasts, recruiting signals, and preparation deadlines for recurring early-career roles.",
+      title: "1stSeen: know when internships open",
+      description: "Likely opening dates, the postings behind them, and a prep plan for the programs you save.",
       type: "website",
       images: [SOCIAL_IMAGE],
     },

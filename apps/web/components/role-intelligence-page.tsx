@@ -42,11 +42,11 @@ const milestoneLabels: Record<string, string> = {
 const factorTone = { positive: "text-success-ink", warning: "text-warning-ink", neutral: "text-ink" } as const;
 
 function day(value: string | null): string {
-  return value ? formatDay(value) : "—";
+  return value ? formatDay(value) : "None";
 }
 
 function stamp(value: string | null): string {
-  return value ? formatStamp(value) : "—";
+  return value ? formatStamp(value) : "None";
 }
 
 function Section({ id, eyebrow, title, note, children }: {
@@ -486,10 +486,10 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 {[
                   ["Model version", forecast?.modelVersion ?? "None", true],
                   ["Method", forecast?.method ? humanize(forecast.method) : "None", false],
-                  ["Forecasted", forecast ? stamp(forecast.forecastedAt) : "—", false],
-                  ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "—", false],
-                  ["Recruiting cycles", forecast ? String(forecast.historyCount) : "—", false],
-                  ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "—", false],
+                  ["Forecasted", forecast ? stamp(forecast.forecastedAt) : "None", false],
+                  ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "None", false],
+                  ["Recruiting cycles", forecast ? String(forecast.historyCount) : "None", false],
+                  ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "None", false],
                   ["Location", place, false],
                   ["Linked observations", String(view.observationCount), false],
                   ...(view.milestones.length ? [["Prep plan rules", view.milestones[0].policyVersion, true] as const] : []),

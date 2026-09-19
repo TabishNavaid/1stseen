@@ -8,6 +8,7 @@ import { ForecastCard } from "@/components/forecast-card";
 import { ForecastChange } from "@/components/forecast-change";
 import { InsufficientRoleCard } from "@/components/insufficient-role-card";
 import { SkipFirstRunButton } from "@/components/onboarding/skip-first-run-button";
+import { CountUp } from "@/components/count-up";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/status";
 import { forecastChanges, forecastRoles as fixtureRoles, openedRoles } from "@/lib/demo-data";
@@ -107,7 +108,7 @@ function StatTile({ icon, label, value, detail, tone = "accent", href }: { icon:
         {label}
         {href && <Icon name="arrow-right" size={14} className="ml-auto text-accent-ink" />}
       </p>
-      <div className="mt-3 flex items-baseline gap-2"><strong className="heading-display text-3xl tabular">{value}</strong><span className="text-caption text-ink-subtle">{detail}</span></div>
+      <div className="mt-3 flex items-baseline gap-2"><strong className="heading-display text-3xl tabular"><CountUp value={value} /></strong><span className="text-caption text-ink-subtle">{detail}</span></div>
     </>
   );
   return href
@@ -190,12 +191,11 @@ export function ForecastDashboard({
       <main id="dashboard-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8 focus:outline-none md:px-6 md:py-10">
         {picks}
         <header className="flex flex-col gap-2">
-          <p className="label-caps text-accent-ink">{watchedOnly ? "Your watchlist" : "Early-career technical roles"}</p>
           <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{watchedOnly ? "Roles you watch" : "Explore roles"}</h1>
           <p className="max-w-2xl text-sm leading-6 text-ink-muted">
             {watchedOnly
-              ? "Your watched roles, with their next predicted windows and prep plans."
-              : "Every program we track, with its next predicted window when there is one. Open a forecast to see what it rests on."}
+              ? "The programs you saved, with their windows and prep plans."
+              : "Every program 1stSeen follows, with the window it is likely to open in next. Open one to see what its window rests on."}
           </p>
         </header>
 
@@ -205,7 +205,7 @@ export function ForecastDashboard({
           <section className="card mt-8 flex flex-col gap-4 border-accent p-6 md:flex-row md:items-center md:justify-between" aria-labelledby="first-run-title">
             <div>
               <h2 id="first-run-title" className="heading-display text-xl">Start with a watchlist that fits</h2>
-              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted">Three quick questions, and 1stSeen shows the programs worth watching for you. Nothing is saved until you say so.</p>
+              <p className="mt-1.5 max-w-2xl text-sm leading-6 text-ink-muted">Three questions, and you get the programs that fit. Nothing is saved until you say so.</p>
             </div>
             <div className="flex shrink-0 flex-wrap items-start gap-2">
               <SkipFirstRunButton label="Not now" />

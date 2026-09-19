@@ -168,7 +168,7 @@ test("the character leads the page, large and decorative, and bobs once unless m
   assert.match(css, /@utility bob-once \{[^}]*animation: bob-once [^;]* 1 both;/, "it plays once");
   assert.doesNotMatch(css, /animation: bob-once[^;]*infinite/);
   const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-  assert.match(reduced, /\.bob-once \{ animation: none; \}/);
+  assert.match(reduced, /\.bob-once[^}]*\{ animation: none; \}/);
 });
 
 test("each visit to a not-found page gets one of the three characters, at random", async () => {
