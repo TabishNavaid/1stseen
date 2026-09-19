@@ -60,6 +60,24 @@ captures, because reconstruction re-derives every role from them. On Figma that 
 wire, so about 45 MB per current-jobs run over the whole corpus. Four runs a day would be about 5.5 GB a month, more
 than Supabase Free's 5 GB of egress before anything else is counted, so current jobs run twice a day (about 2.7 GB).
 
+Most companies have nothing new in a given run, so enrichment now skips them exactly
+(`worker/src/firstseen/enrichment_fingerprints.py`, migration `202608140046`). The database fingerprints everything
+enrichment reads for a company; after a complete pass the fingerprint is taken again, and if it did not move, the pass
+changed nothing and its key (with a hash of the worker's code and model configuration) is kept in
+`collection_checkpoints` (pipeline `enrichment_fingerprints`). A later run skips a company whose key still matches:
+enrichment has no dependence on the clock, so the same inputs would give the same no-op. A new or changed posting, a new
+archive capture, a re-resolution, a scope review, a deploy, or a new model key makes the company enrich again, and
+`firstseen enrich --force` enriches every company regardless. If the database lacks the fingerprint function, every
+company is enriched, as before.
+
+Proved on a scratch copy of the rig corpus with every derived row compared, timestamps included: a first pass, then a
+forced second pass that changed nothing for any company (51,676 rows identical), then a third pass that skipped all 58
+companies and left every row as it was, with 70 requests and 0.2 MB against 1,424 requests and 149 MB for the forced
+pass. Getting there took one fix: when every title of a role is out of scope, the classifier reports the first title's
+reason, and titles came in PostgREST's unordered embed order, so a role's stored reason could flip between two passes
+over the same evidence. Titles are now read earliest-seen first; the first run after this rewrites such reasons once
+(1,472 on the scratch copy, no status among them).
+
 Signal collection had the same shape. Every signal that names no single role recomputes each in-scope role of its
 company, and each recomputation re-read the whole evidence set (every role, observation, match, event, and signal,
 about 2 MB on the wire at the bootstrap's size). It now reads roles and openings once per run and only the signals again
