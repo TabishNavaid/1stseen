@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { MissingPage } from "@/components/missing-page";
 import { RoleIntelligencePage } from "@/components/role-intelligence-page";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { fixtureRoleViews } from "@/lib/demo-data";
 import { parsePlanOutcome } from "@/lib/onboarding";
-import { hasServiceRoleConfig, loadRealRoleIdentity, loadRealRoleView } from "@/lib/real-data";
+import { hasServiceRoleConfig, loadMissingRoleCompany, loadRealRoleIdentity, loadRealRoleView } from "@/lib/real-data";
 import type { RoleView } from "@/lib/role-view";
 import { currentSession } from "@/lib/session";
 
@@ -40,13 +40,13 @@ async function resolveIdentity(roleId: string): Promise<{ company: string; role:
 
 /**
  * The title needs only the role's name, so metadata reads one row rather than loading the role view a second time.
- * A role that is not in the product renders the not-found page; the Worker entry (cloudflare/index.ts) answers it with
- * 404, because by the time the page body runs the root loading boundary has already sent the shell.
+ * A role that is not in the product renders "This program is no longer tracked"; the Worker entry answers it with 404
+ * (cloudflare/page-status.ts), because by the time the page body runs the root loading boundary has already sent the shell.
  */
 export async function generateMetadata({ params }: { params: Promise<{ roleId: string }> }): Promise<Metadata> {
   const { roleId } = await params;
   const identity = await resolveIdentity(roleId);
-  if (!identity) return { title: "Role not found" };
+  if (!identity) return { title: "Program no longer tracked" };
   return {
     title: `${identity.company} ${identity.role}`,
     description: `Forecast, evidence precision, provenance, recruiting signals, and readiness timing for ${identity.company} ${identity.role}.`,
@@ -64,7 +64,14 @@ export default async function RolePage({
   const session = await currentSession();
   const query = await searchParams;
   const view = await resolveView(roleId, session?.userId ?? null, provenancePageFrom(query));
-  if (!view) notFound();
+  if (!view) {
+    return (
+      <>
+        <SiteHeader contentId="missing-content" />
+        <MissingPage variant="program" company={await loadMissingRoleCompany(roleId)} />
+      </>
+    );
+  }
   // Where the first run lands: only a signed-in user who follows this role is told their watchlist is set.
   const outcome = parsePlanOutcome(query.welcome);
   const welcome = outcome && outcome !== "none" && view.isFollowed === true ? outcome : null;

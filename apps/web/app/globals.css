@@ -402,6 +402,18 @@
   animation: var(--animate-pop);
 }
 
+/* The not-found page's question mark: a slow, small bob. Under prefers-reduced-motion it does not move at all. */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+@utility bob {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bob 3.6s ease-in-out infinite;
+}
+
 * { box-sizing: border-box; }
 html { background: var(--color-canvas); scroll-behavior: smooth; }
 body {
@@ -424,4 +436,5 @@ button { cursor: pointer; }
   /* No movement at all: a lifted card stays put, and celebration confetti is not drawn. */
   .lift:hover { transform: none; }
   .confetti { display: none; }
+  .bob { animation: none; }
 }

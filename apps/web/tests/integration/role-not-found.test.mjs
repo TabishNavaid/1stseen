@@ -1,9 +1,10 @@
 /**
  * Integration test: a role page answers 404 for any id that is not a role in the product, with real data configured.
  *
- * The page renders "Role not found", but the root loading boundary sends the shell with 200 before the page body runs,
- * so every missing role used to answer 200. The Worker entry now checks the id beside the render
- * (cloudflare/index.ts, roleIsListed). Needs the local rig and `npm run build`.
+ * The page renders "This program is no longer tracked", but the root loading boundary sends the shell with 200 before
+ * the page body runs, so every missing role used to answer 200. The Worker entry now checks the id beside the render
+ * (cloudflare/index.ts, roleIsListed) and reads the page's own status (cloudflare/page-status.ts). Needs the local rig
+ * and `npm run build`.
  */
 
 import assert from "node:assert/strict";
@@ -29,7 +30,10 @@ test("a role page is 404 for an unknown, malformed, fixture, or out-of-scope id,
   try {
     const { rows: [ids] } = await sql.query(
       `select (select id::text from public.canonical_roles where scope_status = 'in_scope' and active order by id limit 1) as listed,
-              (select id::text from public.canonical_roles where scope_status = 'out_of_scope' order by id limit 1) as outside`,
+              (select id::text from public.canonical_roles where scope_status = 'out_of_scope' order by id limit 1) as outside,
+              (select r.id::text from public.canonical_roles r where r.scope_status = 'out_of_scope' and exists (
+                 select 1 from public.canonical_roles o where o.company_id = r.company_id and o.scope_status = 'in_scope' and o.active)
+               order by r.id limit 1) as sibling`,
     );
     for (const [path, status] of [
       [`/roles/${ids.listed}`, 200],
@@ -41,25 +45,36 @@ test("a role page is 404 for an unknown, malformed, fixture, or out-of-scope id,
       const response = await render(path);
       assert.equal(response.status, status, path);
       const html = await response.text();
-      // A malformed id never reaches the database, so the framework's own not-found page answers it.
-      if (status === 404) assert.match(html, /<title>Role not found · 1stSeen<\/title>|This page could not be found/, path);
+      assert.equal(response.headers.get("cache-control") === "no-store", status === 404, path);
+      if (status === 404) {
+        assert.match(html, /<title>Program no longer tracked · 1stSeen<\/title>/, path);
+        assert.match(html, /This program is no longer tracked\./, path);
+      }
     }
+    // A program the product no longer lists links to its company's other programs, and names nothing else about it.
+    const { rows: [company] } = await sql.query(`select c.id::text, c.name, r.canonical_title from public.canonical_roles r join public.companies c on c.id = r.company_id where r.id = $1`, [ids.sibling]);
+    const sibling = await render(`/roles/${ids.sibling}`);
+    assert.equal(sibling.status, 404);
+    const siblingHtml = (await sibling.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
+    assert.match(siblingHtml, new RegExp(`href="/roles\\?company=${company.id}"`));
+    assert.match(siblingHtml, /See the other programs at/);
+    assert.ok(!siblingHtml.includes(company.canonical_title), "the program itself is not named");
   } finally {
     await sql.end();
   }
 });
 
-test("with the database unreachable, a role page says the data could not be loaded, not that the role does not exist", async () => {
+test("with the database unreachable, a role page answers 500, not that the role does not exist", async () => {
   const saved = process.env.SUPABASE_URL;
   process.env.SUPABASE_URL = "http://127.0.0.1:9";
   try {
     const response = await render("/roles/1f8c981b-96a3-578a-b901-3a1272c45743");
-    assert.notEqual(response.status, 404);
-    // What a reader sees: the document without its inline RSC payload, which carries every boundary's template. The
-    // error view itself ("Intelligence view unavailable ... could not be loaded") is rendered by the error boundary in
-    // the browser; on the server it must at least not say the role does not exist, as it did before.
+    assert.equal(response.status, 500);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    // What a reader sees: the document without its inline RSC payload. The error view ("Something broke on our side")
+    // is drawn by the error boundary in the browser; on the server the page must not say the program is gone.
     const html = (await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
-    assert.doesNotMatch(html, /Role not found|This page could not be found/);
+    assert.doesNotMatch(html, /no longer tracked|This page could not be found/);
   } finally {
     process.env.SUPABASE_URL = saved;
   }

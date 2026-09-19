@@ -94,7 +94,11 @@ them from the Cloudflare Cache API (`apps/web/cloudflare/guest-cache.ts`).
 - **What is cached:** a whole-document GET with no Supabase session cookie, to `/`, `/roles`, `/opened` (with its
   page and company), `/methodology`, or `/roles/<uuid>`. A signed-in
   request, an RSC navigation, and every other method or path always render. Only a 200 HTML response without Set-Cookie
-  is stored.
+  is stored: a 404 or a 500 never is, and both are sent `no-store`.
+- **Real statuses:** the root loading boundary sends a page's shell with 200 before the page runs, so the Worker entry
+  reads each HTML document to the end and sets the status the page states (`cloudflare/page-status.ts`): 404 when it
+  rendered a not-found page (`data-page-status="404"`), 500 when a part of it failed on the server (React's error
+  digest). A client navigation's payload streams through untouched.
 - **The key:** the canonical path, the public data version, and the Worker version (the `CF_VERSION_METADATA`
   binding), so a deploy or a rollback never serves a page rendered by another build, whose stylesheet and scripts that
   build no longer serves. The dashboard's query is canonicalised (unknown

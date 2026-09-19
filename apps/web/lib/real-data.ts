@@ -573,6 +573,30 @@ export async function loadRealRoleIdentity(roleId: string): Promise<{ company: s
 }
 
 /**
+ * The company behind a role the product does not list (retired, out of scope, or unknown), for the "no longer tracked"
+ * page's link to that company's other programs. Only the company is returned, never the role, and only when the company
+ * still has a program in the product; otherwise there is nowhere useful to send the visitor. Any failure reads as
+ * "unknown": the page still says the program is not tracked.
+ */
+export async function loadMissingRoleCompany(roleId: string): Promise<{ id: string; name: string } | null> {
+  if (!hasServiceRoleConfig() || !ROLE_ID.test(roleId)) return null;
+  try {
+    const reader = createPublicReader();
+    // bounded: one row, the role by its primary key, whatever its scope.
+    const role = await reader.from("canonical_roles", "id,company_id,companies(id,name)").eq("id", roleId).maybeSingle();
+    if (role.error || !role.data) return null;
+    const company = embeddedOne(role.data.companies as { id: string; name: string } | { id: string; name: string }[] | null);
+    if (!company) return null;
+    // bounded: a count, no rows.
+    const listed = await reader.count("canonical_roles", "id").eq("company_id", company.id).eq("scope_status", "in_scope").eq("active", true);
+    if (listed.error || !listed.count) return null;
+    return { id: company.id, name: displayCompany(company.name) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The complete real detail record for one canonical role.
  *
  * Returns `null` only when the role id does not exist in this deployment. A role

@@ -133,6 +133,8 @@ Every product surface now uses tokens only: no `[#hex]` class or inline hex colo
 | Focused shell | `focused-shell.tsx` | Single-purpose pages: settings, sign-in, confirmation, password reset |
 | Document page | `document-page.tsx` | Pages that are read rather than used: methodology and accuracy, terms, privacy, data sources, contact |
 | Site footer | `site-footer.tsx` | Every page, from the root layout: the one product-wide disclosure and the links in `lib/site-links.ts` |
+| Not found | `missing-page.tsx` | `app/not-found.tsx` ("This page hasn't opened yet.") and a program the product no longer lists ("This program is no longer tracked.", with a link to the company's other programs when it has any): a search into Explore, and Explore roles, Just opened, and Home. Its calendar's question mark bobs, and stops under reduced motion |
+| Something broke | `broken-page.tsx` | `app/error.tsx` and `app/global-error.tsx`: "Something broke on our side. Try again in a minute.", a retry, and two ways out. It shows no message, digest, or trace |
 
 Every frame starts with a "Skip to content" link to its `main`.
 

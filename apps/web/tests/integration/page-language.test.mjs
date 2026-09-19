@@ -45,7 +45,7 @@ test("real pages read as product copy", async () => {
     const paths = [
       "/", "/roles", "/roles?page=2", "/roles?sort=window", "/opened", "/opened?page=2", "/ask", "/welcome",
       "/welcome?step=ready&for=internship&field=software_engineering&field=data&field=other_engineering",
-      "/methodology", "/signin", "/replay",
+      "/methodology", "/signin", "/replay", "/this-page-does-not-exist", "/roles/00000000-0000-4000-8000-000000000000",
       ...roleIds.map((id) => `/roles/${id}`),
     ];
     const failures = [];

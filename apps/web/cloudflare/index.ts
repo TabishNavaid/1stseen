@@ -13,6 +13,7 @@ import {
 import { frontDoorRedirect } from "./front-door";
 import { durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
 import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache";
+import { withPageStatus } from "./page-status";
 import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers";
 
 // Durable Object classes must be exported from the Worker's main module.
@@ -152,14 +153,18 @@ const worker = {
       headers.set(GUEST_AGENT_HEADER, "allowed");
     }
     const renderPage = () => handler.fetch(new Request(request, { headers }), env, ctx);
+    // A document takes the status its page states: 404 for a not-found page, 500 for a failure (page-status.ts).
+    const renderDocument = request.method === "GET" ? async () => withPageStatus(await renderPage()) : renderPage;
     const role = request.method === "GET" ? ROLE_PAGE.exec(url.pathname) : null;
     const render = role
       ? async () => {
-          const [response, listed] = await Promise.all([renderPage(), roleIsListed(env, decodeURIComponent(role[1]))]);
+          const [response, listed] = await Promise.all([renderDocument(), roleIsListed(env, decodeURIComponent(role[1]))]);
           if (listed !== false || response.status !== 200) return response;
-          return new Response(response.body, { status: 404, statusText: "Not Found", headers: response.headers });
+          const notFound = new Headers(response.headers);
+          notFound.set("cache-control", "no-store");
+          return new Response(response.body, { status: 404, statusText: "Not Found", headers: notFound });
         }
-      : renderPage;
+      : renderDocument;
 
     // The Cache API exists only in workerd; the Node test harness always renders.
     const cache = (globalThis as { caches?: { default?: GuestCache } }).caches?.default;
