@@ -29,6 +29,7 @@ export const GUEST_PAGE_TTL_SECONDS = 300;
 export const VERSION_MEMO_MS = 10_000;
 
 const ROLE_PAGE = /^\/roles\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type GuestCache = {
   match(request: Request): Promise<Response | undefined>;
@@ -73,16 +74,27 @@ export function guestCachePath(request: Request): string | null {
   }
   // The methodology page reads the latest backtest and forecast counts, both of which advance the public data version.
   if (url.pathname === "/methodology") return url.pathname;
-  // Just opened reads opening events, which advance the version; its only parameter is the page.
+  // Just opened reads opening events, which advance the version; its parameters are one company and the page.
   if (url.pathname === "/opened") {
     const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
-    return Number.isFinite(page) && page > 1 ? `/opened?page=${Math.min(page, 1000)}` : "/opened";
+    const company = url.searchParams.get("company") ?? "";
+    const query = new URLSearchParams();
+    if (UUID.test(company)) query.set("company", company);
+    if (Number.isFinite(page) && page > 1) query.set("page", String(Math.min(page, 1000)));
+    const search = query.toString();
+    return search ? `/opened?${search}` : "/opened";
   }
   return ROLE_PAGE.test(url.pathname) ? url.pathname : null;
 }
 
-export function guestCacheKey(origin: string, path: string, version: number): Request {
-  return new Request(new URL(`/__guest-cache/v${version}${path}`, origin).toString(), { method: "GET" });
+/**
+ * The key a guest page is stored under: its canonical path, the public data version, and the Worker version that
+ * rendered it. A deploy or a rollback therefore never serves a page rendered by another build, whose stylesheet and
+ * script files that build no longer serves.
+ */
+export function guestCacheKey(origin: string, path: string, version: number, build = ""): Request {
+  const scope = build ? `b${encodeURIComponent(build)}/` : "";
+  return new Request(new URL(`/__guest-cache/${scope}v${version}${path}`, origin).toString(), { method: "GET" });
 }
 
 /** A version reader that asks at most once per `memoMs` per isolate. A failed read is not remembered. */
@@ -109,6 +121,7 @@ export async function serveGuestPage({
   request,
   path,
   version,
+  build = "",
   nonce,
   cache,
   render,
@@ -117,13 +130,15 @@ export async function serveGuestPage({
   request: Request;
   path: string;
   version: number;
+  /** The Worker version rendering this request (the version_metadata binding), so builds never share a stored page. */
+  build?: string;
   /** The nonce in this request's Content-Security-Policy, which the response must carry. */
   nonce: string;
   cache: GuestCache;
   render: () => Promise<Response>;
   waitUntil: (promise: Promise<unknown>) => void;
 }): Promise<Response> {
-  const key = guestCacheKey(new URL(request.url).origin, path, version);
+  const key = guestCacheKey(new URL(request.url).origin, path, version, build);
   const hit = await cache.match(key);
   const storedNonce = hit?.headers.get(STORED_NONCE_HEADER);
   if (hit && storedNonce) {

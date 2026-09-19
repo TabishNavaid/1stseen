@@ -47,5 +47,5 @@ const WORD_MEANING: Record<ConfidenceWord, string> = {
 /** What the word means, for its tooltip: the band, then the score in its own words, never as a percentage. */
 export function confidenceExplanation(value: number): string {
   const word = confidenceWord(value);
-  return `${word} confidence. ${WORD_MEANING[word]} It is a ${confidencePhrase(value)}, which measures the evidence, not the chance the window is right.`;
+  return `${word} confidence. ${WORD_MEANING[word]} Confidence grows as we see a program open more years in a row. It is a ${confidencePhrase(value)}, which measures the evidence, not the chance the window is right.`;
 }

@@ -61,7 +61,24 @@ test("every number the product displays matches a direct query", async () => {
     if (dash.includes("Likely in 30 days")) check("/roles tiles", "of N forecasts", num(dash, /Likely in 30 days [\d,]+ of ([\d,]+) forecast/), withForecast.n);
     check("/roles tiles", "programs opened, last 45 days", tile(/Just opened ([\d,]+) programs? opened in the last 45 days/, "programs opened in the last 45 days"), opened.n);
     const justOpened = await page("/opened");
-    check("/opened", "programs opened in the last 45 days", num(justOpened, /([\d,]+) programs? opened in the last 45 days, newest first/), opened.n);
+    check("/opened", "programs opened in the last 45 days", num(justOpened, /([\d,]+) programs? opened in the last 45 days\. Newest first/), opened.n);
+    // The feed, page by page: no company takes more than two of any six consecutive items, and the openings it lists
+    // plus the "N more from" links account for every opening.
+    const feedCompanies = [];
+    let overflow = 0;
+    for (let n = 1; n <= 40; n += 1) {
+      const raw = await rawPage(`/opened${n > 1 ? `?page=${n}` : ""}`);
+      const rows = [...raw.matchAll(/<li[^>]*class="card flex[^"]*"[^>]*>[\s\S]*?<p class="text-xs font-semibold text-ink-muted">([^<]*)<\/p>/g)].map((match) => match[1]);
+      feedCompanies.push(...rows);
+      for (const match of raw.matchAll(/<span>([\d,]+)(?:<!-- -->)? more from(?:<!-- -->)? /g)) overflow += Number(match[1].replace(/,/g, ""));
+      if (!raw.includes(">Older<")) break;
+    }
+    const crowded = feedCompanies.some((_, start) => {
+      const window = feedCompanies.slice(start, start + 6);
+      return window.some((name) => window.filter((other) => other === name).length > 2);
+    });
+    check("/opened feed", "windows of six with one company three times or more", crowded ? 1 : 0, 0);
+    check("/opened feed", "listed plus linked", feedCompanies.length + overflow, opened.n);
     check("/roles list", "all in-scope roles", num(dash, /All ([\d,]+) in-scope roles:/), roles.n);
     check("/roles list", "with a forecast", num(dash, /in-scope roles: ([\d,]+) with a forecast/), withForecast.n);
     check("/roles list", "without a forecast", num(dash, /listed first, and ([\d,]+) without/), roles.n - withForecast.n);

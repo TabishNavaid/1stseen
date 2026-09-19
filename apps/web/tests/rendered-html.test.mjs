@@ -40,7 +40,7 @@ test("renders canonical role intelligence with explicit uncertainty semantics", 
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Northstar Software Engineering Intern · 1stSeen/);
-  assert.match(html, /Exactly what contributed to this forecast/);
+  assert.match(html, /Sources and weights/);
   // The provenance section states its total over every linked contribution, not over the page on
   // screen, so a truncated list can never read as the whole of it.
   assert.match(html, /What the model weighed, over all\s*(?:<[^>]+>\s*)*4\s*(?:<[^>]+>\s*)*contributions/);
@@ -80,6 +80,41 @@ test("role intelligence distinguishes signals, reliability, and model ownership"
   assert.doesNotMatch(html, /confidence[^<]{0,40}\d%|\d(?:\.\d)?%\s*(?:<[^>]+>\s*)*confidence/i);
   // Model fields read as plain labels; the exact field names stay under Model details.
   assert.doesNotMatch(html, /Canonical recurring role|Model-ready cycles|role_history contribution/i);
+});
+
+test("a role page reads top to bottom: the date and Save, History, Prep plan, Ask, then one collapsed expander", async () => {
+  const html = await (await render("/roles/northstar-swe-intern")).text();
+  const text = visible(html);
+  // No tab bar.
+  assert.doesNotMatch(html, /aria-label="Role intelligence sections"/);
+  // The hero holds the likely date, the confidence word, and Save.
+  const hero = html.slice(html.indexOf('aria-labelledby="role-title"'), html.indexOf('id="history"'));
+  assert.match(hero, /Likely around/);
+  assert.match(hero, /confidence/);
+  assert.match(hero, /Save to my watchlist/);
+  // The sections, in order, then everything the model used behind one closed expander.
+  const order = ["When it opened before", "Get ready before it opens", "Check the latest evidence", "How this forecast was made"].map((label) => text.indexOf(label));
+  assert.ok(order.every((index) => index > 0), order.join(","));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.equal((text.match(/How this forecast was made/g) ?? []).length, 1);
+  const expander = /<details[^>]*id="how-made"[^>]*>/.exec(html)?.[0] ?? "";
+  assert.ok(expander, "the expander is a details element");
+  assert.doesNotMatch(expander, /\sopen(?:=|\s|>)/, "collapsed by default");
+  const inside = html.slice(html.indexOf('id="how-made"'));
+  for (const detail of ["Sources and weights", "Model details", "Earlier versions of this forecast", "Forecasted ", "days until it starts", "Exact dates"]) {
+    assert.ok(inside.includes(detail), `${detail} is inside the expander`);
+    assert.ok(!html.slice(0, html.indexOf('id="how-made"')).includes(detail), `${detail} is not outside it`);
+  }
+});
+
+test("a role page draws no empty section and no unstated place", async () => {
+  const html = await (await render("/roles/meridian-apm")).text();
+  const text = visible(html);
+  assert.doesNotMatch(text, /No recruiting news/);
+  assert.doesNotMatch(text, /No past opening of this program has been recorded/);
+  const eyebrow = html.slice(html.indexOf('aria-labelledby="role-title"'), html.indexOf('id="role-title"'));
+  assert.doesNotMatch(eyebrow, /Location not stated/);
+  assert.match(text, /Why there is no date yet/);
 });
 
 test("a role without enough cycles states the gap instead of showing a window", async () => {
@@ -174,7 +209,7 @@ test("Just opened lists programs by the date they were posted, labelled as fixtu
   assert.equal(response.status, 200);
   const html = visible(await response.text());
   assert.match(html, /<title>Just opened · 1stSeen<\/title>|Just opened/);
-  assert.match(html, /programs opened in the last 45 days, newest first/);
+  assert.match(html, /programs opened in the last 45 days\. Newest first, mixed so that no one company fills the list/);
   assert.match(html, /Development fixture/);
   assert.match(html, /Opened/);
   const unconfigured = visible(await (await render("/opened", { demo: false })).text());

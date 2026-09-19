@@ -32,6 +32,7 @@ import {
   type FilterKey,
 } from "@/lib/dashboard-query";
 import { fetchAll, fetchAllIn } from "@/lib/supabase/paging";
+import { interleaveByCompany } from "@/lib/just-opened";
 import type { ForecastRole } from "@firstseen/shared";
 import { factorLabel, factorTone } from "@/lib/presentation";
 import { REPLAY_PAGE_SIZE, type ReplayFilters, type ReplayOutcome } from "@/lib/replay-query";
@@ -410,57 +411,98 @@ function daysAgo(days: number): string {
 export const JUST_OPENED_PAGE_SIZE = 30;
 export const JUST_OPENED_DAYS = 45;
 
+/** The Just opened feed, one page of it, and what the page states about the whole. */
+export type JustOpenedFeed = {
+  openings: RealOpening[];
+  /** Every program that opened in the last 45 days (for one company, when `company` is set). */
+  total: number;
+  /** How many of them the interleaved feed lists; the rest are in `more`. */
+  listed: number;
+  /** Companies with more openings than the feed can place without crowding it, each linked to its own list. */
+  more: Array<{ companyId: string; company: string; count: number }>;
+  company: { id: string; name: string } | null;
+};
+
+type OpeningRow = {
+  id: string;
+  canonical_role_id: string;
+  opened_on: string;
+  raw_job_observations: Record<string, unknown> | Record<string, unknown>[] | null;
+  canonical_roles: (EmbeddedRoleIdentity & { company_id?: string; early_career_type?: string | null; location_scope?: string | null }) | (EmbeddedRoleIdentity & { company_id?: string })[] | null;
+};
+
+// Out-of-scope roles stay as evidence; no product surface lists them, nor a retired or withdrawn one (migration
+// 202608140036). Only exact openings count: the job board's own publication date, so "opened" is never an inference.
+function exactOpeningsSince<Query extends { eq: (column: string, value: unknown) => Query; gte: (column: string, value: string) => Query }>(query: Query, since: string): Query {
+  return query
+    .eq("canonical_roles.scope_status", "in_scope")
+    .eq("canonical_roles.active", true)
+    .eq("date_precision", "exact")
+    .gte("opened_on", since);
+}
+
 /**
- * Programs that opened in the last 45 days, newest first: only exact openings, the job board's own publication dates, so
- * "opened" is never an inference. One page of them with the total over all of them, both read from the same filtered set.
+ * Programs that opened in the last 45 days. The feed is newest first, with no company taking more than two of any six
+ * consecutive items (lib/just-opened.ts); a company whose openings cannot all be placed that way is linked to its own
+ * list, which is plain newest first. `companyId` reads that list.
  */
 export async function loadJustOpened(
   reader: PublicReader = createPublicReader(),
-  { limit = JUST_OPENED_PAGE_SIZE, offset = 0 }: { limit?: number; offset?: number } = {},
-): Promise<{ openings: RealOpening[]; total: number }> {
+  { limit = JUST_OPENED_PAGE_SIZE, offset = 0, companyId = null }: { limit?: number; offset?: number; companyId?: string | null } = {},
+): Promise<JustOpenedFeed> {
   const since = daysAgo(JUST_OPENED_DAYS);
-  // Out-of-scope roles stay as evidence; no product surface lists them, nor a retired or
-  // withdrawn one (migration 202608140036). The list and its total read the same filtered set.
-  const exactOpenings = <Query extends { eq: (column: string, value: unknown) => Query; gte: (column: string, value: string) => Query }>(query: Query) =>
-    query
-      .eq("canonical_roles.scope_status", "in_scope")
-      .eq("canonical_roles.active", true)
-      .eq("date_precision", "exact")
-      .gte("opened_on", since);
-  const [result, counted] = await Promise.all([
-    // bounded: one page of at most `limit` (JUST_OPENED_PAGE_SIZE), beside the total counted below.
-    exactOpenings(reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at,location),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,companies(name))"))
-      .order("opened_on", { ascending: false })
-      .order("id", { ascending: true })
-      .range(offset, offset + limit - 1),
-    exactOpenings(reader.count("historical_opening_events", "id,canonical_roles!inner(scope_status)")),
-  ]);
-  if (result.error || counted.error || counted.count == null) throw new Error("recent_openings_read_failed");
-  const rows = result.data ?? [];
-  const recorded = await loadRecordedTitles(reader, rows.map((row) => String(row.canonical_role_id)));
-  const openings = rows.flatMap((row) => {
-    const role = embeddedOne(row.canonical_roles as EmbeddedRoleIdentity | EmbeddedRoleIdentity[] | null) as (EmbeddedRoleIdentity & { early_career_type?: string | null; location_scope?: string | null }) | null;
+  // The whole 45 days, paged: the feed's order depends on every opening in it, and its total is their count.
+  const rows = await fetchAll(() => {
+    const query = exactOpeningsSince(
+      reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at,location),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,company_id,companies(id,name))"),
+      since,
+    );
+    return (companyId ? query.eq("canonical_roles.company_id", companyId) : query).order("opened_on", { ascending: false });
+  }, "just_opened", "id") as OpeningRow[];
+
+  const companyOf = (row: OpeningRow) => {
+    const role = embeddedOne(row.canonical_roles);
+    const company = role ? embeddedOne(role.companies) : null;
+    return { id: String(role?.company_id ?? ""), name: company?.name ? displayCompany(company.name) : "" };
+  };
+  const { feed, overflow } = companyId
+    ? { feed: rows, overflow: [] }
+    : interleaveByCompany(rows, (row) => companyOf(row).id);
+  const names = new Map(rows.map((row) => [companyOf(row).id, companyOf(row).name]));
+  const page = feed.slice(offset, offset + limit);
+  const recorded = await loadRecordedTitles(reader, page.map((row) => String(row.canonical_role_id)));
+  const openings = page.flatMap((row): RealOpening[] => {
+    const role = embeddedOne(row.canonical_roles) as (EmbeddedRoleIdentity & { early_career_type?: string | null; location_scope?: string | null }) | null;
     const company = role ? embeddedOne(role.companies) : null;
     if (!role || !company) return [];
-    const observation = embeddedOne(row.raw_job_observations as Record<string, unknown> | Record<string, unknown>[] | null);
+    const observation = embeddedOne(row.raw_job_observations);
     return [{
-      id: row.id as string,
-      roleId: row.canonical_role_id as string,
+      id: row.id,
+      roleId: row.canonical_role_id,
       company: displayCompany(company.name),
       role: displayTitle(role.canonical_title, recorded.get(String(row.canonical_role_id))),
       programType: programTypeLabel(role.early_career_type ?? null),
       place: displayPlace(role.location_scope, [observation?.location as string | null | undefined]),
-      openedOn: row.opened_on as string,
+      openedOn: row.opened_on,
       observedAt: (observation?.observed_at as string | null) ?? null,
       applyUrl: (observation?.apply_url as string | null) ?? (observation?.source_url as string | null) ?? null,
     }];
   });
-  return { openings, total: counted.count };
+  const only = companyId && rows.length ? { id: companyId, name: names.get(companyId) ?? "" } : null;
+  return {
+    openings,
+    total: rows.length,
+    listed: feed.length,
+    more: overflow.map(({ company, count }) => ({ companyId: company, company: names.get(company) ?? "", count })).sort((a, b) => b.count - a.count || a.company.localeCompare(b.company)),
+    company: only,
+  };
 }
 
 async function loadRecentOpenings(reader: PublicReader): Promise<{ openings: RealOpening[]; total: number }> {
   // The roles view states only the total; it links to Just opened for the list.
-  return loadJustOpened(reader, { limit: 1 });
+  const counted = await exactOpeningsSince(reader.count("historical_opening_events", "id,canonical_roles!inner(scope_status)"), daysAgo(JUST_OPENED_DAYS));
+  if (counted.error || counted.count == null) throw new Error("recent_openings_read_failed");
+  return { openings: [], total: counted.count };
 }
 
 /** Material forecast revisions, read from the immutable before/after lineage. */

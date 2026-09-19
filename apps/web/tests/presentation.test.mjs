@@ -51,5 +51,6 @@ test("a card shows the score as one word, and its explanation gives the score ou
   assert.match(text, /^Low confidence\./);
   assert.match(text, /confidence score 48 of 100/);
   assert.match(text, /not the chance the window is right/);
+  assert.match(text, /Confidence grows as we see a program open more years in a row\./);
   assert.doesNotMatch(text, /%/);
 });

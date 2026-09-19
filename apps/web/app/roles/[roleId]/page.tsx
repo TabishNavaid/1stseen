@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { FollowButton } from "@/components/follow-button";
 import { RoleIntelligencePage } from "@/components/role-intelligence-page";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -75,7 +74,6 @@ export default async function RolePage({
       <SiteHeader
         contentId="role-content"
         status={fixture ? <Badge className="border-warning-line bg-warning-surface text-warning-ink">Development fixture</Badge> : undefined}
-        actions={<FollowButton roleId={view.id} followed={view.isFollowed} itemId={view.watchlistItemId} disabled={fixture} />}
       />
       <RoleIntelligencePage view={view} welcome={welcome} />
     </>

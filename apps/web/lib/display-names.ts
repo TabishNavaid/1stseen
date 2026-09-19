@@ -103,6 +103,25 @@ function withoutYear(title: string): string {
 export type RecordedTitle = { title: string; lastSeenAt: string };
 
 /**
+ * A title without the internal codes a company puts in front of it: "【MA】", "[EJV]", "[Bosch HcP – Internship]", or a
+ * code in parentheses such as "(PA2)". A leading parenthesis that reads as words ("(Senior) Engineer") stays, and a
+ * title that is nothing but a tag is left as it is. Only what is shown changes; the stored title keeps the tag.
+ */
+export function withoutLeadingTags(title: string): string {
+  let rest = title.trim();
+  for (;;) {
+    const next = rest
+      .replace(/^【[^】]*】\s*/, "")
+      .replace(/^\[[^\]]*\]\s*/, "")
+      .replace(/^\((?=[^)]*[A-Z0-9])[A-Z0-9][A-Z0-9 &/._-]{0,11}\)\s*/, "")
+      .replace(/^[-–—:|]\s*/, "");
+    if (next === rest) break;
+    rest = next;
+  }
+  return rest || title.trim();
+}
+
+/**
  * The title to show for a role: the most recently seen of its recorded titles that folds to the stored title, as the
  * company wrote it; otherwise the stored title, tidied.
  */
@@ -114,7 +133,8 @@ export function displayTitle(stored: string, recorded: readonly RecordedTitle[] 
   const published = source ? withoutYear(source.title) : "";
   // A title published in capitals throughout ("DATA ANALYST INTERN") is tidied like a stored one.
   const shouted = published && !/\p{Ll}/u.test(published) && /\p{Lu}{4}/u.test(published);
-  return (shouted ? tidyTitle(published.toLowerCase()) : published) || withoutYear(tidyTitle(stored)) || tidyTitle(stored);
+  const shown = (shouted ? tidyTitle(published.toLowerCase()) : published) || withoutYear(tidyTitle(stored)) || tidyTitle(stored);
+  return withoutLeadingTags(shown);
 }
 
 const US_STATES = new Set([

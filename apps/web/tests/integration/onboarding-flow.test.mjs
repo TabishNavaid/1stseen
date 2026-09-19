@@ -223,7 +223,7 @@ test("the first run against the local rig", async (t) => {
       assert.ok(html.includes(PLAN_OUTCOME_MESSAGES[result.plan]), "the landing states what happened");
       // The policy version is shown in its own <span>, so the assertion is on the
       // words the reader sees rather than on one uninterrupted string of markup.
-      if (plannerUp) assert.match(html, /Policy\s*(?:<[^>]+>\s*)*readiness-workback-v1/);
+      if (plannerUp) assert.match(html, /Prep plan rules\s*(?:<[^>]+>\s*)*readiness-workback-v1/);
 
       const dashboard = decode(await (await call("/roles", { jar })).text());
       assert.doesNotMatch(dashboard, new RegExp(FIRST_RUN_OFFER), "a finished first run is not offered again");

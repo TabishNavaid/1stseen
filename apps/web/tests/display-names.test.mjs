@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayCompany, displayPlace, displayTitle, foldTitle, tidyTitle } from "../lib/display-names.ts";
+import { displayCompany, displayPlace, displayTitle, foldTitle, tidyTitle, withoutLeadingTags } from "../lib/display-names.ts";
 
 test("company names read as the companies write them", () => {
   assert.equal(displayCompany("Imc"), "IMC");
@@ -95,7 +95,7 @@ test("a title published in capitals throughout is tidied", () => {
   assert.equal(displayTitle("Data Analyst Intern", seen("DATA ANALYST INTERN")), "Data Analyst Intern");
   assert.equal(displayTitle("Web Developer Intern Python Automation", seen("WEB DEVELOPER INTERN (PYTHON & AUTOMATION)")), "Web Developer Intern (Python & Automation)");
   // An acronym-led title in normal case is left as written.
-  assert.equal(displayTitle("Ejv Junior Telematics Software Engineer Embedded Android", seen("[EJV] Junior Telematics Software Engineer — Embedded Android")), "[EJV] Junior Telematics Software Engineer — Embedded Android");
+  assert.equal(displayTitle("Ejv Junior Telematics Software Engineer Embedded Android", seen("[EJV] Junior Telematics Software Engineer — Embedded Android")), "Junior Telematics Software Engineer — Embedded Android");
 });
 
 test("a place is shown as a posting wrote it when that folds to the stored place", () => {
@@ -105,4 +105,19 @@ test("a place is shown as a posting wrote it when that folds to the stored place
   // A posting location that is not the stored place is never used.
   assert.equal(displayPlace("chicago il", ["New York, NY"]), "Chicago, IL");
   assert.equal(displayPlace("unspecified", ["Remote"]), "Location not stated");
+});
+
+test("internal codes in front of a title are not shown", () => {
+  assert.equal(withoutLeadingTags("【MA】Internship Regional Product Manager"), "Internship Regional Product Manager");
+  assert.equal(withoutLeadingTags("[EJV] Junior Telematics Software Engineer"), "Junior Telematics Software Engineer");
+  assert.equal(withoutLeadingTags("[Bosch HcP – Internship] Manufacturing Intern"), "Manufacturing Intern");
+  assert.equal(withoutLeadingTags("[SO] [BD] Software Test Engineer Intern"), "Software Test Engineer Intern");
+  assert.equal(withoutLeadingTags("(PA2) Machine Operator"), "Machine Operator");
+  assert.equal(withoutLeadingTags("[BD] - Software Test Engineer"), "Software Test Engineer");
+  // Words in parentheses, a tag later in the title, and a title that is only a tag are left alone.
+  assert.equal(withoutLeadingTags("(Senior) Software Engineer"), "(Senior) Software Engineer");
+  assert.equal(withoutLeadingTags("Software Engineer [Remote]"), "Software Engineer [Remote]");
+  assert.equal(withoutLeadingTags("[Intern]"), "[Intern]");
+  const seen = (title) => [{ title, lastSeenAt: "2026-09-01T00:00:00Z" }];
+  assert.equal(displayTitle("Ma Intern Regional Product Manager In Aftermarket Asia Pacific South", seen("【MA】Internship Regional Product Manager in Aftermarket Asia Pacific South")), "Internship Regional Product Manager in Aftermarket Asia Pacific South");
 });

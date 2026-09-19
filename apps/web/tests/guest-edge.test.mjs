@@ -153,6 +153,25 @@ test("a hit serves the stored page with the request's own nonce in every place",
   assert.equal(hit.headers.get("cache-control"), "no-store, must-revalidate");
 });
 
+test("a page stored by one Worker version is never served by another", async () => {
+  const cache = memoryCache();
+  const pending = [];
+  let renders = 0;
+  const render = async () => {
+    renders += 1;
+    return new Response(`<link rel="stylesheet" href="/assets/build-${renders}.css">`, { status: 200, headers: { "content-type": "text/html" } });
+  };
+  const serve = (build) => serveGuestPage({ request: page("/"), path: "/", version: 3, build, nonce: "n".repeat(24), cache, render, waitUntil: (p) => pending.push(p) });
+  await serve("version-a");
+  await Promise.all(pending);
+  assert.equal((await serve("version-a")).headers.get(CACHE_STATUS_HEADER), "hit");
+  const deployed = await serve("version-b");
+  assert.equal(deployed.headers.get(CACHE_STATUS_HEADER), "miss", "a deploy renders afresh instead of serving the old build's page");
+  assert.match(await deployed.text(), /build-2\.css/);
+  await Promise.all(pending);
+  assert.equal((await serve("version-a")).headers.get(CACHE_STATUS_HEADER), "hit", "a rollback finds its own build's pages");
+});
+
 test("only a 200 HTML page without a cookie is stored, and a new data version misses", async () => {
   const cache = memoryCache();
   const pending = [];

@@ -125,7 +125,7 @@ async function openingsOf(reader: PublicReader, roleId: string): Promise<Landing
  * resting on two or more of the program's own cycles; when there is none, the role with the most recorded dated
  * openings, shown as its observed history with no window. "Opening soon" is every current forecast, soonest window
  * first, one role per company, up to six; a window that has already ended is not a coming opening and is left out.
- * "Just opened" is the newest exact openings of the last 45 days, the same read as the Just opened page, one per company.
+ * "Just opened" is the start of the Just opened page's feed: newest first, no company taking more than two of any six.
  */
 export async function loadLandingData(now: Date = new Date()): Promise<LandingData | null> {
   if (!hasServiceRoleConfig()) return null;
@@ -140,8 +140,8 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, precision: "exact_or_bounded" }, now, "evidence", 3, 1)),
     // bounded: p_limit 12, from which at most OPENING_SOON_LIMIT current windows are shown.
     reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "window", 1, 12)),
-    // bounded: the newest 60, from which the strip keeps the first opening of each company, up to JUST_OPENED_STRIP.
-    loadJustOpened(reader, { limit: 60 }),
+    // The first JUST_OPENED_STRIP of the Just opened feed, in its order (no company takes more than two of six).
+    loadJustOpened(reader, { limit: JUST_OPENED_STRIP }),
   ]);
   if (featured.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
 
@@ -176,8 +176,5 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
       : [];
   });
 
-  // One program per company, so a company that posts a batch on one day does not fill the strip.
-  const companies = new Set<string>();
-  const strip = justOpened.openings.filter((opening) => (companies.has(opening.company) ? false : (companies.add(opening.company), true))).slice(0, JUST_OPENED_STRIP);
-  return { preview, openingSoon, justOpened: { openings: strip, total: justOpened.total } };
+  return { preview, openingSoon, justOpened: { openings: justOpened.openings, total: justOpened.total } };
 }

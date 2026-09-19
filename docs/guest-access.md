@@ -11,9 +11,12 @@ The navigation (`lib/site-nav.ts`) shows a guest three items: **Explore** (`/rol
 **Ask** (`/ask`), with Sign in and Get started beside them. Watchlist and Calendar appear only after sign-in; nothing is
 shown locked. Forecast Replay is linked from `/methodology` and digests from settings; neither is in the navigation.
 
-- **Just opened** lists every in-scope program with an exact opening date in the last 45 days, newest first, 30 to a
-  page, each linking its role page and the posting. The landing page shows the newest eight as a strip, one per
-  company, and the roles view's tile ("N programs opened in the last 45 days") links to it.
+- **Just opened** lists every in-scope program with an exact opening date in the last 45 days, 30 to a page, each
+  linking its role page and the posting. The feed is newest first, except that no company takes more than two of any
+  six consecutive items (`lib/just-opened.ts`), so one company's batch cannot fill it. When the openings left all
+  belong to one or two companies, no order can keep that rule, so the last page links "N more from <company>" to that
+  company's own list (`/opened?company=<id>`), which is plain newest first. The landing strip is the feed's first
+  eight, and the roles view's tile ("N programs opened in the last 45 days") links to it.
 - **Ask** is the agent's own page: a question box, three suggested questions, and the guest limit said plainly. A role
   page asks the same agent about that program.
 - The roles view never draws a tile whose number is zero (`lib/dashboard-tiles.ts`).
@@ -88,11 +91,13 @@ through two limits, each a sliding 60-second window counted exactly by the `Gues
 Every guest sees the same landing page, roles view, Just opened, methodology, and role pages, so the Worker entry serves
 them from the Cloudflare Cache API (`apps/web/cloudflare/guest-cache.ts`).
 
-- **What is cached:** a whole-document GET with no Supabase session cookie, to `/`, `/roles`, `/opened`,
-  `/methodology`, or `/roles/<uuid>`. A signed-in
+- **What is cached:** a whole-document GET with no Supabase session cookie, to `/`, `/roles`, `/opened` (with its
+  page and company), `/methodology`, or `/roles/<uuid>`. A signed-in
   request, an RSC navigation, and every other method or path always render. Only a 200 HTML response without Set-Cookie
   is stored.
-- **The key:** the canonical path plus the public data version. The dashboard's query is canonicalised (unknown
+- **The key:** the canonical path, the public data version, and the Worker version (the `CF_VERSION_METADATA`
+  binding), so a deploy or a rollback never serves a page rendered by another build, whose stylesheet and scripts that
+  build no longer serves. The dashboard's query is canonicalised (unknown
   parameters dropped, known ones ordered, filter values sorted and de-duplicated, the page kept), so a random query
   string cannot force a render.
 - **Purge:** any statement on a table a guest page reads advances `public_data_version_seq`, so a forecast regeneration

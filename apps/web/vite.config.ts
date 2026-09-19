@@ -7,6 +7,8 @@ const localBindingConfig = {
   // Guest questions to the agent are counted exactly by one Durable Object per key (cloudflare/guest-limiter.ts).
   durable_objects: { bindings: [{ name: "GUEST_QUESTION_LIMITER", class_name: "GuestQuestionLimiter" }] },
   migrations: [{ tag: "v1-guest-question-limiter", new_sqlite_classes: ["GuestQuestionLimiter"] }],
+  // The Worker version's id scopes the guest page cache to one build (cloudflare/guest-cache.ts).
+  version_metadata: { binding: "CF_VERSION_METADATA" },
 };
 
 export default defineConfig(async () => {

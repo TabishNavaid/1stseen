@@ -165,7 +165,10 @@ them.
 - **Replay:** candidates are stacked rows below `md` and a table from `md` up. The page never scrolls sideways.
 - **Calendar:** below `sm`, the month grid shows one marker per entry (its date-kind utility and glyph), and the
   month's entries follow as a day-by-day list.
-- **Role pages:** the section navigation scrolls sideways within itself; the page does not.
+- **Role pages:** one column at every width, in the order a person needs it: the likely date with its window,
+  confidence word, and Save; History (when it opened before, with sources); the prep plan; Ask. Everything the model
+  used (the window chart, sources and weights, earlier versions, model details, evidence-class counts) is in one
+  collapsed "How this forecast was made" (or "Why there is no date yet"). A section with nothing in it is not drawn.
 
 ### Reading a forecast
 

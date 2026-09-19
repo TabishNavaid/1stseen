@@ -5,6 +5,7 @@ import type { DatePrecision, RoleView } from "@/lib/role-view";
 import { AgentInvestigation } from "@/components/agent-investigation";
 import { ConfidenceWord } from "@/components/confidence-word";
 import { EvidenceMark } from "@/components/evidence-mark";
+import { FollowButton } from "@/components/follow-button";
 import { LikelyWindow } from "@/components/likely-window";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { GenerateReadinessButton } from "@/components/generate-readiness-button";
@@ -96,46 +97,29 @@ function WindowVisualization({ view }: { view: RoleView }) {
   );
 }
 
-/** The model refused this role (`lib/forecast-gap`): a plain statement about its history, beside the openings that exist. */
-function InsufficientEvidence({ view }: { view: RoleView }) {
+/** A block inside "How this forecast was made": a small heading, an optional note, and its content. */
+function Detail({ id, title, note, children }: { id?: string; title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section id="forecast" className="panel scroll-mt-32" aria-labelledby="forecast-title">
-      <div className="border-b border-line px-4 py-3 md:px-5">
-        <p className="label-caps flex items-center gap-1.5 text-ink-subtle">
-          <Icon name="circle-dashed" size={12} />No forecast yet
-        </p>
-        <h2 id="forecast-title" className="mt-1 text-base font-semibold">Too little history to forecast this role</h2>
-      </div>
-      <div className="p-4 md:p-5">
-        <p className="text-xs leading-6 text-ink">{view.insufficientEvidence}</p>
-        <p className="mt-3 text-sm text-ink">
-          <span className="font-semibold tabular">{view.cycles.length === 1 ? "One past opening" : `${view.cycles.length.toLocaleString("en-US")} past openings`}</span> on record.{" "}
-          {view.cycles.length > 0 && <a href="#history" className="link-accent focus-ring">See when</a>}
-        </p>
-        <div className="mt-4 border-t border-line pt-4">
-          <h3 className="text-xs font-semibold text-ink">What to do now</h3>
-          <p className="mt-1 text-xs leading-5 text-ink-muted">
-            Save it to your watchlist to keep it on your calendar too; it gets a likely date as soon as the model can compute one. Until
-            then, the roles at {view.company} that have a forecast show when the company tends to open.
-          </p>
-          {view.companyId && (
-            <Link href={`/roles?company=${view.companyId}`} className="link-accent focus-ring mt-2 inline-flex min-h-touch items-center gap-1 text-xs">
-              See every role at {view.company}<Icon name="arrow-right" size={13} />
-            </Link>
-          )}
-        </div>
-      </div>
+    <section id={id} className="scroll-mt-24 border-t border-line px-4 py-5 md:px-6" aria-labelledby={id ? `${id}-title` : undefined} aria-label={id ? undefined : title}>
+      <h3 id={id ? `${id}-title` : undefined} className="text-sm font-semibold text-ink">{title}</h3>
+      {note && <p className="mt-1 text-caption text-ink-subtle">{note}</p>}
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
 
+/**
+ * A role page in the order a person needs it: when it is likely to open and a way to save it, when it opened before
+ * with the sources, how to get ready, and a way to ask. Everything the model used (its window, weights, sources,
+ * versions, and fields) is in one collapsed "How this forecast was made", and a section with nothing in it is not drawn.
+ */
 export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView; welcome?: Exclude<PlanOutcome, "none"> | null }) {
   const fixture = view.origin === "fixture";
   const forecast = view.forecast;
   // What the window mainly rests on, from the forecast's own date weights (lib/forecast-basis).
   const basis = forecast?.basis ?? null;
   const livePosting = view.currentPostings[0] ?? null;
-  // The History footer counts each evidence class the role has; a class with no dates is left out.
+  // The evidence classes the role has dates in; a class with no dates is left out.
   const recordedPrecisions = (["exact", "bounded", "observed_by"] as const).filter((precision) => view.precisionCounts[precision] > 0);
   // The contribution receipts are paged in the URL, the way the dashboard and Replay page:
   // server-rendered, so every row is reachable by a link and none of it needs JavaScript.
@@ -151,18 +135,13 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
     : view.cycles.length
       ? "Not currently observed open"
       : "No opening observed yet";
-  const sections: Array<[string, string]> = [
-    ["#forecast", "Forecast"],
-    ["#history", "History"],
-    ["#evidence", "Sources"],
-    ["#readiness", "Prep plan"],
-    ["#signals", "Signals"],
-    ["#metadata", "Model details"],
-  ];
+  const place = view.place ?? locationLabel(view.locationScope);
+  const eyebrow = [humanize(view.track), view.recruitingSeason === "unknown" ? null : `${humanize(view.recruitingSeason)} season`, place === "Location not stated" ? null : place].filter(Boolean).join(" · ");
+  const signUp = `/signin?mode=sign_up&return_to=${encodeURIComponent(`/roles/${view.id}`)}`;
 
   return (
     <div className="flex-1 bg-canvas text-ink">
-      <main id="role-content" className="mx-auto max-w-[1440px] px-4 py-6 md:px-6 md:py-8">
+      <main id="role-content" className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <nav className="mb-5 flex min-w-0 items-center gap-1 text-caption text-ink-subtle" aria-label="Breadcrumb">
           <Link href="/roles" className="focus-ring inline-flex min-h-touch items-center rounded-sm hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} />
           <span className="truncate">{view.company}</span><Icon name="chevron-right" size={11} /><span className="truncate text-ink-muted" aria-current="page">{view.role}</span>
@@ -180,9 +159,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
 
         <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
-            <p className="label-caps text-ink-subtle">
-              {[humanize(view.track), view.recruitingSeason === "unknown" ? null : `${humanize(view.recruitingSeason)} season`, view.place ?? locationLabel(view.locationScope)].filter(Boolean).join(" · ")}
-            </p>
+            {eyebrow && <p className="label-caps text-ink-subtle">{eyebrow}</p>}
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
             <h1 id="role-title" className="heading-display mt-1 text-3xl leading-tight sm:text-4xl md:text-5xl">{view.role}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4">
@@ -191,114 +168,153 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
               {livePosting?.applyUrl && <a href={livePosting.applyUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-xs">Open current posting<Icon name="arrow-up-right" size={13} /></a>}
             </div>
           </div>
-          <div className="flex flex-wrap items-end gap-5 rounded-card bg-surface-sunken p-4 sm:p-5">
+          <div className="rounded-card bg-surface-sunken p-4 sm:p-5 lg:min-w-[320px]">
             {forecast ? (
-              <>
-                <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
-                <ConfidenceWord value={forecast.confidence} align="end" />
-              </>
+              <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
             ) : (
               <div>
                 <p className="text-caption font-semibold text-ink-subtle">Likely around</p>
                 <p className="heading-display mt-0.5 text-2xl text-ink">No date yet</p>
-                <p className="mt-1 text-caption text-ink-muted">Not enough history to predict the next opening.</p>
+                <p className="mt-1 max-w-xs text-caption text-ink-muted">Not enough history to predict the next opening.</p>
+                {view.companyId && (
+                  <Link href={`/roles?company=${view.companyId}`} className="link-accent focus-ring mt-1 inline-flex min-h-touch items-center gap-1 text-caption">
+                    See every role at {view.company}<Icon name="arrow-right" size={12} />
+                  </Link>
+                )}
               </div>
             )}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {forecast && <ConfidenceWord value={forecast.confidence} align="start" />}
+              <FollowButton roleId={view.id} followed={view.isFollowed} itemId={view.watchlistItemId} disabled={fixture} />
+            </div>
           </div>
         </section>
 
-        <nav className="sticky top-16 z-20 -mx-4 mt-4 flex gap-1 overflow-x-auto bg-canvas/95 px-4 py-1.5 backdrop-blur md:-mx-6 md:px-6" aria-label="Role intelligence sections">
-          {sections.map(([href, label]) => (
-            <a key={href} href={href} className="focus-ring inline-flex min-h-touch shrink-0 items-center rounded-chip px-3 text-caption font-semibold text-ink-muted hover:bg-surface hover:text-accent-ink">{label}</a>
-          ))}
-        </nav>
-
-        <div className="mt-6 grid items-start gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,.65fr)]">
-          <div className="min-w-0 space-y-5">
-            {forecast ? (
-              <section id="forecast" className="panel scroll-mt-32" aria-labelledby="forecast-title">
-                <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line px-4 py-3 md:px-5">
-                  <div>
-                    <p className="label-caps text-accent-ink">Current statistical forecast</p>
-                    <h2 id="forecast-title" className="mt-1 text-base font-semibold">When this role is likely to open</h2>
-                  </div>
-                  <span className="text-micro tabular text-ink-subtle">Forecasted {stamp(forecast.forecastedAt)}</span>
-                </div>
-                <div className="p-4 md:p-5">
-                  <WindowVisualization view={view} />
-                </div>
-                <details className="group border-t border-line px-4 py-3 md:px-5" id="how-made">
-                  <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 rounded-control [&::-webkit-details-marker]:hidden">
-                    <h3 className="text-sm font-semibold text-ink">How this forecast was made</h3>
-                    <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
-                  </summary>
-                  {basis && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className="label-caps text-ink-subtle">What the window rests on</span>
-                      <ForecastBasisChip basis={basis} />
-                      <span className="text-caption text-ink-muted">{BASIS[basis.kind].meaning} <a href="#evidence" className="link-accent focus-ring">See the weights</a></span>
+        <div className="mt-6 space-y-5">
+          {view.cycles.length > 0 && (
+            <Section id="history" eyebrow="History" title="When it opened before">
+              <ol className="divide-y divide-line">
+                {view.cycles.slice(0, 24).map((cycle) => (
+                  <li key={cycle.id} className="flex items-start gap-3 px-4 py-4 md:px-5">
+                    <EvidenceMark precision={cycle.precision} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold tabular text-ink">{historyWords(cycle)}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-ink-muted">
+                        <SourceBadge kind={cycle.sourceKind === "archive" ? "archive" : "official"} />
+                        {cycle.sourceUrl && (
+                          <a href={cycle.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 sm:min-h-0">
+                            Source<Icon name="arrow-up-right" size={11} />
+                          </a>
+                        )}
+                        {cycle.uncertaintyDays ? <span className="tabular text-ink-subtle">give or take {cycle.uncertaintyDays} days</span> : null}
+                      </p>
+                      {cycle.uncertaintyReason && <p className="mt-1 text-micro text-ink-subtle">{cycle.uncertaintyReason}</p>}
                     </div>
-                  )}
-                  <dl className="mt-3 grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line sm:grid-cols-4">
-                    {[
-                      ["Expected date", day(forecast.expectedOpening)],
-                      ["Confidence score", confidenceOutOf(forecast.confidence, 1)],
-                      ["Recruiting cycles used", String(forecast.historyCount)],
-                      ["Similar-program sample", forecast.priorEffectiveSampleSize.toFixed(1)],
-                    ].map(([label, value]) => (
-                      <div key={label} className="border-b border-r border-line p-3">
-                        <dt className="text-micro text-ink-subtle">{label}</dt>
-                        <dd className="mt-1 text-sm font-semibold tabular">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <h4 className="mt-4 label-caps text-ink-subtle">Why this confidence</h4>
-                  <dl className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line lg:grid-cols-3">
-                    {forecast.confidenceFactors.map((factor) => (
-                      <div key={factor.label} className="bg-surface p-3">
-                        <dt className="text-micro text-ink-subtle">{factor.label}</dt>
-                        <dd className={`mt-1 text-xs font-semibold tabular ${factorTone[factor.tone]}`}>{factor.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <p className="mt-3 text-micro text-ink-subtle">
-                    Each factor runs from 0 to 1. Signals against and signal conflict lower the score; every other factor raises it.
-                    Sparse recruiting history is capped: {forecast.historyCount} recruiting cycle{forecast.historyCount === 1 ? "" : "s"} behind this window.
-                    The score measures how much consistent evidence backs the window, not the chance that it is right.
-                  </p>
-                </details>
-              </section>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+          )}
+
+          <Section id="readiness" eyebrow="Prep plan" title="Get ready before it opens">
+            {view.milestones.length > 0 ? (
+              <ol className="divide-y divide-line">
+                {view.milestones.map((milestone) => (
+                  <li key={`${milestone.kind}-${milestone.dueOn}`} className="px-4 py-3 md:px-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-xs font-semibold text-ink">{milestoneLabels[milestone.kind] ?? humanize(milestone.kind)}</p>
+                      <time dateTime={milestone.dueOn} className="shrink-0 text-caption font-medium tabular text-ink-muted">{day(milestone.dueOn)}</time>
+                    </div>
+                    <p className="mt-1 text-micro text-ink-subtle">{milestone.rationale}</p>
+                    {milestone.dueOn !== milestone.idealDueOn && (
+                      <p className="mt-1 text-micro text-warning-ink">Compressed: the ideal date {day(milestone.idealDueOn)} has already passed.</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
             ) : (
-              <InsufficientEvidence view={view} />
+              <p className="px-4 py-4 text-caption leading-5 text-ink-muted md:px-5">
+                {view.isFollowed === null
+                  ? <>{forecast
+                      ? "Save this program to your watchlist and 1stSeen works back from its likely date: when to start networking, and when your résumé should be ready."
+                      : "Save this program to your watchlist, and once it has a likely date 1stSeen works back from it: when to start networking, and when your résumé should be ready."}
+                    {" "}Saving needs a free account. <Link href={signUp} className="link-accent focus-ring">Create an account</Link></>
+                  : view.isFollowed
+                    ? forecast
+                      ? "It is on your watchlist. Build the prep plan to work back from its window; the dates then appear here and on your calendar."
+                      : "It is on your watchlist. A prep plan works back from a likely date, and this program does not have one yet."
+                    : "Save it to your watchlist to get a prep plan worked back from its likely date."}
+              </p>
+            )}
+            {view.isFollowed === true && forecast && !fixture && <div className="px-4 pb-4 md:px-5"><GenerateReadinessButton roleId={view.id} /></div>}
+          </Section>
+
+          <AgentInvestigation company={view.company} role={view.role} roleId={view.origin === "real" ? view.id : undefined} />
+
+          <details id="how-made" className="panel group scroll-mt-24" open={view.provenancePage > 1}>
+            <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-3 rounded-panel px-4 py-4 md:px-6 [&::-webkit-details-marker]:hidden">
+              <span>
+                <span className="block text-base font-semibold text-ink">{forecast ? "How this forecast was made" : "Why there is no date yet"}</span>
+                <span className="mt-0.5 block text-caption text-ink-subtle">
+                  {forecast
+                    ? "The window, the sources and their weights, earlier versions, and the model\u2019s details."
+                    : "What the model needs before it can date this program, and the model\u2019s details."}
+                </span>
+              </span>
+              <Icon name="chevron-down" size={16} className="shrink-0 text-ink-subtle transition-transform group-open:rotate-180" />
+            </summary>
+
+            {forecast ? (
+              <Detail id="forecast" title="The likely window" note={`Forecasted ${stamp(forecast.forecastedAt)}.`}>
+                <WindowVisualization view={view} />
+                {basis && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="label-caps text-ink-subtle">What the window rests on</span>
+                    <ForecastBasisChip basis={basis} />
+                    <span className="text-caption text-ink-muted">{BASIS[basis.kind].meaning}</span>
+                  </div>
+                )}
+                <dl className="mt-4 grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line sm:grid-cols-4">
+                  {[
+                    ["Expected date", day(forecast.expectedOpening)],
+                    ["Confidence score", confidenceOutOf(forecast.confidence, 1)],
+                    ["Recruiting cycles used", String(forecast.historyCount)],
+                    ["Similar-program sample", forecast.priorEffectiveSampleSize.toFixed(1)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="border-b border-r border-line p-3">
+                      <dt className="text-micro text-ink-subtle">{label}</dt>
+                      <dd className="mt-1 text-sm font-semibold tabular">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <h4 className="mt-4 label-caps text-ink-subtle">Why this confidence</h4>
+                <dl className="mt-2 grid grid-cols-2 gap-px overflow-hidden rounded-control border border-line bg-line lg:grid-cols-3">
+                  {forecast.confidenceFactors.map((factor) => (
+                    <div key={factor.label} className="bg-surface p-3">
+                      <dt className="text-micro text-ink-subtle">{factor.label}</dt>
+                      <dd className={`mt-1 text-xs font-semibold tabular ${factorTone[factor.tone]}`}>{factor.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-3 text-micro text-ink-subtle">
+                  Each factor runs from 0 to 1. Signals against and signal conflict lower the score; every other factor raises it.
+                  Sparse recruiting history is capped: {forecast.historyCount} recruiting cycle{forecast.historyCount === 1 ? "" : "s"} behind this window.
+                  The score measures how much consistent evidence backs the window, not the chance that it is right.
+                </p>
+              </Detail>
+            ) : (
+              <Detail id="forecast" title="Too little history to forecast this role">
+                <p className="text-xs leading-6 text-ink">{view.insufficientEvidence}</p>
+                <p className="mt-2 text-xs text-ink-muted">
+                  {view.cycles.length === 1 ? "One past opening" : `${view.cycles.length.toLocaleString("en-US")} past openings`} on record.
+                  It gets a likely date as soon as the model can compute one.
+                </p>
+              </Detail>
             )}
 
-            <Section id="history" eyebrow="History" title="When it opened before">
-              {view.cycles.length === 0 ? (
-                <p className="p-5 text-xs text-ink-muted">No past opening of this program has been recorded yet.</p>
-              ) : (
-                <ol className="divide-y divide-line">
-                  {view.cycles.slice(0, 24).map((cycle) => (
-                    <li key={cycle.id} className="flex items-start gap-3 px-4 py-4 md:px-5">
-                      <EvidenceMark precision={cycle.precision} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold tabular text-ink">{historyWords(cycle)}</p>
-                        <p className="mt-1 flex flex-wrap items-center gap-2 text-caption text-ink-muted">
-                          <SourceBadge kind={cycle.sourceKind === "archive" ? "archive" : "official"} />
-                          {cycle.sourceUrl && (
-                            <a href={cycle.sourceUrl} target="_blank" rel="noreferrer" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 sm:min-h-0">
-                              Source<Icon name="arrow-up-right" size={11} />
-                            </a>
-                          )}
-                          {cycle.uncertaintyDays ? <span className="tabular text-ink-subtle">give or take {cycle.uncertaintyDays} days</span> : null}
-                        </p>
-                        {cycle.uncertaintyReason && <p className="mt-1 text-micro text-ink-subtle">{cycle.uncertaintyReason}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              )}
-              {recordedPrecisions.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line bg-surface-sunken px-4 py-3 text-caption text-ink-muted md:px-5">
+            {recordedPrecisions.length > 0 && (
+              <Detail title="Past openings by how their date is known">
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption text-ink-muted">
                   {recordedPrecisions.map((precision) => (
                     <span key={precision} className="inline-flex items-center gap-2">
                       <EvidenceMark precision={precision} />
@@ -306,63 +322,47 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     </span>
                   ))}
                 </div>
-              )}
-            </Section>
+              </Detail>
+            )}
 
-            <section id="evidence" className="scroll-mt-32 overflow-clip rounded-panel border border-source-official-line bg-surface shadow-raised" aria-labelledby="evidence-title">
-              <div className="border-b border-line bg-source-official-surface px-4 py-4 md:px-5">
-                <p className="label-caps flex items-center gap-1.5 text-source-official-ink"><Icon name="shield-check" size={12} />Sources</p>
-                <h2 id="evidence-title" className="mt-1 text-lg font-semibold tracking-title">Exactly what contributed to this forecast</h2>
-                <p className="mt-1 text-caption text-ink-muted">Every row is a record the model read, with the page it came from and how much it counted.</p>
-              </div>
-              {view.provenanceTotal === 0 ? (
-                <p className="p-5 text-xs text-ink-muted">
-                  {forecast
-                    ? "This stored forecast has no linked evidence rows in this deployment."
-                    : "Provenance appears once a forecast exists; contributions are recorded per stored forecast version."}
-                </p>
-              ) : (
-                <details className="group" open={view.provenancePage > 1}>
-                <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold text-accent-ink hover:bg-surface-hover md:px-5 [&::-webkit-details-marker]:hidden">
-                  <span>Show all {view.provenanceTotal.toLocaleString("en-US")} {view.provenanceTotal === 1 ? "contribution" : "contributions"} and their weights</span>
-                  <Icon name="chevron-down" size={15} className="transition-transform group-open:rotate-180" />
-                </summary>
+            {view.provenanceTotal > 0 && (
+              <Detail id="evidence" title="Sources and weights" note="Every row is a record the model read, with the page it came from and how much it counted.">
                 <table className="w-full border-y border-line text-caption">
-                  <caption className="px-4 py-3 text-left text-micro text-ink-subtle md:px-5">
+                  <caption className="py-2 text-left text-micro text-ink-subtle">
                     What the model weighed, over all {view.provenanceTotal.toLocaleString("en-US")} contributions.
                   </caption>
                   <thead>
                     <tr className="border-y border-line bg-surface-sunken text-left">
-                      <th scope="col" className="label-caps px-4 py-2 font-medium text-ink-subtle md:px-5">Contribution</th>
+                      <th scope="col" className="label-caps px-3 py-2 font-medium text-ink-subtle">Contribution</th>
                       <th scope="col" className="label-caps px-2 py-2 text-right font-medium text-ink-subtle">Observations</th>
-                      <th scope="col" className="label-caps px-4 py-2 text-right font-medium text-ink-subtle md:px-5">Weight</th>
+                      <th scope="col" className="label-caps px-3 py-2 text-right font-medium text-ink-subtle">Weight</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-line">
                     {view.provenanceGroups.map((group) => (
                       <tr key={group.contribution}>
-                        <th scope="row" className="px-4 py-2.5 text-left font-semibold md:px-5">
+                        <th scope="row" className="px-3 py-2.5 text-left font-semibold">
                           {contributionLabel(group.contribution)}
                           <span className="mt-0.5 block text-micro font-normal text-ink-subtle">{group.rationale}</span>
                         </th>
                         <td className="px-2 py-2.5 text-right tabular align-top">{group.rows.toLocaleString("en-US")}</td>
-                        <td className="px-4 py-2.5 text-right font-semibold tabular align-top md:px-5">{(group.weight * 100).toFixed(1)}%</td>
+                        <td className="px-3 py-2.5 text-right font-semibold tabular align-top">{(group.weight * 100).toFixed(1)}%</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <p className="px-4 pt-4 text-micro text-ink-subtle md:px-5">
+                <p className="pt-4 text-micro text-ink-subtle">
                   {view.provenanceTotal <= PROVENANCE_PAGE_SIZE
                     ? `Every contribution, with the record it was read from.`
                     : `Contributions ${provenanceFirst.toLocaleString("en-US")} to ${provenanceLast.toLocaleString("en-US")} of ${view.provenanceTotal.toLocaleString("en-US")}, heaviest first, each with the record it was read from.`}
                 </p>
                 <ol className="divide-y divide-line" start={provenanceFirst}>
                   {view.provenance.map((item, index) => (
-                    <li key={`${item.observationId}-${item.contribution}`} className="grid gap-3 px-4 py-4 md:grid-cols-[28px_minmax(0,1fr)_150px] md:px-5">
+                    <li key={`${item.observationId}-${item.contribution}`} className="grid gap-3 py-4 md:grid-cols-[28px_minmax(0,1fr)_150px]">
                       <span className="grid h-6 w-6 place-items-center rounded-full border border-line-strong text-micro font-semibold tabular text-ink-muted" aria-hidden="true">{provenanceFirst + index}</span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-xs font-semibold">{contributionLabel(item.contribution)}</h3>
+                          <h4 className="text-xs font-semibold">{contributionLabel(item.contribution)}</h4>
                           <SourceBadge kind={item.signalKind ? "signal" : item.extractionMethod === "archive" ? "archive" : "official"} />
                         </div>
                         {ownRationale.has(item.contribution) && <p className="mt-1 text-caption text-ink-muted">{item.rationale}</p>}
@@ -380,7 +380,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   ))}
                 </ol>
                 {provenancePages > 1 && (
-                  <nav className="flex items-center justify-between gap-3 border-t border-line px-4 py-3 md:px-5" aria-label="Contribution pages">
+                  <nav className="flex items-center justify-between gap-3 border-t border-line pt-3" aria-label="Contribution pages">
                     {view.provenancePage > 1 ? (
                       <Link href={provenanceHref(view.provenancePage - 1)} className="link-accent focus-ring flex min-h-touch items-center gap-1 text-micro font-semibold sm:min-h-0">
                         <Icon name="arrow-left" size={11} />Previous
@@ -394,21 +394,18 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     ) : <span />}
                   </nav>
                 )}
-                </details>
-              )}
-            </section>
+              </Detail>
+            )}
 
-            <Section id="signals" eyebrow="Supporting evidence" title="Recruiting news" note="News about hiring never moves the date. It can only raise or lower confidence.">
-              {view.signals.length === 0 ? (
-                <p className="p-5 text-xs text-ink-muted">No recruiting news has been recorded for this program.</p>
-              ) : (
+            {view.signals.length > 0 && (
+              <Detail id="signals" title="Recruiting news" note="News about hiring never moves the date. It can only raise or lower confidence.">
                 <ol className="divide-y divide-line">
                   {view.signals.map((signal) => (
-                    <li key={signal.id} className="grid gap-3 px-4 py-4 md:grid-cols-[24px_minmax(0,1fr)_auto] md:px-5">
+                    <li key={signal.id} className="grid gap-3 py-4 md:grid-cols-[24px_minmax(0,1fr)_auto]">
                       <Icon name="radio" size={15} className="mt-0.5 text-source-signal-ink" />
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-xs font-semibold">{humanize(signal.kind)}</h3>
+                          <h4 className="text-xs font-semibold">{humanize(signal.kind)}</h4>
                           <SourceBadge kind={signal.kind === "community_recruiting_discussion" ? "community" : "signal"} />
                         </div>
                         <p className="mt-1 text-caption text-ink-muted">“{signal.evidenceQuote}”</p>
@@ -422,72 +419,45 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     </li>
                   ))}
                 </ol>
-              )}
-              {view.signals.some((signal) => signal.kind === "community_recruiting_discussion") && (
-                <div className="border-t border-line bg-surface-sunken px-4 py-3 text-micro text-ink-subtle md:px-5">
-                  Community evidence is supporting-only and cannot confirm that applications opened.
-                </div>
-              )}
-            </Section>
+                {view.signals.some((signal) => signal.kind === "community_recruiting_discussion") && (
+                  <p className="mt-2 text-micro text-ink-subtle">Community evidence is supporting-only and cannot confirm that applications opened.</p>
+                )}
+              </Detail>
+            )}
 
-            <AgentInvestigation company={view.company} role={view.role} roleId={view.origin === "real" ? view.id : undefined} />
-          </div>
-
-          <aside className="min-w-0 space-y-5 xl:sticky xl:top-[104px]" aria-label="Preparation and model details">
-            <section id="readiness" className="panel scroll-mt-32" aria-labelledby="readiness-title">
-              <div className="border-b border-line px-4 py-3">
-                <p className="label-caps text-ink-subtle">Work-back plan</p>
-                <h2 id="readiness-title" className="mt-1 text-sm font-semibold">Application readiness</h2>
-              </div>
-              {view.milestones.length > 0 ? (
-                <ol className="divide-y divide-line">
-                  {view.milestones.map((milestone) => (
-                    <li key={`${milestone.kind}-${milestone.dueOn}`} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-xs font-semibold text-ink">{milestoneLabels[milestone.kind] ?? humanize(milestone.kind)}</p>
-                        <time dateTime={milestone.dueOn} className="shrink-0 text-caption font-medium tabular text-ink-muted">{day(milestone.dueOn)}</time>
-                      </div>
-                      <p className="mt-1 text-micro text-ink-subtle">{milestone.rationale}</p>
-                      {milestone.dueOn !== milestone.idealDueOn && (
-                        <p className="mt-1 text-micro text-warning-ink">Compressed: the ideal date {day(milestone.idealDueOn)} has already passed.</p>
+            {view.currentPostings.length > 0 && (
+              <Detail title="Postings we see now">
+                <ul className="divide-y divide-line">
+                  {view.currentPostings.map((posting) => (
+                    <li key={`${posting.title}-${posting.sourceUrl}`} className="py-3">
+                      <p className="text-caption font-semibold">{posting.title}</p>
+                      <p className="mt-1 text-micro text-ink-subtle">
+                        {posting.publishedAt ? `Published ${day(posting.publishedAt)}` : "No source-supplied publication date"}
+                        {posting.lastSeenAt ? ` · last seen ${day(posting.lastSeenAt)}` : ""}
+                      </p>
+                      {(posting.applyUrl ?? posting.sourceUrl) && (
+                        <a href={(posting.applyUrl ?? posting.sourceUrl)!} target="_blank" rel="noreferrer" className="link-accent focus-ring mt-1 inline-flex min-h-touch items-center gap-1 text-micro sm:min-h-0">
+                          Open posting<Icon name="arrow-up-right" size={10} />
+                        </a>
                       )}
                     </li>
                   ))}
-                  <li className="px-4 py-2.5 text-micro text-ink-subtle">Policy <span className="font-mono">{view.milestones[0].policyVersion}</span></li>
-                </ol>
-              ) : (
-                <p className="p-4 text-caption text-ink-muted">
-                  {view.isFollowed === null
-                    ? <>A work-back plan is built from this role&apos;s prediction interval for a role you watch, and watching needs an account. <Link href={`/signin?mode=sign_up&return_to=${encodeURIComponent(`/roles/${view.id}`)}`} className="link-accent focus-ring">Create an account</Link></>
-                    : view.isFollowed
-                      ? forecast
-                        ? "You follow this role. Generate the work-back plan to run the versioned readiness policy over this forecast interval; the milestones then appear here and in your recruiting calendar."
-                        : "You follow this role. Preparation dates are worked back from a prediction interval, and this role does not have one yet."
-                      : "Follow this role to generate a deterministic work-back plan from its prediction interval."}
-                </p>
-              )}
-              {view.isFollowed === true && forecast && !fixture && <GenerateReadinessButton roleId={view.id} />}
-            </section>
+                </ul>
+              </Detail>
+            )}
 
-            <details className="panel group">
-              <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 [&::-webkit-details-marker]:hidden">
-                <span><span className="block label-caps text-ink-subtle">Version history</span><span className="mt-1 block text-sm font-semibold">Forecast history</span></span>
-                <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="border-t border-line">
-              {view.forecastRefusal && (
-                <p className="border-b border-line px-4 py-3 text-caption leading-5 text-ink-muted">
-                  The model declined this role on {day(view.forecastRefusal.refusedAt)}, after its evidence changed:
-                  {" "}&ldquo;{view.forecastRefusal.reason}&rdquo; The versions below are history, not a current window.
-                </p>
-              )}
-              {view.forecastVersions.length === 0 ? (
-                <p className="p-4 text-caption text-ink-muted">No stored forecast version exists for this role.</p>
-              ) : (
-                <ol className="divide-y divide-line">
+            {(view.forecastVersions.length > 0 || view.forecastRefusal) && (
+              <Detail title="Earlier versions of this forecast">
+                {view.forecastRefusal && (
+                  <p className="mb-3 text-caption leading-5 text-ink-muted">
+                    The model declined this role on {day(view.forecastRefusal.refusedAt)}, after its evidence changed:
+                    {" "}&ldquo;{view.forecastRefusal.reason}&rdquo; The versions below are history, not a current window.
+                  </p>
+                )}
+                {view.forecastVersions.length > 0 && <ol className="divide-y divide-line rounded-card border border-line">
                   {view.forecastVersions.map((version, index) => (
-                    <li key={version.forecastId} className="px-4 py-3">
-                      <div className="grid grid-cols-[56px_minmax(0,1fr)_auto] gap-2">
+                    <li key={version.forecastId} className="px-3 py-3">
+                      <div className="grid grid-cols-[88px_minmax(0,1fr)_auto] gap-2">
                         <span className="text-micro font-medium tabular text-ink-subtle">{day(version.asOf)}</span>
                         <div>
                           <p className="text-caption font-semibold tabular">{day(version.windowStart)} – {day(version.windowEnd)}</p>
@@ -507,38 +477,12 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                       )}
                     </li>
                   ))}
-                </ol>
-              )}
-              </div>
-            </details>
-
-            {view.currentPostings.length > 0 && (
-              <Section eyebrow="Observed now" title="Current postings">
-                <ul className="divide-y divide-line">
-                  {view.currentPostings.map((posting) => (
-                    <li key={`${posting.title}-${posting.sourceUrl}`} className="px-4 py-3">
-                      <p className="text-caption font-semibold">{posting.title}</p>
-                      <p className="mt-1 text-micro text-ink-subtle">
-                        {posting.publishedAt ? `Published ${day(posting.publishedAt)}` : "No source-supplied publication date"}
-                        {posting.lastSeenAt ? ` · last seen ${day(posting.lastSeenAt)}` : ""}
-                      </p>
-                      {(posting.applyUrl ?? posting.sourceUrl) && (
-                        <a href={(posting.applyUrl ?? posting.sourceUrl)!} target="_blank" rel="noreferrer" className="link-accent focus-ring mt-1 inline-flex min-h-touch items-center gap-1 text-micro sm:min-h-0">
-                          Open posting<Icon name="arrow-up-right" size={10} />
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
+                </ol>}
+              </Detail>
             )}
 
-            <details id="metadata" className="panel group scroll-mt-32 p-4">
-              <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center gap-2 rounded-control [&::-webkit-details-marker]:hidden">
-                <Icon name="database" size={14} className="text-ink-subtle" /><h2 id="metadata-title" className="flex-1 text-sm font-semibold">Model details</h2>
-                <Icon name="chevron-down" size={14} className="text-ink-subtle transition-transform group-open:rotate-180" />
-              </summary>
-              <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-micro">
+            <Detail id="metadata" title="Model details">
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-micro">
                 {[
                   ["Model version", forecast?.modelVersion ?? "None", true],
                   ["Method", forecast?.method ? humanize(forecast.method) : "None", false],
@@ -546,8 +490,9 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "—", false],
                   ["Recruiting cycles", forecast ? String(forecast.historyCount) : "—", false],
                   ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "—", false],
-                  ["Location", view.place ?? locationLabel(view.locationScope), false],
+                  ["Location", place, false],
                   ["Linked observations", String(view.observationCount), false],
+                  ...(view.milestones.length ? [["Prep plan rules", view.milestones[0].policyVersion, true] as const] : []),
                 ].map(([label, value, mono]) => (
                   <div key={String(label)} className="contents">
                     <dt className="text-ink-subtle">{label}</dt>
@@ -555,9 +500,8 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                   </div>
                 ))}
               </dl>
-            </details>
-
-          </aside>
+            </Detail>
+          </details>
         </div>
 
         {fixture && (

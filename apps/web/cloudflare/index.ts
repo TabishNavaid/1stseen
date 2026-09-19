@@ -33,6 +33,8 @@ interface Env extends GuestAgentLimits {
   SUPABASE_SERVICE_ROLE_KEY?: string;
   /** "off" renders every guest page, for measuring the uncached path and as an operational switch. */
   FIRSTSEEN_EDGE_CACHE?: string;
+  /** This Worker version's id, which scopes the guest cache to one build (vite.config.ts). */
+  CF_VERSION_METADATA?: { id?: string };
 }
 
 interface ExecutionContext {
@@ -169,6 +171,7 @@ const worker = {
           request,
           path,
           version,
+          build: env.CF_VERSION_METADATA?.id ?? "",
           nonce,
           cache,
           render,
