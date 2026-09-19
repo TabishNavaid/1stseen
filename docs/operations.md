@@ -76,6 +76,54 @@ reported as such, never silently passed):
 
 The Worker check is also how production CPU is read (below).
 
+## Rolling back the web app
+
+The web app is one Cloudflare Worker, `firstseen-web`. Every deploy is a version, and a rollback puts an earlier version
+back at 100% of traffic in seconds, with no rebuild. Run these from the repository root, logged in to Cloudflare
+(`npx wrangler login`).
+
+List the versions, newest last, with the one serving marked (100%):
+
+```bash
+npx wrangler deployments list --name firstseen-web
+```
+
+Roll back to one of them:
+
+```bash
+npx wrangler rollback <version-id> --name firstseen-web --message "<why>" -y
+```
+
+Roll forward the same way, with the newer version's id. Then confirm the version serving and the app's health:
+
+```bash
+curl -s https://1stseen.win/api/health
+```
+
+Versions worth knowing (19 September 2026):
+
+| Version | Commit | What it is |
+| --- | --- | --- |
+| `88e2eff0-dac1-40b0-ac98-87ce1f883435` | `3053c1c` | Current: the redesign, with the landing page as the link preview image |
+| `c48139f4-b68e-4549-a268-e0b0ceea0381` | `9219cf6` | The redesign, before the link preview image |
+| `2bed8d50-1e99-48c9-8278-79d4cfb7faa6` | | The last version before the redesign (deployed 16:39 UTC): the dashboard at `/` |
+
+To tell them apart on the live site: before the redesign, `/` has no "Know when internships open"; only the current
+version's pages name `og-image.png`:
+
+```bash
+curl -s -H "Accept: text/html" https://1stseen.win/ | grep -c og-image.png
+```
+
+- **What a rollback restores:** the earlier build, including the `NEXT_PUBLIC_*` values baked into it, and its runtime
+  vars. Check `npx wrangler secret list --name firstseen-web` afterwards (deployment.md §7).
+- **What it does not:** the database. None of the versions above differs in schema, so any of them runs on today's
+  database. Before rolling back across a migration, check that the older code still reads the newer schema.
+- **Cached guest pages:** from `c48139f4` on, a guest page stored at the edge is keyed by the Worker version that
+  rendered it (`CF_VERSION_METADATA`, `docs/guest-access.md`), so after a rollback or roll forward no version serves a
+  page whose stylesheet and scripts belong to another. `2bed8d50` predates that key, but the pages it could find are
+  only its own.
+
 ## Backup and restore
 
 Supabase Free keeps no backups. `scripts/backup-corpus.mjs` takes one every Monday from GitHub Actions and proves it

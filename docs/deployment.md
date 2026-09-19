@@ -439,6 +439,9 @@ npx wrangler rollback <version-id> --name firstseen-web
 A rollback restores an earlier build, including the `NEXT_PUBLIC_*` values baked into it. Check
 `npx wrangler secret list --name firstseen-web` afterwards.
 
+The versions worth knowing, and how to tell them apart on the live site, are in `docs/operations.md`, "Rolling back
+the web app".
+
 ---
 
 ## 8. Production configuration inventory
