@@ -338,4 +338,5 @@ export const TOOLING_VARIABLES = {
 export const ACTIONS_ONLY_VARIABLES = {
   COURTESY_HTTP_MIN_HOST_INTERVAL_SECONDS: "exported as HTTP_MIN_HOST_INTERVAL_SECONDS by the historical and signals workflows",
   SUPABASE_DB_CA_CERT_PEM: "Supabase's root certificate itself; the backup workflow writes it to a file and sets SUPABASE_DB_CA_CERT to that path",
+  BACKUP_ENCRYPTION_PASSPHRASE: "secret: encrypts the weekly corpus backup before it is kept (the repository is public); also in the owner's password manager, without which no backup can be restored",
 };

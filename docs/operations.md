@@ -105,7 +105,10 @@ cursor. `worker/tests/test_ops_workflows.py` fails on a table that a migration c
   (`"$user", public`, without `extensions`), so a migration that would fail there fails here too. In the workflow the
   scratch server is a throwaway `pgvector/pgvector:pg17` service container: migration 001 creates `vector`, which
   `postgres:17-alpine` cannot install.
-- The archive and manifest are kept as the run's artifact for 14 days: the last two weekly backups.
+- The archive is encrypted (`gpg --symmetric`, AES-256) with the secret `BACKUP_ENCRYPTION_PASSPHRASE` and the plaintext
+  deleted before anything is kept: the repository is public, and anyone signed in to GitHub can download its run
+  artifacts. The encrypted archive and the readable manifest are kept as the run's artifact for 14 days: the last two
+  weekly backups. The passphrase lives in the owner's password manager too; without it no backup can be restored.
 
 Measured on the rebuilt rig with every branch merged (99,541 rows in 20 tables, migration 202608140043): the dump
 took 8.3 s and hashing 3.2 s; the archive is 51.0 MiB; all 43 migrations built the scratch schema in 0.5 s, `pg_restore`
@@ -117,7 +120,8 @@ failure; the workflow's restore proof runs with hosted's search_path on its own 
 
 1. Create the project and apply `supabase/migrations` up to the manifest's `migration_level`
    (`supabase db push`, or the SQL editor in order).
-2. Download the latest `corpus-backup-*` artifact and check its sha256 against the manifest.
+2. Download the latest `corpus-backup-*` artifact and decrypt it with the passphrase from the password manager
+   (`gpg --decrypt --output corpus.dump corpus.dump.gpg`), then check the archive's sha256 against the manifest.
 3. `pg_restore --data-only --no-owner --no-privileges --single-transaction --exit-on-error --dbname=<new> corpus.dump`,
    with the connection in `PG*` variables rather than on the command line.
 4. `SUPABASE_DB_URL=<new> node scripts/backup-corpus.mjs verify <dir>`: every table must match.

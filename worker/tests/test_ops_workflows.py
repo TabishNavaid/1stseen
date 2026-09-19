@@ -95,9 +95,18 @@ class OpsWorkflowTests(unittest.TestCase):
         source = (WORKFLOWS / "backup-corpus.yml").read_text()
         dump = source.index("node scripts/backup-corpus.mjs dump backup")
         prove = source.index("node scripts/backup-corpus.mjs prove-restore backup")
+        encrypt = source.index("--symmetric --cipher-algo AES256")
         keep = source.index("actions/upload-artifact@v4")
         self.assertLess(dump, prove)
-        self.assertLess(prove, keep)
+        self.assertLess(prove, encrypt)
+        self.assertLess(encrypt, keep)
+        # The repository is public: the artifact holds the encrypted archive and the manifest, never the plaintext dump.
+        artifact = source[keep:]
+        self.assertIn("backup/corpus.dump.gpg", artifact)
+        self.assertIn("backup/manifest.json", artifact)
+        self.assertNotRegex(artifact, r"path: backup/\s*$|backup/corpus\.dump\s*$", "the plaintext archive is never uploaded")
+        self.assertIn("rm backup/corpus.dump", source)
+        self.assertIn("secrets.BACKUP_ENCRYPTION_PASSPHRASE", source)
         # The restore server must be able to install pgvector (migration 202608140001); postgres:17-alpine cannot.
         self.assertIn("image: pgvector/pgvector:pg17", source)
         self.assertNotIn("postgresql://postgres:restore-proof-only@", source.replace(

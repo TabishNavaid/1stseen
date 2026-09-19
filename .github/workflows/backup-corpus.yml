@@ -78,11 +78,28 @@ jobs:
             cat backup/manifest.json >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-      # Two weeks of weekly backups: about 44 MB each today, within a private repository's 500 MB artifact storage.
+      # The repository is public, so anyone signed in to GitHub can download a run's artifacts. The archive is the whole
+      # collected corpus: it is encrypted before it is kept, and the plaintext never reaches the artifact. The manifest
+      # (row counts, content hashes, the plaintext archive's sha256) stays readable so a restore can be checked.
+      - name: Encrypt the archive
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Set the repository secret BACKUP_ENCRYPTION_PASSPHRASE (docs/operations.md, Backup and restore)"
+            exit 1
+          fi
+          printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 --output backup/corpus.dump.gpg backup/corpus.dump
+          rm backup/corpus.dump
+          test -s backup/corpus.dump.gpg && test ! -e backup/corpus.dump
+      # Two weeks of weekly backups, about 51 MB each.
       - uses: actions/upload-artifact@v4
         with:
           name: corpus-backup-${{ github.run_id }}
-          path: backup/
+          path: |
+            backup/manifest.json
+            backup/corpus.dump.gpg
           if-no-files-found: error
           retention-days: 14
       - uses: ./.github/actions/ops-alert
