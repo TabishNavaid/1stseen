@@ -3,7 +3,7 @@ name: Historical recruiting enrichment
 on:
   schedule:
     # Sunday 04:07 UTC, inside the gap between forecast regeneration (02:52) and the
-    # next current-jobs run (06:17) even at the full timeout below.
+    # next career-page-signals run (07:37) even at the full timeout below.
     - cron: "7 4 * * 0"
   workflow_dispatch:
     inputs:

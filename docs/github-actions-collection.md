@@ -11,7 +11,7 @@ GitHub schedules use UTC, run only from the default branch, and can start late w
 
 | Workflow | Schedule (UTC) | Timeout | Purpose |
 | --- | --- | --- | --- |
-| `current-jobs.yml` | 00:17, 06:17, 12:17, 18:17 | 45 min | Current ATS, career-page, feed, and sitemap job observations, then enrichment |
+| `current-jobs.yml` | 00:17, 12:17 | 45 min | Current ATS, career-page, feed, and sitemap job observations, then enrichment |
 | `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
 | `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | 25 min | Only roles affected by changed persisted evidence, then readiness plans and the health report |
 | `historical-enrichment.yml` | Sunday 04:07 | 90 min | Wayback captures and archived recruiting observations, then enrichment |
@@ -24,6 +24,44 @@ took 487 s (97 configured sources project to about 17 minutes), 6 Wayback source
 about 38 minutes), a preloaded regeneration pass over 3,451 roles took about 12 s, and a 4,574-target
 backtest took 7.4 s. Signal collection has never run against a real corpus, so its 45 minutes is an
 estimate to revisit after the first production run.
+
+### Round trips to the hosted database
+
+Those durations were measured against a local database, where a request costs about a millisecond. The hosted
+project is a network round trip away: about 140 ms per PostgREST request from a laptop, and every request collection
+made was per row. A posting cost an existence check and a write; a role decision cost a fresh read of every candidate
+role and five more requests; history reconstruction cost four or more requests for every role of the company, whether
+or not anything had changed. The hosted bootstrap ran at about 1.35 observations a second, and reconstruction alone
+would have spent over an hour of every current-jobs run on the corpus's 8,500 roles.
+
+Collection now reads each source's and each company's evidence once and writes in bulk
+(`IntelligenceRepository.upsert_jobs`, `worker/src/firstseen/enrichment_session.py`, migration `202608140045`), so
+its requests follow the number of sources and companies rather than observations. Model attempts are inserted
+together before each source's or company's tool call is recorded.
+
+Measured on a scratch copy of the rig corpus, enriching Databricks, Stripe, and Figma from nothing (2,747
+observations): the per-row code sent 34,528 requests and the batched code 137, about 12,600 and 50 per 1,000
+observations, and the two wrote identical roles, aliases, matches, opening events, and change records (12,065 rows).
+The batched code's requests are a fixed 40 to 50 per company whatever its size. The per-row code also downloaded every
+candidate role's description for every observation it resolved: 1,736 MB for Stripe and Figma alone, against 18 MB
+for all three batched, which matters as much as the time on Supabase Free's 5 GB of monthly egress. At 140 ms a
+request, the round trips alone were about 80 minutes against 20 seconds. Collecting Databricks' 17 current sources
+and enriching the company (923 postings, 1,012 observations resolved) took 14,979 requests and 1,338 MB before and 183
+requests and 7.5 MB after, with the same outcome for every posting. What remains is about 8 requests per source (its
+page hash, its fetch record, its tool call) and about 45 per company, so a current-jobs pass over 296 sources and 58
+companies makes about 5,000 requests, some 8 minutes of round trips from a runner. The first Actions run against the
+hosted project (dispatched 2026-09-19: 303 sources, 8,115 postings, 55 companies enriched, 61 new observations
+resolved) took 16 minutes end to end with 3,277 requests, well inside the 45-minute timeout. On the hosted project, a
+steady-state pass over Figma (324 observations, 144 roles, nothing new to resolve) took 1,251 requests and 78 s before
+and 26 requests and 4.7 s after.
+
+What a run still reads is every company's evidence: its observations' text, its stored opening events, and its archive
+captures, because reconstruction re-derives every role from them. On Figma that is about 2.5 KB per observation on the
+wire, so about 45 MB per current-jobs run over the whole corpus. Four runs a day would be about 5.5 GB a month, more
+than Supabase Free's 5 GB of egress before anything else is counted, so current jobs run twice a day (about 2.7 GB).
+
+Every `ingest` and `enrich` summary reports `database_requests` and `elapsed_seconds`, and the workflow's step
+summary shows them, so a run drifting back toward per-row requests shows it in its own summary.
 
 Every workflow also supports `workflow_dispatch`. Current jobs, signals, and historical enrichment accept an
 optional company name, domain, or UUID for bounded development runs.
@@ -153,11 +191,11 @@ non-zero only when the database cannot be read. Run it locally with `npm run hea
 ## Cost and keep-alive
 
 - **Actions minutes.** Public repositories run standard GitHub-hosted runners free. A private repository on
-  GitHub Free has 2,000 minutes a month, and this schedule needs roughly 4,000: current jobs about
-  2,400 (4 runs a day at about 20 minutes including setup), signals up to 1,400, regeneration about 360,
+  GitHub Free has 2,000 minutes a month, and this schedule needs roughly 2,800: current jobs about
+  1,200 (2 runs a day at about 20 minutes including setup), signals up to 1,400, regeneration about 360,
   historical about 170, plus CI. A private repository needs a lower cadence or a paid plan.
 - **Supabase free-tier pausing.** A free project pauses after 7 days without activity. Collection writes to
-  the database every 6 hours, well inside that window.
+  the database several times a day, well inside that window.
 - **GitHub schedule disabling.** In a public repository GitHub disables scheduled workflows after 60 days
   with no repository activity. Collection itself makes no commits, so a repository left alone for two months
   stops collecting, and a week after that Supabase pauses. Re-enable from the Actions tab.

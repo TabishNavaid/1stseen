@@ -18,7 +18,7 @@ import json
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal, Protocol, get_args
@@ -961,12 +961,19 @@ class RoleScopeService:
 
     def classify(self, company_id: UUID | None = None) -> RoleScopeSummary:
         summary = RoleScopeSummary()
+        # A store that saves many decisions at once (the Supabase repository: save_role_scopes) gets them together
+        # after the loop; any other store saves each as it is decided.
+        save_many = getattr(self.store, "save_role_scopes", None)
+        changed: list[tuple[UUID, RoleScopeClassification]] = []
         for stored in self.store.list_role_scope_inputs(company_id):
             summary.roles += 1
             try:
                 result = self._classify(stored, summary)
                 if stored.current is not None and stored.current.model_dump() == result.model_dump():
                     summary.unchanged += 1
+                elif save_many is not None:
+                    changed.append((stored.role_id, result))
+                    continue
                 else:
                     self.store.save_role_scope(stored.role_id, result)
                     summary.written += 1
@@ -974,7 +981,32 @@ class RoleScopeService:
                 summary.failures += 1
                 continue
             summary.record(result)
+        if changed and save_many is not None:
+            self._save_all(changed, save_many, summary)
         return summary
+
+    def _save_all(
+        self,
+        changed: list[tuple[UUID, RoleScopeClassification]],
+        save_many: Callable[[list[tuple[UUID, RoleScopeClassification]]], object],
+        summary: RoleScopeSummary,
+    ) -> None:
+        """Save the changed decisions together; if the store refuses, save them one at a time, each failing alone."""
+        try:
+            save_many(changed)
+            saved = changed
+        except Exception:  # noqa: BLE001 - retried role by role below
+            saved = []
+            for role_id, result in changed:
+                try:
+                    self.store.save_role_scope(role_id, result)
+                except Exception:  # noqa: BLE001 - roles classify independently; the count is reported
+                    summary.failures += 1
+                    continue
+                saved.append((role_id, result))
+        for _, result in saved:
+            summary.written += 1
+            summary.record(result)
 
     def _classify(self, stored: StoredRoleScope, summary: RoleScopeSummary) -> RoleScopeClassification:
         current = stored.current

@@ -2,9 +2,12 @@ name: Current job collection
 
 on:
   schedule:
-    # 00:17, 06:17, 12:17, 18:17 UTC. Collection workflows are staggered at least an
-    # hour apart; see the note on `concurrency` below.
-    - cron: "17 0,6,12,18 * * *"
+    # 00:17 and 12:17 UTC. Twice a day, not four times: each run re-reads every company's
+    # evidence, and four runs a day would spend Supabase Free's 5 GB of monthly egress on
+    # collection alone (docs/github-actions-collection.md, "Round trips to the hosted
+    # database"). Collection workflows are staggered at least an hour apart; see the note
+    # on `concurrency` below.
+    - cron: "17 0,12 * * *"
   workflow_dispatch:
     inputs:
       company:

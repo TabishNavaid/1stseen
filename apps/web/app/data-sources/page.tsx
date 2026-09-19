@@ -89,7 +89,7 @@ export default function DataSourcesPage() {
       <DocumentSection id="pace" title="How often, and how politely">
         <ul>
           <li>
-            On the current schedule, current postings are read four times a day, career pages for changes four times a day,
+            On the current schedule, current postings are read twice a day, career pages for changes four times a day,
             and the archive once a week.
           </li>
           <li>

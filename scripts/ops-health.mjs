@@ -31,7 +31,7 @@ const env = process.env;
 
 /** Scheduled workflows and how old their last success may be: their interval, plus the longest timeout, plus slack. */
 const SCHEDULED = [
-  { file: "current-jobs.yml", label: "Current job collection", staleHours: 13 },
+  { file: "current-jobs.yml", label: "Current job collection", staleHours: 19 },
   { file: "career-page-signals.yml", label: "Career page signals", staleHours: 13 },
   { file: "forecast-regeneration.yml", label: "Forecast regeneration", staleHours: 13 },
   { file: "historical-enrichment.yml", label: "Historical enrichment", staleHours: 24 * 8 },

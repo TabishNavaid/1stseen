@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from functools import lru_cache
 from hashlib import sha256
 from math import sqrt
 from typing import Literal, Protocol
@@ -120,6 +121,10 @@ def _slug(value: str) -> str:
     return "_".join(re.findall(r"[a-z0-9]+", value.casefold()))
 
 
+# Resolution scores every observation against every compatible role of its company, so the same titles and descriptions
+# are read thousands of times in one pass. The three readings below are pure functions of their text and return values
+# nothing can change (a string and frozensets), so each is cached: a decision is the same, only computed once.
+@lru_cache(maxsize=65_536)
 def normalize_title(value: str) -> str:
     title = value.casefold()
     # Archived and static pages expose anchor text as the title; the call to action
@@ -231,6 +236,7 @@ def title_level(title: str) -> RoleLevel:
     return level
 
 
+@lru_cache(maxsize=65_536)
 def stated_early_career_types(title: str) -> frozenset[EarlyCareerType]:
     """The early-career types a title states by itself, ignoring any description.
 
@@ -310,7 +316,8 @@ def _location_scope(value: str | None) -> str:
     return text
 
 
-def _description_tokens(value: str) -> set[str]:
+@lru_cache(maxsize=4_096)
+def _description_tokens(value: str) -> frozenset[str]:
     stop = {
         "and",
         "the",
@@ -332,14 +339,14 @@ def _description_tokens(value: str) -> set[str]:
         "employer",
         "apply",
     }
-    return {
+    return frozenset(
         token
         for token in re.findall(r"[a-z0-9]+", value.casefold())
         if len(token) > 2 and token not in stop and not re.fullmatch(r"(?:19|20)\d{2}", token)
-    }
+    )
 
 
-def _jaccard(left: set[str], right: set[str]) -> float:
+def _jaccard(left: frozenset[str], right: frozenset[str]) -> float:
     if not left or not right:
         return 0.5
     return len(left.intersection(right)) / len(left.union(right))
