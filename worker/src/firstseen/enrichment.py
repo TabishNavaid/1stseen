@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID
 
 from .adapters.base import CollectionDiagnostic
@@ -150,15 +150,25 @@ class EvidenceEnrichmentService:
         """
         return bool(observation.source_reliability.get("page_level_evidence"))
 
+    def _company_store(self, company_id: UUID) -> EnrichmentStore:
+        """The store one company's pass reads and writes through.
+
+        A store that can open an enrichment session (the Supabase repository: enrichment_session.py) gets one, which
+        reads the company's evidence once and writes its decisions in bulk; any other store is used as it is.
+        """
+        open_session = getattr(self.store, "enrichment_session", None)
+        return cast(EnrichmentStore, open_session(company_id)) if open_session is not None else self.store
+
     def enrich_company(self, company_id: UUID) -> EnrichmentSummary:
+        store = self._company_store(company_id)
         observations = [
             item
-            for item in self.store.list_unresolved_observations(company_id)
+            for item in store.list_unresolved_observations(company_id)
             if not self._is_page_level(item)
         ]
-        resolution = self._resolve_roles(company_id, observations)
-        degraded = self.store.degraded_source_ids(company_id)
-        reconstruction = self._reconstruct_history(company_id, degraded_sources=degraded)
+        resolution = self._resolve_roles(store, company_id, observations)
+        degraded = store.degraded_source_ids(company_id)
+        reconstruction = self._reconstruct_history(store, company_id, degraded_sources=degraded)
         roles_reconstructed, events_persisted, history_counters = reconstruction
         scope_diagnostics: list[CollectionDiagnostic] = []
         roles_in_scope = scope_written = scope_failures = 0
@@ -193,34 +203,44 @@ class EvidenceEnrichmentService:
             scope_failures=scope_failures,
         )
 
-    def _resolve_roles(self, company_id: UUID, observations: Sequence[JobObservation]) -> _Counters:
+    def _resolve_roles(
+        self, store: EnrichmentStore, company_id: UUID, observations: Sequence[JobObservation]
+    ) -> _Counters:
         counters = _Counters()
         if not observations:
             return counters
+        resolver = (
+            self.persistent_resolver
+            if store is self.store
+            else PersistentRoleResolver(self.persistent_resolver.resolver, store)
+        )
+        resolved: list[RoleResolution] = []
         # Candidates are reloaded per observation so a role created earlier in this
         # pass can immediately absorb a later observation of the same program.
         for observation in observations:
             if observation.id is None:
                 continue
             try:
-                candidates = self.store.list_canonical_roles_for_resolution(company_id)
-                result = self.persistent_resolver.resolve_new(
+                candidates = store.list_canonical_roles_for_resolution(company_id)
+                result = resolver.resolve_new(
                     company_id=company_id,
                     observation=observation,
                     candidates=candidates,
                 )
             except Exception as exc:  # noqa: BLE001 - observations resolve independently
-                counters.failures += 1
-                counters.diagnostics.append(
-                    CollectionDiagnostic(
-                        code="role_resolution_failed",
-                        message=f"Role resolution failed for one observation: {type(exc).__name__}.",
-                        severity="error",
-                        details={"observation_id": str(observation.id)},
-                    )
-                )
+                self._resolution_failed(counters, observation.id, exc)
                 continue
-            if result is None:
+            if result is not None:
+                resolved.append(result)
+        # A session holds its decisions until here and reports any the database then refused; a plain store has
+        # written each one already.
+        flush = getattr(store, "flush_resolutions", None)
+        refused: set[UUID] = set()
+        for resolution, error in flush() if flush is not None else []:
+            refused.add(resolution.observation_id)
+            self._resolution_failed(counters, resolution.observation_id, error)
+        for result in resolved:
+            if result.observation_id in refused:
                 continue
             if result.decision == "matched":
                 counters.matched += 1
@@ -228,51 +248,73 @@ class EvidenceEnrichmentService:
                 counters.created += 1
         return counters
 
+    @staticmethod
+    def _resolution_failed(counters: _Counters, observation_id: UUID, exc: Exception) -> None:
+        counters.failures += 1
+        counters.diagnostics.append(
+            CollectionDiagnostic(
+                code="role_resolution_failed",
+                message=f"Role resolution failed for one observation: {type(exc).__name__}.",
+                severity="error",
+                details={"observation_id": str(observation_id)},
+            )
+        )
+
     def _reconstruct_history(
         self,
+        store: EnrichmentStore,
         company_id: UUID,
         *,
         degraded_sources: set[UUID],
     ) -> tuple[int, int, _Counters]:
         counters = _Counters()
-        roles = self.store.list_recurring_roles(company_id)
+        roles = store.list_recurring_roles(company_id)
         if not roles:
             return 0, 0, counters
-        captures = self._admissible_captures(company_id, degraded_sources, counters)
+        captures = self._admissible_captures(store, company_id, degraded_sources, counters)
         reconstructed = 0
         persisted = 0
         for role in roles:
             try:
-                observations = self.store.list_role_observations(role.id)
+                observations = store.list_role_observations(role.id)
                 if not observations and not captures:
                     continue
                 events = self.history_resolver.resolve(
                     role,
                     captures=captures,
                     observations=observations,
-                    historical_first_seen=self.store.list_historical_events(role.id),
+                    historical_first_seen=store.list_historical_events(role.id),
                 )
                 if events:
-                    self.store.save_historical_openings(events)
+                    store.save_historical_openings(events)
                     persisted += len(events)
-                    self._link_event_observations(role.id, events)
+                    self._link_event_observations(store, role.id, events)
                 reconstructed += 1
             except Exception as exc:  # noqa: BLE001 - roles reconstruct independently
-                counters.failures += 1
-                counters.diagnostics.append(
-                    CollectionDiagnostic(
-                        code="historical_reconstruction_failed",
-                        message=(
-                            f"Historical reconstruction failed for one role: {type(exc).__name__}."
-                        ),
-                        severity="error",
-                        details={"canonical_role_id": str(role.id)},
-                    )
-                )
+                self._reconstruction_failed(counters, role.id, exc)
+        # A session holds each role's writes until here; a role the database then refused is counted as failed.
+        flush = getattr(store, "flush_history", None)
+        for role_id, events_written, error in flush() if flush is not None else []:
+            reconstructed -= 1
+            persisted -= events_written
+            self._reconstruction_failed(counters, role_id, error)
         return reconstructed, persisted, counters
 
+    @staticmethod
+    def _reconstruction_failed(counters: _Counters, role_id: UUID, exc: Exception) -> None:
+        counters.failures += 1
+        counters.diagnostics.append(
+            CollectionDiagnostic(
+                code="historical_reconstruction_failed",
+                message=f"Historical reconstruction failed for one role: {type(exc).__name__}.",
+                severity="error",
+                details={"canonical_role_id": str(role_id)},
+            )
+        )
+
+    @staticmethod
     def _link_event_observations(
-        self,
+        store: EnrichmentStore,
         role_id: UUID,
         events: Sequence[HistoricalOpeningEvent],
     ) -> None:
@@ -286,9 +328,9 @@ class EvidenceEnrichmentService:
             # Checked per (observation, role) pair: one archived page is evidence for
             # many roles, so an existing match for a different role must not block
             # this role's attribution.
-            if self.store.role_evidence_exists(event.observation_id, role_id):
+            if store.role_evidence_exists(event.observation_id, role_id):
                 continue
-            self.store.link_observation_to_role(
+            store.link_observation_to_role(
                 event.observation_id,
                 role_id,
                 match_confidence=ARCHIVE_ATTRIBUTION_CONFIDENCE,
@@ -297,11 +339,12 @@ class EvidenceEnrichmentService:
 
     def _admissible_captures(
         self,
+        store: EnrichmentStore,
         company_id: UUID,
         degraded_sources: set[UUID],
         counters: _Counters,
     ) -> list[ArchiveCapture]:
-        captures = self.store.list_company_archive_captures(company_id)
+        captures = store.list_company_archive_captures(company_id)
         if not degraded_sources:
             return captures
         return list(self._demote_degraded(captures, degraded_sources, counters))

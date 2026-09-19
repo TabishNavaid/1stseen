@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sys
+import time
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from hashlib import sha256
@@ -72,9 +73,17 @@ from .source_ingestion import SourceIngestionService
 from .takedown import TakedownRefused, TakedownService
 
 
+def _run_cost(repository: IntelligenceRepository, started: float) -> dict[str, object]:
+    """What a run cost the database: its PostgREST requests (each a round trip) and its wall time."""
+    requests = getattr(repository, "database_requests", None)
+    return {"database_requests": requests, "elapsed_seconds": round(time.monotonic() - started, 1)}
+
+
 def run_ingestion(company: str | None, *, collection: str = "all") -> int:
+    started = time.monotonic()
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
+    repository.buffer_model_attempts()
     sources = repository.list_source_configs(company)
     if collection == "current":
         sources = [source for source in sources if source.adapter not in {"wayback", "reddit"}]
@@ -167,6 +176,7 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
                 "degraded_sources": degraded,
                 "diagnostics": diagnostic_counts,
                 "enrichment": enrichment,
+                **_run_cost(repository, started),
                 "status": status,
                 "run_id": str(run_id),
             },
@@ -245,8 +255,10 @@ def _enrichment_totals(summaries: list[EnrichmentSummary], failures: int) -> dic
 
 def run_enrichment(company: str | None) -> int:
     """Standalone re-derivation of roles and openings from already-collected evidence."""
+    started = time.monotonic()
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
+    repository.buffer_model_attempts()
     sources = repository.list_source_configs(company)
     company_ids = sorted({source.company_id for source in sources}, key=str)
     run_id = repository.start_agent_run(
@@ -265,7 +277,7 @@ def run_enrichment(company: str | None) -> int:
         else "succeeded"
     )
     repository.finish_agent_run(run_id, status=status)
-    print(json.dumps({**totals, "status": status, "run_id": str(run_id)}, indent=2))
+    print(json.dumps({**totals, **_run_cost(repository, started), "status": status, "run_id": str(run_id)}, indent=2))
     return 1 if status == "failed" and company_ids else 0
 
 

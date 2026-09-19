@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 from uuid import UUID
 
 from firstseen.inference import (
@@ -154,8 +154,7 @@ class SourceIngestionService:
                     details={"duplicates": duplicate_count},
                 )
             )
-        for observation in unique_observations.values():
-            status = self.store.upsert_job(observation)
+        for status in self._upsert_jobs(list(unique_observations.values())):
             if status == "created":
                 created += 1
             elif status == "changed":
@@ -173,12 +172,16 @@ class SourceIngestionService:
                 jobs=len(unique_observations),
             )
         ]
-        for decision in decisions:
-            self.store.record_inference_decision(
-                decision,
-                decided_at=observed_at,
-                agent_run_id=self.agent_run_id,
-            )
+        record_many = getattr(self.store, "record_inference_decisions", None)
+        if record_many is not None:
+            record_many(decisions, decided_at=observed_at, agent_run_id=self.agent_run_id)
+        else:
+            for decision in decisions:
+                self.store.record_inference_decision(
+                    decision,
+                    decided_at=observed_at,
+                    agent_run_id=self.agent_run_id,
+                )
         self.store.record_fetch(
             source.id,
             fetched_at=observed_at,
@@ -202,6 +205,13 @@ class SourceIngestionService:
             complete=result.complete,
             diagnostics=tuple(diagnostics),
         )
+
+    def _upsert_jobs(self, observations: list[JobObservation]) -> list[str]:
+        """Each posting's upsert_job outcome, written in bulk when the store can (the Supabase repository: upsert_jobs)."""
+        upsert_many = getattr(self.store, "upsert_jobs", None)
+        if upsert_many is not None:
+            return cast(list[str], upsert_many(observations))
+        return [self.store.upsert_job(observation) for observation in observations]
 
     def ingest_discovery(
         self,

@@ -71,7 +71,9 @@ npx supabase db push
 ```
 
 **Expected:** after `db push`, `migration list --linked` shows every migration on both sides, through
-`202608140044`. Three of them change what the hosted database allows, so confirm each landed:
+`202608140045` (the collectors' batched writes; without it enrichment fails for every company, because it asks the
+database for each source's latest fetch through a function that migration adds). Three of them change what the hosted
+database allows, so confirm each landed:
 `202608140031_guest_access` (anon loses every table grant; `npm run verify:supabase` reports
 `grants/anon-anywhere` PASS), `202608140032_scope_widening` (seven disciplines and the apprenticeship type), and
 `202608140033_role_scope_reviews` (the service-only review table and `record_role_scope_review`).

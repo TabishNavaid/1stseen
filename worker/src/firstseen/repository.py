@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from datetime import UTC, date, datetime
 from functools import partial
 from hashlib import sha256
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from postgrest.exceptions import APIError
@@ -60,6 +61,9 @@ from .scope_review import (
 )
 from .signals import ForecastChange, RecruitingSignal, SignalSourceState, StoredForecastVersion
 from .takedown import HOLD_ACTIONS, CollectionHeldError, TakedownAction
+
+if TYPE_CHECKING:
+    from .enrichment_session import CompanyEnrichmentSession
 
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
 
@@ -163,6 +167,39 @@ def _chunked(values: list[str], size: int) -> list[list[str]]:
     return [values[index : index + size] for index in range(0, len(values), size)] or [[]]
 
 
+# A bulk write sends at most this many rows, and about this many bytes of JSON, in one request. A role row carries a
+# description of up to 32 KB and a posting up to 128 KB of text, so the byte bound is the one that usually applies.
+_WRITE_CHUNK_ROWS = 500
+_WRITE_CHUNK_BYTES = 2_000_000
+
+
+def write_chunks(rows: Sequence[dict[str, Any]], *, by_columns: bool = True) -> list[list[dict[str, Any]]]:
+    """Split rows into requests, each holding rows with one set of columns, bounded in rows and bytes.
+
+    PostgREST writes a bulk request's rows with the union of their columns, so a row without a column would write NULL
+    where a one-row request left the column alone. Rows are therefore grouped by their columns, and keep their order
+    within each group. A function that reads a missing column as "leave it" (touch_job_observations) passes
+    by_columns=False and gets its rows in their order, bounded only in size.
+    """
+    groups: dict[frozenset[str], list[dict[str, Any]]] = {}
+    for row in rows:
+        groups.setdefault(frozenset(row) if by_columns else frozenset(), []).append(row)
+    chunks: list[list[dict[str, Any]]] = []
+    for group in groups.values():
+        current: list[dict[str, Any]] = []
+        size = 0
+        for row in group:
+            row_size = len(json.dumps(row, default=str))
+            if current and (len(current) >= _WRITE_CHUNK_ROWS or size + row_size > _WRITE_CHUNK_BYTES):
+                chunks.append(current)
+                current, size = [], 0
+            current.append(row)
+            size += row_size
+        if current:
+            chunks.append(current)
+    return chunks
+
+
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
@@ -184,9 +221,45 @@ def bounded_utf8(value: str, max_bytes: int) -> str:
     return encoded[:max_bytes].decode("utf-8", errors="ignore")
 
 
+_LEVEL_TO_TRACK = {
+    "internship": "internship",
+    "new_grad": "new_grad",
+    "apprenticeship": "apprenticeship",
+    "full_time": "other",
+    "unknown": "other",
+}
+
+
 class IntelligenceRepository:
+    # Every request this repository's client sends to PostgREST, counted so a run can report its round trips.
+    database_requests: int = 0
+
     def __init__(self, client: Client) -> None:
         self.client = client
+        self._count_requests()
+
+    def _count_requests(self) -> None:
+        """Count each HTTP request the PostgREST client sends. Test doubles without an HTTP session count nothing."""
+        session = getattr(getattr(self.client, "postgrest", None), "session", None)
+        hooks = getattr(session, "event_hooks", None)
+        if isinstance(hooks, dict):
+            hooks.setdefault("request", []).append(self._record_request)
+
+    def _record_request(self, request: object) -> None:
+        del request
+        self.database_requests += 1
+
+    def insert_rows(self, table: str, rows: Sequence[dict[str, Any]]) -> None:
+        """Insert rows in as few requests as write_chunks allows."""
+        for chunk in write_chunks(rows):
+            self.client.table(table).insert(chunk, returning=ReturnMethod.minimal).execute()
+
+    def upsert_rows(self, table: str, rows: Sequence[dict[str, Any]], *, on_conflict: str) -> None:
+        """Upsert rows on a unique key in as few requests as write_chunks allows. Each key must appear once."""
+        for chunk in write_chunks(rows):
+            self.client.table(table).upsert(
+                chunk, on_conflict=on_conflict, returning=ReturnMethod.minimal
+            ).execute()
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> IntelligenceRepository:
@@ -498,6 +571,22 @@ class IntelligenceRepository:
         payload["agent_run_id"] = str(agent_run_id) if agent_run_id else None
         self.client.table("inference_decisions").insert(payload).execute()
 
+    def record_inference_decisions(
+        self,
+        decisions: Sequence[PageInferenceDecision],
+        *,
+        decided_at: datetime,
+        agent_run_id: UUID | None,
+    ) -> None:
+        """record_inference_decision for a source's decisions, in one request."""
+        payloads = []
+        for decision in decisions:
+            payload = decision.model_dump(mode="json")
+            payload["decided_at"] = decided_at.isoformat()
+            payload["agent_run_id"] = str(agent_run_id) if agent_run_id else None
+            payloads.append(payload)
+        self.insert_rows("inference_decisions", payloads)
+
     def list_inference_metrics(self, run_id: UUID | None = None) -> list[dict[str, Any]]:
         def metrics() -> Any:
             query = self.client.table("inference_run_metrics").select("*")
@@ -585,6 +674,93 @@ class IntelligenceRepository:
         self.client.table("raw_job_observations").update(payload).eq("id", existing["id"]).execute()
         return "changed"
 
+    def upsert_jobs(self, observations: Sequence[JobObservation]) -> list[str]:
+        """upsert_job for a batch of postings, in a few requests instead of two per posting.
+
+        Each posting's existing row is found in one paged read of its source, and the outcome is upsert_job's: a new
+        posting is inserted; an unchanged one records that it was seen again (and its ATS categories), through
+        touch_job_observations (migration 202608140045); a changed one is rewritten in full on its existing id, keeping
+        its first-seen time. A request that fails is retried one posting at a time through upsert_job, so a posting the
+        database refuses fails the source exactly as it did before, after the postings ahead of it are kept.
+        """
+        outcomes: list[str] = []
+        created: list[tuple[JobObservation, dict[str, Any]]] = []
+        changed: list[tuple[JobObservation, dict[str, Any]]] = []
+        touched: list[tuple[JobObservation, dict[str, Any]]] = []
+        existing = self._existing_postings({str(item.source_id) for item in observations})
+        for observation in observations:
+            row = existing.get((str(observation.source_id), observation.identity_key))
+            payload = self._job_payload(observation)
+            if row is None:
+                created.append((observation, payload))
+                outcomes.append("created")
+            elif row["content_hash"] == observation.content_hash:
+                seen: dict[str, Any] = {
+                    "id": row["id"],
+                    "last_seen_at": observation.last_seen_at.isoformat(),
+                    "observed_at": observation.last_seen_at.isoformat(),
+                }
+                if observation.ats_categories:
+                    seen["raw_payload"] = payload["raw_payload"]
+                touched.append((observation, seen))
+                outcomes.append("unchanged")
+            else:
+                payload["first_seen_at"] = row["first_seen_at"]
+                if payload.setdefault("id", row["id"]) != row["id"]:
+                    # A posting whose own id differs from its stored row's: upsert_job's update would move the row
+                    # to the new id, which an upsert on id cannot do. It is written exactly that way.
+                    self.upsert_job(observation)
+                else:
+                    changed.append((observation, payload))
+                outcomes.append("changed")
+        for chunk in write_chunks([payload for _, payload in created]):
+            self._write_or_replay(
+                created, chunk, lambda rows: self.insert_rows("raw_job_observations", rows)
+            )
+        for chunk in write_chunks([payload for _, payload in changed]):
+            self._write_or_replay(
+                changed, chunk, lambda rows: self.upsert_rows("raw_job_observations", rows, on_conflict="id")
+            )
+        for chunk in write_chunks([payload for _, payload in touched], by_columns=False):
+            # bounded: a write; the function returns one integer, the number of rows it updated.
+            self._write_or_replay(
+                touched, chunk, lambda rows: self.client.rpc("touch_job_observations", {"p_rows": rows}).execute()
+            )
+        return outcomes
+
+    def _write_or_replay(
+        self,
+        pairs: list[tuple[JobObservation, dict[str, Any]]],
+        chunk: list[dict[str, Any]],
+        write: Callable[[list[dict[str, Any]]], object],
+    ) -> None:
+        """Send one chunk; if the database refuses it, write its postings one at a time through upsert_job."""
+        try:
+            write(chunk)
+        except APIError:
+            members = {id(payload) for payload in chunk}
+            for observation, payload in pairs:
+                if id(payload) in members:
+                    self.upsert_job(observation)
+
+    def _existing_postings(self, source_ids: set[str]) -> dict[tuple[str, str], dict[str, Any]]:
+        """Each source's stored postings by identity key: the id, first-seen time, and content hash upsert_job reads."""
+        existing: dict[tuple[str, str], dict[str, Any]] = {}
+        for source_id in sorted(source_ids):
+            rows = fetch_all_rows(
+                partial(
+                    lambda source: self.client.table("raw_job_observations")
+                    .select("id,identity_key,first_seen_at,content_hash")
+                    .eq("source_id", source)
+                    .not_.is_("identity_key", "null"),
+                    source_id,
+                ),
+                key="id",
+            )
+            for row in rows:
+                existing[(source_id, str(row["identity_key"]))] = row
+        return existing
+
     def touch_source_jobs(self, source_id: UUID, *, seen_at: datetime) -> int:
         # The update reports how many rows it touched. Selecting the ids first to count them read at most 1000 rows,
         # and one Databricks board already holds 930.
@@ -639,29 +815,31 @@ class IntelligenceRepository:
         # reconstruction updates the existing cycle instead of inserting a duplicate
         # alongside a row that was created with a different identifier.
         self.client.table("historical_opening_events").upsert(
-            [
-                {
-                    "canonical_role_id": str(event.canonical_role_id),
-                    "observation_id": str(event.observation_id),
-                    "opened_on": event.opened_on.isoformat(),
-                    "closed_on": event.closed_on.isoformat() if event.closed_on else None,
-                    "evidence_quote": bounded_utf8(event.evidence_quote, 8_192),
-                    "source_quality": event.source_quality,
-                    "extraction_version": event.resolution_method,
-                    "opening_window_start": (
-                        event.opening_window_start.isoformat() if event.opening_window_start else None
-                    ),
-                    "opening_window_end": event.opening_window_end.isoformat(),
-                    "date_precision": event.date_precision,
-                    "uncertainty_days": event.uncertainty_days,
-                    "uncertainty_reason": event.uncertainty_reason,
-                    "resolution_method": event.resolution_method,
-                    "provenance": event.provenance,
-                }
-                for event in events
-            ],
-            on_conflict="canonical_role_id,opened_on,observation_id",
+            [self.event_payload(event) for event in events],
+            on_conflict=self.EVENT_KEY,
         ).execute()
+
+    EVENT_KEY = "canonical_role_id,opened_on,observation_id"
+
+    @staticmethod
+    def event_payload(event: HistoricalOpeningEvent) -> dict[str, Any]:
+        """The historical_opening_events row reconstruction upserts on the event's natural key."""
+        return {
+            "canonical_role_id": str(event.canonical_role_id),
+            "observation_id": str(event.observation_id),
+            "opened_on": event.opened_on.isoformat(),
+            "closed_on": event.closed_on.isoformat() if event.closed_on else None,
+            "evidence_quote": bounded_utf8(event.evidence_quote, 8_192),
+            "source_quality": event.source_quality,
+            "extraction_version": event.resolution_method,
+            "opening_window_start": event.opening_window_start.isoformat() if event.opening_window_start else None,
+            "opening_window_end": event.opening_window_end.isoformat(),
+            "date_precision": event.date_precision,
+            "uncertainty_days": event.uncertainty_days,
+            "uncertainty_reason": event.uncertainty_reason,
+            "resolution_method": event.resolution_method,
+            "provenance": event.provenance,
+        }
 
     def role_match_exists(self, observation_id: UUID) -> bool:
         # bounded: an existence check, one row at most.
@@ -1006,6 +1184,26 @@ class IntelligenceRepository:
             }
         ).eq("id", str(role_id)).execute()
 
+    def save_role_scopes(self, decisions: Sequence[tuple[UUID, RoleScopeClassification]]) -> None:
+        """save_role_scope for many roles, through save_role_scopes (migration 202608140045) in a few requests."""
+        rows = [
+            {
+                "id": str(role_id),
+                "scope_status": classification.status,
+                "scope_reason": classification.reason,
+                "discipline": classification.discipline,
+                "early_career_type": classification.early_career_type,
+                "scope_evidence": [item.model_dump() for item in classification.evidence],
+                "scope_method": classification.method,
+                "scope_classifier_version": classification.classifier_version,
+                "scope_classified_at": datetime.now(UTC).isoformat(),
+            }
+            for role_id, classification in decisions
+        ]
+        for chunk in write_chunks(rows):
+            # bounded: a write; the function returns one integer, the number of roles it updated.
+            self.client.rpc("save_role_scopes", {"p_rows": chunk}).execute()
+
     def in_scope_role_ids(self) -> set[UUID]:
         rows = fetch_all_rows(
             lambda: self.client.table("canonical_roles")
@@ -1020,57 +1218,56 @@ class IntelligenceRepository:
         # A company can hold hundreds of active roles (Stripe has 521), so this pages rather than trusting one response.
         rows = fetch_all_rows(
             lambda: self.client.table("canonical_roles")
-            .select(
-                "id,company_id,company_normalized,canonical_title,recurrence_key,normalized_title,"
-                "role_family,level,recruiting_season,specialization,feature_profile,"
-                "description_prototype,role_aliases(alias_title)"
-            )
+            .select(f"{self.RESOLUTION_ROLE_COLUMNS},role_aliases(alias_title)")
             .eq("company_id", str(company_id))
             .eq("active", True),
             key="id",
         )
-        roles: list[CanonicalRoleIdentity] = []
-        for row in rows:
-            profile = cast(dict[str, Any], row.get("feature_profile") or {})
-            alias_rows = cast(list[dict[str, Any]], row.get("role_aliases") or [])
-            roles.append(
-                CanonicalRoleIdentity(
-                    id=row["id"],
-                    company_id=row["company_id"],
-                    company_normalized=normalize_company(str(row["company_normalized"])),
-                    canonical_title=str(row["canonical_title"]),
-                    recurrence_key=str(row["recurrence_key"]),
-                    features=RoleFeatures(
-                        normalized_title=str(row["normalized_title"]),
-                        level=row["level"],
-                        role_family=str(row["role_family"]),
-                        specialization=row.get("specialization"),
-                        recruiting_season=row["recruiting_season"],
-                        location_scope=str(profile.get("location_scope") or "unspecified"),
-                        description_fingerprint=str(
-                            profile.get("description_fingerprint") or sha256(b"").hexdigest()
-                        ),
-                    ),
-                    aliases=[str(alias["alias_title"]) for alias in alias_rows if alias.get("alias_title")],
-                    description_prototype=str(row.get("description_prototype") or ""),
-                )
+        return [
+            self.resolution_identity(
+                row, [str(alias["alias_title"]) for alias in row.get("role_aliases") or [] if alias.get("alias_title")]
             )
-        return roles
+            for row in rows
+        ]
 
-    def save_role_resolution(self, resolution: RoleResolution) -> None:
+    # The canonical_roles columns a resolution candidate is built from, without its aliases.
+    RESOLUTION_ROLE_COLUMNS = (
+        "id,company_id,company_normalized,canonical_title,recurrence_key,normalized_title,"
+        "role_family,level,recruiting_season,specialization,feature_profile,description_prototype"
+    )
+
+    @staticmethod
+    def resolution_identity(row: dict[str, Any], aliases: list[str]) -> CanonicalRoleIdentity:
+        """A stored canonical role as the resolver compares it: its columns, its feature profile, and its aliases."""
+        profile = cast(dict[str, Any], row.get("feature_profile") or {})
+        return CanonicalRoleIdentity(
+            id=row["id"],
+            company_id=row["company_id"],
+            company_normalized=normalize_company(str(row["company_normalized"])),
+            canonical_title=str(row["canonical_title"]),
+            recurrence_key=str(row["recurrence_key"]),
+            features=RoleFeatures(
+                normalized_title=str(row["normalized_title"]),
+                level=row["level"],
+                role_family=str(row["role_family"]),
+                specialization=row.get("specialization"),
+                recruiting_season=row["recruiting_season"],
+                location_scope=str(profile.get("location_scope") or "unspecified"),
+                description_fingerprint=str(profile.get("description_fingerprint") or sha256(b"").hexdigest()),
+            ),
+            aliases=aliases,
+            description_prototype=str(row.get("description_prototype") or ""),
+        )
+
+    @staticmethod
+    def role_payload(resolution: RoleResolution) -> dict[str, Any]:
+        """The canonical_roles row a resolution upserts."""
         role = resolution.canonical_role
-        level_to_track = {
-            "internship": "internship",
-            "new_grad": "new_grad",
-            "apprenticeship": "apprenticeship",
-            "full_time": "other",
-            "unknown": "other",
-        }
         role_payload: dict[str, Any] = {
             "id": str(role.id),
             "company_id": str(role.company_id),
             "canonical_title": role.canonical_title,
-            "track": level_to_track[role.features.level],
+            "track": _LEVEL_TO_TRACK[role.features.level],
             "location_scope": role.features.location_scope,
             "recurrence_key": role.recurrence_key,
             "company_normalized": role.company_normalized,
@@ -1085,7 +1282,63 @@ class IntelligenceRepository:
         }
         if role.description_embedding and len(role.description_embedding) == 1536:
             role_payload["description_embedding"] = role.description_embedding
-        self.client.table("canonical_roles").upsert(role_payload, on_conflict="id").execute()
+        return role_payload
+
+    @staticmethod
+    def alias_insert_payload(resolution: RoleResolution, seen: dict[str, Any]) -> dict[str, Any]:
+        """The role_aliases row a resolution inserts when its role has no alias of that normalized title yet.
+
+        `seen` is the observation's stored first_seen_at and last_seen_at.
+        """
+        return {
+            "canonical_role_id": str(resolution.canonical_role.id),
+            "alias_title": resolution.observed_alias,
+            "normalized_alias": normalize_title(resolution.observed_alias),
+            "first_observation_id": str(resolution.observation_id),
+            "last_observation_id": str(resolution.observation_id),
+            "first_seen_at": seen["first_seen_at"],
+            "last_seen_at": seen["last_seen_at"],
+            "match_confidence": resolution.match_confidence,
+            "match_evidence": [item.model_dump(mode="json") for item in resolution.evidence],
+            "resolver_version": resolution.resolver_version,
+        }
+
+    @staticmethod
+    def alias_update_payload(
+        resolution: RoleResolution, seen: dict[str, Any], stored_confidence: object
+    ) -> dict[str, Any]:
+        """What a resolution changes on an alias its role already has: the latest sighting and the higher confidence."""
+        return {
+            "alias_title": resolution.observed_alias,
+            "last_observation_id": str(resolution.observation_id),
+            "last_seen_at": seen["last_seen_at"],
+            "match_confidence": max(float(cast(Any, stored_confidence)), resolution.match_confidence),
+            "match_evidence": [item.model_dump(mode="json") for item in resolution.evidence],
+            "resolver_version": resolution.resolver_version,
+        }
+
+    @staticmethod
+    def match_payload(resolution: RoleResolution) -> dict[str, Any]:
+        """The observation_role_matches row a resolution upserts: the observation's primary identity."""
+        return {
+            "observation_id": str(resolution.observation_id),
+            "canonical_role_id": str(resolution.canonical_role.id),
+            "decision": resolution.decision,
+            "match_confidence": resolution.match_confidence,
+            "feature_scores": resolution.feature_scores,
+            "reasons": resolution.reasons,
+            "evidence": [item.model_dump(mode="json") for item in resolution.evidence],
+            "used_embedding": resolution.used_embedding,
+            "used_llm": resolution.used_llm,
+            "inference_decision": resolution.inference_decision.model_dump(mode="json"),
+            "resolver_version": resolution.resolver_version,
+            "evidence_kind": "observation_resolution",
+            "is_primary": True,
+        }
+
+    def save_role_resolution(self, resolution: RoleResolution) -> None:
+        role = resolution.canonical_role
+        self.client.table("canonical_roles").upsert(self.role_payload(resolution), on_conflict="id").execute()
 
         # bounded: one row, the observation by its primary key.
         observation = (
@@ -1099,61 +1352,24 @@ class IntelligenceRepository:
         if not observation_rows:
             raise RuntimeError("Cannot persist a role alias without its observation")
         seen = observation_rows[0]
-        normalized_alias = normalize_title(resolution.observed_alias)
-        alias_payload: dict[str, Any] = {
-            "canonical_role_id": str(role.id),
-            "alias_title": resolution.observed_alias,
-            "normalized_alias": normalized_alias,
-            "first_observation_id": str(resolution.observation_id),
-            "last_observation_id": str(resolution.observation_id),
-            "first_seen_at": seen["first_seen_at"],
-            "last_seen_at": seen["last_seen_at"],
-            "match_confidence": resolution.match_confidence,
-            "match_evidence": [item.model_dump(mode="json") for item in resolution.evidence],
-            "resolver_version": resolution.resolver_version,
-        }
         # bounded: an existence check on the unique (role, normalized alias), one row at most.
         existing_alias = (
             self.client.table("role_aliases")
             .select("id,match_confidence")
             .eq("canonical_role_id", str(role.id))
-            .eq("normalized_alias", normalized_alias)
+            .eq("normalized_alias", normalize_title(resolution.observed_alias))
             .limit(1)
             .execute()
         )
         alias_rows = cast(list[dict[str, Any]], existing_alias.data or [])
         if alias_rows:
             self.client.table("role_aliases").update(
-                {
-                    "alias_title": resolution.observed_alias,
-                    "last_observation_id": str(resolution.observation_id),
-                    "last_seen_at": seen["last_seen_at"],
-                    "match_confidence": max(
-                        float(alias_rows[0].get("match_confidence", 0)), resolution.match_confidence
-                    ),
-                    "match_evidence": [item.model_dump(mode="json") for item in resolution.evidence],
-                    "resolver_version": resolution.resolver_version,
-                }
+                self.alias_update_payload(resolution, seen, alias_rows[0].get("match_confidence", 0))
             ).eq("id", alias_rows[0]["id"]).execute()
         else:
-            self.client.table("role_aliases").insert(alias_payload).execute()
+            self.client.table("role_aliases").insert(self.alias_insert_payload(resolution, seen)).execute()
         self.client.table("observation_role_matches").upsert(
-            {
-                "observation_id": str(resolution.observation_id),
-                "canonical_role_id": str(role.id),
-                "decision": resolution.decision,
-                "match_confidence": resolution.match_confidence,
-                "feature_scores": resolution.feature_scores,
-                "reasons": resolution.reasons,
-                "evidence": [item.model_dump(mode="json") for item in resolution.evidence],
-                "used_embedding": resolution.used_embedding,
-                "used_llm": resolution.used_llm,
-                "inference_decision": resolution.inference_decision.model_dump(mode="json"),
-                "resolver_version": resolution.resolver_version,
-                "evidence_kind": "observation_resolution",
-                "is_primary": True,
-            },
-            on_conflict="observation_id,canonical_role_id",
+            self.match_payload(resolution), on_conflict="observation_id,canonical_role_id"
         ).execute()
 
     _OBSERVATION_COLUMNS = (
@@ -1214,6 +1430,86 @@ class IntelligenceRepository:
             )
         return rows
 
+    def enrichment_session(self, company_id: UUID) -> CompanyEnrichmentSession:
+        """One company's enrichment reading its evidence once and writing its decisions in bulk (enrichment_session.py)."""
+        from .enrichment_session import CompanyEnrichmentSession
+
+        return CompanyEnrichmentSession(self, company_id)
+
+    def company_observation_rows(self, source_ids: list[str]) -> list[dict[str, Any]]:
+        """Every stored observation of these sources, including rows without an identity key."""
+        if not source_ids:
+            return []
+        return fetch_all_rows(
+            lambda: self.client.table("raw_job_observations")
+            .select(self._OBSERVATION_COLUMNS)
+            .in_("source_id", source_ids),
+            key="id",
+        )
+
+    def observation_matches_for_sources(self, source_ids: list[str]) -> list[dict[str, Any]]:
+        """Every role match, primary or not, of an observation from these sources."""
+        if not source_ids:
+            return []
+        return fetch_all_rows(
+            lambda: self.client.table("observation_role_matches")
+            .select("observation_id,canonical_role_id,is_primary,raw_job_observations!inner(source_id)")
+            .in_("raw_job_observations.source_id", source_ids),
+            key=("observation_id", "canonical_role_id"),
+        )
+
+    def role_matches_for_company(self, company_id: UUID) -> list[dict[str, Any]]:
+        """Every observation matched to one of the company's roles, active or not."""
+        return fetch_all_rows(
+            lambda: self.client.table("observation_role_matches")
+            .select("observation_id,canonical_role_id,canonical_roles!inner(company_id)")
+            .eq("canonical_roles.company_id", str(company_id)),
+            key=("observation_id", "canonical_role_id"),
+        )
+
+    def resolution_role_rows(self, company_id: UUID) -> list[dict[str, Any]]:
+        """The company's roles, active or not, with the columns a resolution candidate is built from."""
+        return fetch_all_rows(
+            lambda: self.client.table("canonical_roles")
+            .select(f"{self.RESOLUTION_ROLE_COLUMNS},active")
+            .eq("company_id", str(company_id)),
+            key="id",
+        )
+
+    def alias_rows_for_company(self, company_id: UUID) -> list[dict[str, Any]]:
+        """Every alias of the company's roles, with the columns save_role_resolution reads and writes."""
+        return fetch_all_rows(
+            lambda: self.client.table("role_aliases")
+            .select(
+                "id,canonical_role_id,alias_title,normalized_alias,first_observation_id,last_observation_id,"
+                "first_seen_at,last_seen_at,match_confidence,match_evidence,resolver_version,"
+                "canonical_roles!inner(company_id)"
+            )
+            .eq("canonical_roles.company_id", str(company_id)),
+            key="id",
+        )
+
+    _EVENT_COLUMNS = (
+        "id,canonical_role_id,observation_id,opened_on,closed_on,evidence_quote,source_quality,"
+        "opening_window_start,opening_window_end,date_precision,uncertainty_days,"
+        "uncertainty_reason,resolution_method,provenance"
+    )
+
+    def event_rows_for_company(self, company_id: UUID) -> list[dict[str, Any]]:
+        """Every opening event of the company's roles, in id order."""
+        return fetch_all_rows(
+            lambda: self.client.table("historical_opening_events")
+            .select(f"{self._EVENT_COLUMNS},canonical_roles!inner(company_id)")
+            .eq("canonical_roles.company_id", str(company_id)),
+            key="id",
+        )
+
+    def observation_rows_by_id(self, observation_ids: list[str]) -> list[dict[str, Any]]:
+        return self._rows_in("raw_job_observations", self._OBSERVATION_COLUMNS, "id", observation_ids)
+
+    def company_source_ids(self, company_id: UUID) -> list[str]:
+        return self._company_source_ids(company_id)
+
     def _company_source_ids(self, company_id: UUID) -> list[str]:
         rows = fetch_all_rows(
             lambda: self.client.table("sources").select("id").eq("company_id", str(company_id)), key="id"
@@ -1233,26 +1529,26 @@ class IntelligenceRepository:
         )
         if not rows:
             return []
-        # Scanning the match table is cheaper and safer than sending thousands of
-        # observation ids back as a URL filter. Only a primary posting-level
-        # resolution counts as resolved: an archive page attribution says the role
-        # was visible there, not that the observation's own identity is settled.
-        matched = {
-            str(item["observation_id"])
-            for item in fetch_all_rows(
-                lambda: self.client.table("observation_role_matches")
-                .select("observation_id")
-                .eq("is_primary", True), key=("observation_id", "canonical_role_id")
-            )
-        }
+        return self.unresolved_among(rows, self.observation_matches_for_sources(source_ids))
+
+    @classmethod
+    def unresolved_among(
+        cls, rows: list[dict[str, Any]], matches: list[dict[str, Any]]
+    ) -> list[JobObservation]:
+        """The observations among `rows` that no primary match resolves, oldest first.
+
+        Only a primary posting-level resolution counts as resolved: an archive page attribution says the role was
+        visible there, not that the observation's own identity is settled. Oldest evidence comes first so the earliest
+        observation of a program establishes its canonical identity and later cycles match into it.
+        """
+        matched = {str(item["observation_id"]) for item in matches if item.get("is_primary")}
         observations = [
             observation
             for row in rows
-            if str(row["id"]) not in matched
-            and (observation := self._observation_from_row(row)) is not None
+            if row.get("identity_key") is not None
+            and str(row["id"]) not in matched
+            and (observation := cls._observation_from_row(row)) is not None
         ]
-        # Oldest evidence first so the earliest observation of a program establishes
-        # its canonical identity and later cycles match into it.
         return sorted(observations, key=lambda item: (item.first_seen_at, str(item.id)))
 
     def list_recurring_roles(self, company_id: UUID) -> list[RecurringRoleIdentity]:
@@ -1307,7 +1603,9 @@ class IntelligenceRepository:
         return sorted(observations, key=lambda item: (item.first_seen_at, str(item.id)))
 
     def list_company_archive_captures(self, company_id: UUID) -> list[ArchiveCapture]:
-        source_ids = self._company_source_ids(company_id)
+        return self.archive_captures_for_sources(self._company_source_ids(company_id))
+
+    def archive_captures_for_sources(self, source_ids: list[str]) -> list[ArchiveCapture]:
         if not source_ids:
             return []
         rows = fetch_all_rows(
@@ -1339,14 +1637,15 @@ class IntelligenceRepository:
     def list_historical_events(self, role_id: UUID) -> list[HistoricalOpeningEvent]:
         rows = fetch_all_rows(
             lambda: self.client.table("historical_opening_events")
-            .select(
-                "id,canonical_role_id,observation_id,opened_on,closed_on,evidence_quote,source_quality,"
-                "opening_window_start,opening_window_end,date_precision,uncertainty_days,"
-                "uncertainty_reason,resolution_method,provenance"
-            )
+            .select(self._EVENT_COLUMNS)
             .eq("canonical_role_id", str(role_id)),
             key="id",
         )
+        return self.events_from_rows(rows)
+
+    @staticmethod
+    def events_from_rows(rows: list[dict[str, Any]]) -> list[HistoricalOpeningEvent]:
+        """Stored opening events, in the rows' order, skipping any without the provenance reconstruction requires."""
         events: list[HistoricalOpeningEvent] = []
         for row in rows:
             window_start = row.get("opening_window_start")
@@ -1405,37 +1704,44 @@ class IntelligenceRepository:
         title matching, so only the observation match row is persisted.
         """
         self.client.table("observation_role_matches").upsert(
-            {
-                "observation_id": str(observation_id),
-                "canonical_role_id": str(role_id),
-                "decision": "matched",
-                "match_confidence": match_confidence,
-                "feature_scores": {"archive_title_attribution": match_confidence},
-                "reasons": [rationale],
-                "evidence": [
-                    {
-                        "kind": "archive_capture_attribution",
-                        "value": match_confidence,
-                        "detail": rationale,
-                    }
-                ],
-                "used_embedding": False,
-                "used_llm": False,
-                "inference_decision": {
-                    "action": "not_required",
-                    "reason": "stored_alias_match",
-                    "llm_escalated": False,
-                    "deterministic_best_score": match_confidence,
-                    "deterministic_margin": 1.0,
-                },
-                "resolver_version": HISTORICAL_ATTRIBUTION_VERSION,
-                # One archived capture is evidence for many roles, so an attribution
-                # is never the observation's primary identity.
-                "evidence_kind": "archive_page_attribution",
-                "is_primary": False,
-            },
+            self.link_payload(observation_id, role_id, match_confidence=match_confidence, rationale=rationale),
             on_conflict="observation_id,canonical_role_id",
         ).execute()
+
+    @staticmethod
+    def link_payload(
+        observation_id: UUID, role_id: UUID, *, match_confidence: float, rationale: str
+    ) -> dict[str, Any]:
+        """The observation_role_matches row an archive attribution upserts; never the observation's primary identity."""
+        return {
+            "observation_id": str(observation_id),
+            "canonical_role_id": str(role_id),
+            "decision": "matched",
+            "match_confidence": match_confidence,
+            "feature_scores": {"archive_title_attribution": match_confidence},
+            "reasons": [rationale],
+            "evidence": [
+                {
+                    "kind": "archive_capture_attribution",
+                    "value": match_confidence,
+                    "detail": rationale,
+                }
+            ],
+            "used_embedding": False,
+            "used_llm": False,
+            "inference_decision": {
+                "action": "not_required",
+                "reason": "stored_alias_match",
+                "llm_escalated": False,
+                "deterministic_best_score": match_confidence,
+                "deterministic_margin": 1.0,
+            },
+            "resolver_version": HISTORICAL_ATTRIBUTION_VERSION,
+            # One archived capture is evidence for many roles, so an attribution
+            # is never the observation's primary identity.
+            "evidence_kind": "archive_page_attribution",
+            "is_primary": False,
+        }
 
     def degraded_source_ids(self, company_id: UUID) -> set[UUID]:
         """Sources whose most recent collection was incomplete.
@@ -1443,31 +1749,22 @@ class IntelligenceRepository:
         Their archive evidence may be missing captures entirely, so absence cannot
         be inferred from it.
         """
-        source_ids = self._company_source_ids(company_id)
+        return self.degraded_among(self._company_source_ids(company_id))
+
+    def degraded_among(self, source_ids: list[str]) -> set[UUID]:
         if not source_ids:
             return set()
         # Only each source's latest fetch matters. Reading every fetch of every source met PostgREST's cap: one
-        # company already has 130, and they grow by about sixty a day.
-        latest: dict[str, dict[str, Any]] = {}
-        for source_id in source_ids:
-            # bounded: one row, the source's newest fetch, with its id breaking a tie on fetched_at.
-            rows = cast(
-                list[dict[str, Any]],
-                self.client.table("source_fetches")
-                .select("source_id,fetched_at,error")
-                .eq("source_id", source_id)
-                .order("fetched_at", desc=True)
-                .order("id", desc=True)
-                .limit(1)
-                .execute()
-                .data
-                or [],
-            )
-            if rows:
-                latest[source_id] = rows[0]
+        # company already has 130, and they grow by about sixty a day. latest_source_fetch_errors (migration
+        # 202608140045) returns each source's newest fetch, the id breaking a tie on fetched_at, in one request.
+        latest: list[dict[str, Any]] = []
+        for chunk in _chunked(source_ids, _FILTER_CHUNK):
+            # bounded: one row per source in the chunk, at most _FILTER_CHUNK rows.
+            response = self.client.rpc("latest_source_fetch_errors", {"p_source_ids": chunk}).execute()
+            latest += cast(list[dict[str, Any]], response.data or [])
         return {
-            UUID(source_id)
-            for source_id, row in latest.items()
+            UUID(str(row["source_id"]))
+            for row in latest
             if cast(dict[str, Any], row.get("error") or {}).get("status") == "degraded"
         }
 
@@ -1587,6 +1884,7 @@ class IntelligenceRepository:
         return UUID(str(rows[0]["id"]))
 
     def finish_agent_run(self, run_id: UUID, *, status: str, error: dict[str, Any] | None = None) -> None:
+        self.flush_model_attempts()
         self.client.table("agent_runs").update(
             {
                 "status": status,
@@ -1622,6 +1920,7 @@ class IntelligenceRepository:
         started_at: datetime,
         error: dict[str, Any] | None = None,
     ) -> UUID:
+        self.flush_model_attempts()
         response = (
             self.client.table("agent_tool_calls")
             .insert(
@@ -1643,9 +1942,35 @@ class IntelligenceRepository:
             raise RuntimeError("Supabase did not return the created tool call")
         return UUID(str(rows[0]["id"]))
 
+    # Model attempts waiting to be inserted together, when buffer_model_attempts() is on; None writes each at once.
+    _model_attempts: list[dict[str, Any]] | None = None
+    _MODEL_ATTEMPT_BUFFER = 200
+
+    def buffer_model_attempts(self) -> None:
+        """Insert model attempts together instead of one request each: before every tool call and run outcome is
+        recorded (each source, each company), and every 200 attempts.
+
+        Collection escalates many observations to a model, and each attempt was its own insert. A run that dies
+        between two tool calls loses the attempts of the source or company it was working on; every other record is
+        written as before. Only the collection commands turn this on; the agent API writes each attempt as it happens.
+        """
+        if self._model_attempts is None:
+            self._model_attempts = []
+
+    def flush_model_attempts(self) -> None:
+        pending = self._model_attempts
+        if pending:
+            self._model_attempts = []
+            self.insert_rows("model_usage", pending)
+
     def record_model_attempt(self, attempt: ModelAttempt) -> None:
         """Persist every provider attempt, including failures that trigger fallback."""
-        self.client.table("model_usage").insert(attempt.model_dump(mode="json")).execute()
+        if self._model_attempts is None:
+            self.client.table("model_usage").insert(attempt.model_dump(mode="json")).execute()
+            return
+        self._model_attempts.append(attempt.model_dump(mode="json"))
+        if len(self._model_attempts) >= self._MODEL_ATTEMPT_BUFFER:
+            self.flush_model_attempts()
 
     def get_signal_source_state(self, source_id: UUID) -> SignalSourceState | None:
         # bounded: one row, the signal state keyed by its source (primary key).

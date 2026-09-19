@@ -32,6 +32,9 @@ class Repository:
     def start_agent_run(self, **kwargs):
         return UUID("00000000-0000-4000-8000-000000000901")
 
+    def buffer_model_attempts(self):
+        type(self).model_attempts_buffered = True
+
     def finish_agent_run(self, run_id, *, status, error=None):
         type(self).finished_status = status
 
