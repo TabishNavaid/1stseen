@@ -4,17 +4,18 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
-import { PASSWORD_MIN_LENGTH, parseAuthFragment, passwordProblems } from "@/lib/auth/policy";
+import { PASSWORD_MIN_LENGTH, parseAuthFragment, passwordProblems, supabaseHandledLink } from "@/lib/auth/policy";
 import { FormMessage, TextField, focusRing, primaryButtonClass, textLinkClass } from "@/components/auth/fields";
-import { useInitialFragment } from "@/components/auth/use-initial-fragment";
+import { useInitialFragment, useInitialSearch } from "@/components/auth/use-initial-fragment";
 import { useHydrated } from "@/components/auth/use-hydrated";
 
-type Stage = "verifying" | "choose" | "no_link" | "link_unusable" | "link_invalid" | "session_expired";
+type Stage = "verifying" | "choose" | "no_link" | "link_unusable" | "link_invalid" | "link_outdated" | "session_expired";
 
 const stops: Record<Exclude<Stage, "verifying" | "choose">, { title: string; body: string }> = {
   no_link: { title: "Open the link from your reset email", body: "This page needs the link we emailed you. If you don't have one, request a new link." },
   link_unusable: { title: "This reset link has expired or was already used", body: "A reset link works once, for one hour. Request a new one to choose a password." },
   link_invalid: { title: "This reset link is incomplete", body: "Part of the link seems to be missing. Open it again from the email, or request a new link." },
+  link_outdated: { title: "Request a new reset link", body: "This link can't be finished on this page. Request a new one and open the newest email." },
   session_expired: { title: "Your reset session has ended", body: "For your security, a reset has to be finished soon after opening the link. Request a new one." },
 };
 
@@ -25,13 +26,24 @@ const stops: Record<Exclude<Stage, "verifying" | "choose">, { title: string; bod
 export function ResetPasswordFlow({ hasSession }: { hasSession: boolean }) {
   const router = useRouter();
   const fragment = useInitialFragment();
+  const search = useInitialSearch();
   // Until hydration the submit button is disabled, so a native submission can never carry these fields.
   const hydrated = useHydrated();
   const link = fragment ? parseAuthFragment(fragment, "recovery") : null;
+  // A link Supabase verified itself (its default template) arrives with a session this page never takes from a URL.
+  const handled = fragment === null || link ? null : supabaseHandledLink(fragment, search ?? "");
   // Set only by network outcomes. Before the fragment is read, or without a usable link, the
   // stage is derived: a reload after verification (a live session) goes straight to the form.
   const [outcome, setOutcome] = useState<Stage | null>(null);
-  const stage: Stage = outcome ?? (fragment === null ? "verifying" : link ? "verifying" : hasSession ? "choose" : "no_link");
+  const stage: Stage =
+    outcome ??
+    (fragment === null
+      ? "verifying"
+      : link
+        ? "verifying"
+        : hasSession
+          ? "choose"
+          : handled === "verified" ? "link_outdated" : handled === "expired" ? "link_unusable" : "no_link");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [errors, setErrors] = useState<{ password?: string; confirmation?: string }>({});
@@ -46,7 +58,7 @@ export function ResetPasswordFlow({ hasSession }: { hasSession: boolean }) {
   useEffect(() => {
     if (fragment === null || started.current) return;
     started.current = true;
-    if (fragment) window.history.replaceState(null, "", window.location.pathname);
+    if (fragment || search) window.history.replaceState(null, "", window.location.pathname);
     if (!link) return;
     void fetch("/api/auth/recovery", {
       method: "POST",
@@ -58,7 +70,7 @@ export function ResetPasswordFlow({ hasSession }: { hasSession: boolean }) {
         setOutcome(response.ok ? "choose" : payload.error === "link_unusable" ? "link_unusable" : "link_invalid");
       })
       .catch(() => setOutcome("link_invalid"));
-  }, [fragment, link]);
+  }, [fragment, search, link]);
 
   useEffect(() => { if (stage !== "verifying") headingRef.current?.focus(); }, [stage]);
   useEffect(() => { if (failure) failureRef.current?.focus(); }, [failure]);

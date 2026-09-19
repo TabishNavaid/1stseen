@@ -86,8 +86,12 @@ both load fixture data into the real database.
    `https://1stseen.win/**` and `http://localhost:3000/**`.
 6. **Authentication → Emails → Templates:** paste `supabase/templates/confirmation.html` into **Confirm signup**
    (subject `Confirm your 1stSeen account`) and `supabase/templates/recovery.html` into **Reset password**
-   (subject `Reset your 1stSeen password`). With the default templates, confirmation and reset links will not
-   work.
+   (subject `Reset your 1stSeen password`), replacing everything in each message body, and save each. Both links
+   are built from `{{ .SiteURL }}` and carry the token in the fragment
+   (`{{ .SiteURL }}/auth/confirm#token_hash={{ .TokenHash }}&type=email`), so the Site URL in step 5 must have no
+   trailing slash. With Supabase's default templates (`{{ .ConfirmationURL }}`) Supabase verifies the link itself:
+   the account is confirmed, but the page cannot sign the user in, and says so. The sign-up row of the smoke test
+   (section 8) is what proves the templates are the right ones: the confirmation link must land signed in on `/welcome`.
 7. **Authentication → Attack Protection:** leave **CAPTCHA off**. The app's sign-in routes do not send a
    CAPTCHA token, so turning it on breaks every sign-in.
 
@@ -366,7 +370,7 @@ As a brand-new user, on the live site:
 | Step | Expected |
 |---|---|
 | Sign up with a real address | "Check your email" state; the confirmation arrives (slowly, see step 1) |
-| Click the confirmation link | Lands on `https://1stseen.win`, signed in |
+| Click the confirmation link | Lands on `https://1stseen.win/welcome`, signed in (a page saying the address is confirmed and asking you to sign in means the hosted template is not the repository's: step 1.6) |
 | Sign out, then **Forgot your password?** | "Check your email"; the reset link opens "Choose a new password" |
 | Save a new password | Lands on the dashboard signed in; the old password no longer works |
 | Dashboard | Real companies, filters and pages change the URL |
