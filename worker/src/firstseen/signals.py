@@ -550,10 +550,32 @@ class RecruitingSignalIngestionService:
             evidence_text=result.evidence_text[:65_536],
             extraction_method=route,
         )
+        created, unchanged, signal_ids, role_ids = self._record_signals(
+            source, result.candidates, observed_at=observed_at, observation_id=observation_id
+        )
+        self.store.save_signal_source_state(result.state)
+        return SignalIngestionSummary(
+            source.id,
+            len(result.candidates),
+            created,
+            unchanged,
+            tuple(sorted(role_ids, key=str)),
+            tuple(signal_ids),
+        )
+
+    def _record_signals(
+        self,
+        source: SourceConfig,
+        candidates: Sequence[SignalCandidate],
+        *,
+        observed_at: datetime,
+        observation_id: UUID,
+    ) -> tuple[int, int, list[UUID], set[UUID]]:
+        """Store each candidate as a signal: how many were new, how many already stored, and the roles they reach."""
         created = unchanged = 0
         signal_ids: list[UUID] = []
         role_ids: set[UUID] = set()
-        for candidate in result.candidates:
+        for candidate in candidates:
             role_id = self.store.resolve_signal_role(source.company_id, candidate.evidence_snippet)
             signal = self._normalize(source, candidate, observed_at, observation_id, role_id)
             if self.store.upsert_recruiting_signal(signal):
@@ -565,15 +587,7 @@ class RecruitingSignalIngestionService:
                     role_ids.update(self.store.list_company_role_ids(source.company_id))
             else:
                 unchanged += 1
-        self.store.save_signal_source_state(result.state)
-        return SignalIngestionSummary(
-            source.id,
-            len(result.candidates),
-            created,
-            unchanged,
-            tuple(sorted(role_ids, key=str)),
-            tuple(signal_ids),
-        )
+        return created, unchanged, signal_ids, role_ids
 
     def ingest_social(
         self,
@@ -598,21 +612,9 @@ class RecruitingSignalIngestionService:
                 else "structured_endpoint"
             ),
         )
-        created = unchanged = 0
-        signal_ids: list[UUID] = []
-        role_ids: set[UUID] = set()
-        for candidate in candidates:
-            role_id = self.store.resolve_signal_role(source.company_id, candidate.evidence_snippet)
-            signal = self._normalize(source, candidate, observed_at, observation_id, role_id)
-            if self.store.upsert_recruiting_signal(signal):
-                created += 1
-                signal_ids.append(signal.id)
-                if role_id:
-                    role_ids.add(role_id)
-                else:
-                    role_ids.update(self.store.list_company_role_ids(source.company_id))
-            else:
-                unchanged += 1
+        created, unchanged, signal_ids, role_ids = self._record_signals(
+            source, candidates, observed_at=observed_at, observation_id=observation_id
+        )
         self.store.save_signal_source_state(
             SignalSourceState(
                 source_id=source.id,

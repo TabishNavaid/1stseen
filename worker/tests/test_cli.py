@@ -35,6 +35,9 @@ class Repository:
     def buffer_model_attempts(self):
         type(self).model_attempts_buffered = True
 
+    def cache_company_roles(self):
+        type(self).company_roles_cached = True
+
     def finish_agent_run(self, run_id, *, status, error=None):
         type(self).finished_status = status
 

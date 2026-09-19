@@ -52,11 +52,16 @@ class Query:
         self.payload: Any = None
         self.options: dict[str, Any] = {}
         self.offset = 0
+        self.filters: list[tuple[str, set[str]]] = []
 
     def select(self, *_: Any) -> Query:
         return self
 
     def eq(self, *_: Any) -> Query:
+        return self
+
+    def in_(self, column: str, values: list[str]) -> Query:
+        self.filters.append((column, set(values)))
         return self
 
     def is_(self, *_: Any) -> Query:
@@ -83,7 +88,7 @@ class Query:
         return self
 
     def execute(self) -> Any:
-        return self.client.run(self.table, self.op, self.payload, self.options, self.offset)
+        return self.client.run(self.table, self.op, self.payload, self.options, self.offset, self.filters)
 
 
 class Client:
@@ -100,12 +105,23 @@ class Client:
     def rpc(self, name: str, params: dict[str, Any]) -> Any:
         return SimpleNamespace(execute=lambda: self.run(name, "rpc", params, {}, 0))
 
-    def run(self, table: str, op: str, payload: Any, options: dict[str, Any], offset: int) -> Any:
+    def run(
+        self,
+        table: str,
+        op: str,
+        payload: Any,
+        options: dict[str, Any],
+        offset: int,
+        filters: list[tuple[str, set[str]]] | None = None,
+    ) -> Any:
         self.requests.append((table, op, payload, options))
         if (table, op) in self.refuse:
             raise APIError({"message": "refused", "code": "23505"})
         if op == "select":
-            return SimpleNamespace(data=self.rows.get(table, [])[offset : offset + 1000])
+            rows = [
+                row for row in self.rows.get(table, []) if all(str(row[column]) in values for column, values in filters or [])
+            ]
+            return SimpleNamespace(data=rows[offset : offset + 1000])
         return SimpleNamespace(data=None)
 
 
@@ -208,6 +224,78 @@ class RequestCounterTests(unittest.TestCase):
             hook(object())
             hook(object())
         self.assertEqual(subject.database_requests, 2)
+
+
+class ForecastEvidenceTests(unittest.TestCase):
+    """Signal ingestion reads roles and openings once and re-reads only the signals; the result must be a full load's."""
+
+    ROLE = "00000000-0000-4000-8000-00000000a001"
+    COMPANY = "00000000-0000-4000-8000-00000000c001"
+
+    def tables(self) -> dict[str, list[dict[str, Any]]]:
+        return {
+            "canonical_roles": [
+                {"id": self.ROLE, "company_id": self.COMPANY, "role_family": "software_engineering", "level": "internship",
+                 "recruiting_season": "summer", "companies": {"metadata": {"company_size": "large"}}},
+            ],
+            "raw_job_observations": [
+                {"id": "obs-1", "observed_at": "2025-08-01T00:00:00+00:00", "raw_title": "Software Engineer Intern"},
+                {"id": "page-1", "observed_at": "2026-06-01T00:00:00+00:00", "raw_title": "Careers"},
+            ],
+            "observation_role_matches": [
+                {"observation_id": "obs-1", "canonical_role_id": self.ROLE, "match_confidence": 0.9,
+                 "created_at": "2025-08-01T00:00:00+00:00"},
+            ],
+            "historical_opening_events": [
+                {"id": "event-1", "canonical_role_id": self.ROLE, "observation_id": "obs-1", "opened_on": "2025-08-01",
+                 "source_quality": 0.9, "opening_window_start": None, "opening_window_end": "2025-08-01",
+                 "uncertainty_days": 0, "date_precision": "exact", "available_at": "2025-08-01T00:00:00+00:00"},
+            ],
+            "signals": [
+                {"id": "signal-1", "company_id": self.COMPANY, "canonical_role_id": None, "observation_id": "page-1",
+                 "observed_at": "2026-06-01T00:00:00+00:00", "available_at": "2026-06-01T00:00:00+00:00",
+                 "strength": 0.5, "reliability": 0.7, "kind": "new_relevant_sitemap_url", "metadata": {}},
+            ],
+        }
+
+    def test_the_split_load_is_the_full_load(self) -> None:
+        client = Client(self.tables())
+        full = repository(client).load_backtest_dataset()
+        evidence = repository(client).load_forecast_evidence()
+        self.assertEqual((evidence.roles, evidence.events, repository(client).load_backtest_signals(evidence)), full)
+        self.assertEqual(len(full[2]), 1, "a company-scoped signal reaches the company's role")
+
+    def test_a_signal_written_after_the_evidence_was_loaded_is_read_with_its_page(self) -> None:
+        client = Client(self.tables())
+        subject = repository(client)
+        evidence = subject.load_forecast_evidence()
+        client.rows["raw_job_observations"].append(
+            {"id": "page-2", "observed_at": "2026-09-19T12:00:00+00:00", "raw_title": "Careers"}
+        )
+        client.rows["signals"].append(
+            {**client.rows["signals"][0], "id": "signal-2", "observation_id": "page-2",
+             "observed_at": "2026-09-19T12:00:00+00:00", "available_at": "2026-09-19T12:00:00+00:00"}
+        )
+        refreshed = subject.load_backtest_signals(evidence)
+        self.assertEqual(refreshed, repository(client).load_backtest_dataset()[2])
+        self.assertEqual(len(refreshed), 2)
+
+
+class CompanyRoleCacheTests(unittest.TestCase):
+    def test_a_company_s_roles_are_read_once_when_cached_and_every_time_otherwise(self) -> None:
+        rows = {"canonical_roles": [{"id": "00000000-0000-4000-8000-00000000a001", "normalized_title": "software engineer intern",
+                                     "company_normalized": "fixture", "role_aliases": []}]}
+        company = UUID(int=1)
+        for cached, expected_reads in ((True, 2), (False, 8)):
+            client = Client(rows)
+            subject = repository(client)
+            if cached:
+                subject.cache_company_roles()
+            for _ in range(2):
+                subject.resolve_signal_role(company, "software engineer intern")
+                subject.list_company_role_ids(company)
+            reads = [request for request in client.requests if request[1] == "select"]
+            self.assertEqual(len(reads), expected_reads, "each read is one page and the empty page that ends it")
 
 
 class ScopeBulkSaveTests(unittest.TestCase):

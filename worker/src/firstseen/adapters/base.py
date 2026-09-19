@@ -74,7 +74,26 @@ class FetchedDocument:
 
 
 class HttpTransport(Protocol):
-    def get(self, url: str, *, accept: str = "*/*") -> FetchedDocument: ...
+    def get(self, url: str, *, accept: str = "*/*", max_bytes: int | None = None) -> FetchedDocument: ...
+
+
+# The most one source may read, whatever its own `max_source_bytes` option asks for. MAX_SOURCE_BYTES (at most 10 MB)
+# bounds every source; a source whose single response is legitimately larger, such as a Greenhouse board with a few
+# thousand postings (Anduril's is 42 MB, and the board API has no paging), names its own limit instead, so raising
+# one source never raises the others.
+SOURCE_BYTES_CEILING = 64_000_000
+
+
+def source_byte_limit(source: SourceConfig) -> int | None:
+    """The source's own read limit from its `max_source_bytes` option, or None to use MAX_SOURCE_BYTES."""
+    value = source.options.get("max_source_bytes")
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        limit = int(value)
+    except (TypeError, ValueError):
+        return None
+    return max(10_000, min(limit, SOURCE_BYTES_CEILING))
 
 
 class UrlLibTransport:
@@ -106,7 +125,8 @@ class UrlLibTransport:
             sleeper=sleeper,
         )
 
-    def get(self, url: str, *, accept: str = "*/*") -> FetchedDocument:
+    def get(self, url: str, *, accept: str = "*/*", max_bytes: int | None = None) -> FetchedDocument:
+        limit = max_bytes or self.settings.max_source_bytes
         self.url_policy.validate(url)
         if self.robots is not None:
             self.robots.check(url)
@@ -123,14 +143,14 @@ class UrlLibTransport:
             declared_length = response.headers.get("content-length")
             if declared_length:
                 try:
-                    if int(declared_length) > self.settings.max_source_bytes:
+                    if int(declared_length) > limit:
                         raise ValueError("source_response_too_large")
                 except ValueError as exc:
                     if str(exc) == "source_response_too_large":
                         raise
                     # Broken Content-Length headers are ignored; the bounded read remains authoritative.
-            body = response.read(self.settings.max_source_bytes + 1)
-            if len(body) > self.settings.max_source_bytes:
+            body = response.read(limit + 1)
+            if len(body) > limit:
                 raise ValueError("source_response_too_large")
             return FetchedDocument(
                 url=response.url,

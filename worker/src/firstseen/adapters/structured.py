@@ -17,6 +17,7 @@ from .base import (
     SourceAdapter,
     SourceConfig,
     build_observations,
+    source_byte_limit,
 )
 from .common import location_text, parse_published_datetime, strip_html
 
@@ -60,7 +61,13 @@ class _JsonEndpointAdapter(SourceAdapter):
         observed_at: datetime,
         previous_document_hash: str | None = None,
     ) -> AdapterResult:
-        document = transport.get(self.endpoint(source), accept="application/json")
+        # A source's own limit is passed only when it has one, so a transport that predates the option still works.
+        limit = source_byte_limit(source)
+        document = (
+            transport.get(self.endpoint(source), accept="application/json", max_bytes=limit)
+            if limit is not None
+            else transport.get(self.endpoint(source), accept="application/json")
+        )
         if previous_document_hash == document.content_hash:
             return AdapterResult([], document.content_hash, "structured_endpoint", len(document.body), True)
         diagnostics: list[CollectionDiagnostic] = []

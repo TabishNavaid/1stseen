@@ -41,7 +41,7 @@ from .readiness import (
     SupabaseReadinessPlanStore,
 )
 from .recruiting_paths import page_source_allowed
-from .repository import BacktestDataset, IntelligenceRepository
+from .repository import BacktestDataset, ForecastEvidence, IntelligenceRepository
 from .role_identity_migration import (
     RoleIdentityMigrationService,
     RoleIdentityPlan,
@@ -74,9 +74,15 @@ from .takedown import TakedownRefused, TakedownService
 
 
 def _run_cost(repository: IntelligenceRepository, started: float) -> dict[str, object]:
-    """What a run cost the database: its PostgREST requests (each a round trip) and its wall time."""
+    """What a run cost: its PostgREST requests (each a round trip), what their responses downloaded on the wire (the
+    project's egress), and its wall time."""
     requests = getattr(repository, "database_requests", None)
-    return {"database_requests": requests, "elapsed_seconds": round(time.monotonic() - started, 1)}
+    downloaded = getattr(repository, "database_bytes", None)
+    return {
+        "database_requests": requests,
+        "database_mb_downloaded": round(downloaded / 1e6, 2) if downloaded is not None else None,
+        "elapsed_seconds": round(time.monotonic() - started, 1),
+    }
 
 
 def run_ingestion(company: str | None, *, collection: str = "all") -> int:
@@ -397,6 +403,7 @@ def plan_readiness_for_watchlists() -> int:
 
 
 def regenerate_changed_forecasts() -> int:
+    started = time.monotonic()
     repository = IntelligenceRepository.from_settings(get_settings())
     pipeline = "forecast_regeneration"
     cursor = repository.collection_checkpoint(pipeline)
@@ -548,6 +555,7 @@ def regenerate_changed_forecasts() -> int:
                 "readiness_failures": readiness_failures,
                 "failures": failures,
                 "cursor_advanced": cursor_advanced,
+                **_run_cost(repository, started),
                 "status": status,
                 "run_id": str(run_id),
             },
@@ -909,6 +917,7 @@ def record_scope_decision(args: argparse.Namespace) -> int:
 
 
 def run_backtest(*, cutoff_days: int, from_year: int | None, to_year: int | None) -> int:
+    started = time.monotonic()
     repository = IntelligenceRepository.from_settings(get_settings())
     roles, events, signals = repository.load_backtest_dataset()
     result = BacktestRunner().run(
@@ -922,10 +931,13 @@ def run_backtest(*, cutoff_days: int, from_year: int | None, to_year: int | None
     )
     repository.save_backtest_run(result)
     print(result.to_json())
+    # The run's cost goes to stderr: stdout is the result the workflow publishes as it is.
+    print(json.dumps({"backtest_run_cost": _run_cost(repository, started)}), file=sys.stderr)
     return 0
 
 
 def run_signal_ingestion(company: str | None) -> int:
+    started = time.monotonic()
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
     sources = [
@@ -949,6 +961,11 @@ def run_signal_ingestion(company: str | None) -> int:
         else None
     )
     versioner = SignalForecastVersionService(repository)
+    # A pass adds signals and nothing else a forecast reads, so roles and openings are read once, on the first source
+    # that creates a signal, and only the signals are read again after each such source. Company role lists are read
+    # once per company for the same reason.
+    repository.cache_company_roles()
+    evidence: ForecastEvidence | None = None
     created = recomputed = material = failures = insufficient_roles = unchanged_versions = 0
     skipped: dict[str, int] = {}
     for source in sources:
@@ -994,9 +1011,13 @@ def run_signal_ingestion(company: str | None) -> int:
             created += summary.created
             changes: list[dict[str, object]] = []
             if summary.signal_ids:
+                evidence = evidence or repository.load_forecast_evidence()
+                dataset = (evidence.roles, evidence.events, repository.load_backtest_signals(evidence))
                 for role_id in summary.affected_role_ids:
                     try:
-                        forecast = repository.build_current_forecast(role_id, as_of=started_at.date())
+                        forecast = repository.build_current_forecast(
+                            role_id, as_of=started_at.date(), dataset=dataset
+                        )
                     except InsufficientEvidenceError:
                         # A company-scoped signal reaches roles that cannot be forecast yet; that
                         # skips the role, it does not fail the source.
@@ -1058,6 +1079,7 @@ def run_signal_ingestion(company: str | None) -> int:
                 "unchanged_input_fingerprints": unchanged_versions,
                 "skipped_sources": skipped,
                 "failures": failures,
+                **_run_cost(repository, started),
                 "status": status,
             },
             indent=2,

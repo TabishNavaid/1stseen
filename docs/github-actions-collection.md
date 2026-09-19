@@ -60,8 +60,22 @@ captures, because reconstruction re-derives every role from them. On Figma that 
 wire, so about 45 MB per current-jobs run over the whole corpus. Four runs a day would be about 5.5 GB a month, more
 than Supabase Free's 5 GB of egress before anything else is counted, so current jobs run twice a day (about 2.7 GB).
 
-Every `ingest` and `enrich` summary reports `database_requests` and `elapsed_seconds`, and the workflow's step
-summary shows them, so a run drifting back toward per-row requests shows it in its own summary.
+Signal collection had the same shape. Every signal that names no single role recomputes each in-scope role of its
+company, and each recomputation re-read the whole evidence set (every role, observation, match, event, and signal,
+about 2 MB on the wire at the bootstrap's size). It now reads roles and openings once per run and only the signals again
+after each source that created some, since a signal pass adds nothing else a forecast reads. On a scratch copy of the
+rig corpus, a pass over IMC's 24 sources that created 970 signals and recomputed 14 forecasts took 18,948 requests and
+589 MB re-reading per role, and 2,499 requests and 29 MB now, writing identical signals, forecasts, forecast evidence,
+and changes. Most of the request difference is the evidence each forecast cites: it was looked up one request per id,
+and a forecast can cite over a thousand signals; it is now read a hundred ids at a time (forecast regeneration and the
+agent write forecasts through the same code). The same pass exposed a failure that predates this: a sitemap gaining two
+recruiting URLs for one role wrote two signals under the key `signals` allows once (role, observation, kind), the
+database refused the second, and the source failed on every later run. The first signal now stands for the page.
+
+Every `ingest`, `enrich`, `signals`, and `regenerate-forecasts` summary reports `database_requests`,
+`database_mb_downloaded` (response bytes on the wire, which is what Supabase counts as egress), and `elapsed_seconds`;
+`backtest` writes the same to its log. The workflow's step summary shows them, so a run drifting back toward per-row
+requests or large downloads shows it in its own summary.
 
 Every workflow also supports `workflow_dispatch`. Current jobs, signals, and historical enrichment accept an
 optional company name, domain, or UUID for bounded development runs.
@@ -104,6 +118,12 @@ silently restore the `config.py` defaults (a 2 MB response cap, which rejects re
 
 Forecast regeneration and backtesting make no source requests; they carry the same bounds for parity. A
 value outside the `config.py` limits makes `Settings` raise at import, so the run fails loudly.
+
+A single source whose one response is legitimately larger than `MAX_SOURCE_BYTES` names its own limit in its options
+(`sources.metadata.options.max_source_bytes`), bounded by `SOURCE_BYTES_CEILING` (64 MB) in
+`worker/src/firstseen/adapters/base.py`; every other source keeps the global cap. Anduril's Greenhouse board is the one
+such source today: 2,374 postings in one 42 MB response, and the board API has no paging, so its source carries
+`max_source_bytes: 50000000`.
 
 ## Required repository secrets
 
