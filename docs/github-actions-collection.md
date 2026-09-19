@@ -49,7 +49,9 @@ request, the round trips alone were about 80 minutes against 20 seconds. Collect
 and enriching the company (923 postings, 1,012 observations resolved) took 14,979 requests and 1,338 MB before and 183
 requests and 7.5 MB after, with the same outcome for every posting. What remains is about 8 requests per source (its
 page hash, its fetch record, its tool call) and about 45 per company, so a current-jobs pass over 296 sources and 58
-companies makes about 5,000 requests, some 8 minutes of round trips from a runner. On the hosted project, a
+companies makes about 5,000 requests, some 8 minutes of round trips from a runner. The first Actions run against the
+hosted project (dispatched 2026-09-19: 303 sources, 8,115 postings, 55 companies enriched, 61 new observations
+resolved) took 16 minutes end to end with 3,277 requests, well inside the 45-minute timeout. On the hosted project, a
 steady-state pass over Figma (324 observations, 144 roles, nothing new to resolve) took 1,251 requests and 78 s before
 and 26 requests and 4.7 s after.
 
