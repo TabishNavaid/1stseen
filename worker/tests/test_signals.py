@@ -330,3 +330,60 @@ class SignalVersionIdempotencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SitemapChildFailureTests(unittest.TestCase):
+    """One unreadable child of a sitemap index does not cost the whole source.
+
+    Dropbox's index lists ten children, and one of them answers with an HTML page. Refusing it is right -- it carries a
+    doctype, and `parse_untrusted_xml` refuses those -- but the refusal used to end the source, discarding nine
+    siblings including two with 370 KB of URLs between them. On 2026-09-20 that failed Dropbox's signals three runs in
+    a row and opened an ops alert. Collection has isolated a child like this from the start (adapters/feeds.py).
+    """
+
+    INDEX = "https://fixture.example/sitemapindex.xml"
+    GOOD = "https://fixture.example/careers/sitemap.xml"
+    HTML = "https://fixture.example/business/sitemap.xml"
+
+    def transport(self, *, html_child: bool = True) -> Transport:
+        index = (
+            f"<sitemapindex><sitemap><loc>{self.HTML}</loc></sitemap>"
+            f"<sitemap><loc>{self.GOOD}</loc></sitemap></sitemapindex>"
+        ).encode()
+        responses = {
+            self.INDEX: (index, "application/xml"),
+            self.GOOD: (
+                b"<urlset><url><loc>https://fixture.example/careers/software-internship</loc></url></urlset>",
+                "application/xml",
+            ),
+        }
+        if html_child:
+            responses[self.HTML] = (b"<!DOCTYPE html>\n<html><body>Not a sitemap</body></html>", "text/html")
+        return Transport(responses)
+
+    def ingest(self, transport: Transport):
+        store = MemorySignalStore()
+        service = RecruitingSignalIngestionService(store, transport)
+        first = service.ingest(source("sitemap", self.INDEX, emit_initial_signals=True), observed_at=SEEN)
+        return store, first
+
+    def test_the_readable_children_still_produce_their_signals(self) -> None:
+        store, summary = self.ingest(self.transport())
+        self.assertEqual(summary.created, 1, "the sibling's recruiting URL is still found")
+        self.assertEqual(list(summary.unreadable_children), [self.HTML], "and the one that failed is reported")
+        signal = next(iter(store.signals.values()))
+        self.assertEqual(signal.signal_type, "new_relevant_sitemap_url")
+
+    def test_a_child_that_answers_nothing_at_all_is_skipped_the_same_way(self) -> None:
+        # The child is missing from the transport, so fetching it raises KeyError: any failure, not only a parse one.
+        _, summary = self.ingest(self.transport(html_child=False))
+        self.assertEqual(summary.created, 1)
+        self.assertEqual(list(summary.unreadable_children), [self.HTML])
+
+    def test_a_source_whose_own_document_cannot_be_read_still_fails(self) -> None:
+        # A source that cannot be read at all has nothing to diff, so it must not look like a quiet success.
+        transport = Transport({})
+        store = MemorySignalStore()
+        service = RecruitingSignalIngestionService(store, transport)
+        with self.assertRaises(KeyError):
+            service.ingest(source("sitemap", self.INDEX), observed_at=SEEN)

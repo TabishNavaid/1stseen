@@ -283,13 +283,18 @@ def _enrich_companies(
             )
             continue
         summaries.append(summary)
-        # A complete pass that left the inputs as it found them changed nothing, and would change nothing again.
-        if (
-            key is not None
-            and summary.complete
-            and repository.company_enrichment_fingerprints([company_id]).get(company_id) == before[company_id]
-        ):
-            noop_keys[str(company_id)] = key
+        # A complete pass that left the inputs as it found them changed nothing, and would change nothing again. The
+        # fingerprint is an optimisation, so failing to take it costs a future pass and never this company: a refused or
+        # timed-out call here used to be the one thing in the loop that could end the whole run.
+        if key is not None and summary.complete:
+            try:
+                unchanged_inputs = (
+                    repository.company_enrichment_fingerprints([company_id]).get(company_id) == before[company_id]
+                )
+            except APIError:
+                unchanged_inputs = False
+            if unchanged_inputs:
+                noop_keys[str(company_id)] = key
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",
@@ -904,35 +909,46 @@ def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = 
     )
 
 
-def run_text_trim(keep: int) -> int:
-    """Shorten the text held against roles nobody can apply to, and report what moved.
+def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
+    """Shorten the text held against roles nobody can apply to, a chunk a call, and report what moved.
 
-    Run after collection: a pass classifies the roles it resolved, and this keeps what those classifications imply
-    about storage. It is idempotent, so running it when nothing is out of scope costs one request.
+    PostgREST connects under an eight-second statement timeout, which one statement over the whole corpus cannot meet:
+    the first scheduled run to try it failed with 57014 and changed nothing. So this calls the function until it reports
+    nothing left or the budget is spent, and the next run continues from where this one stopped. Every call is
+    idempotent, so stopping early costs nothing but time.
     """
     started = time.monotonic()
     repository = IntelligenceRepository.from_settings(get_settings())
-    report = repository.trim_out_of_scope_text(keep=keep)
-    megabytes = {
-        f"{name}_mb": round(report[f"{name}_bytes_before"] / 1e6, 2)
-        for name in ("excerpt", "prototype", "quote", "database")
-    }
-    freed = {
-        f"{name}_mb_removed": round((report[f"{name}_bytes_before"] - report[f"{name}_bytes_after"]) / 1e6, 2)
-        for name in ("excerpt", "prototype", "quote")
-    }
+    before = repository.out_of_scope_text_bytes()
+    totals = {"observations": 0, "roles": 0, "events": 0}
+    calls = 0
+    remaining = {"remaining_observations": -1, "remaining_roles": -1, "remaining_events": -1}
+    while time.monotonic() - started < max_seconds:
+        report = repository.trim_out_of_scope_text(keep=keep)
+        calls += 1
+        for name in totals:
+            totals[name] += report[name]
+        remaining = {name: report[name] for name in remaining}
+        if not any(remaining.values()):
+            break
+    after = repository.out_of_scope_text_bytes()
     print(
         json.dumps(
             {
                 "kept_characters": keep,
-                **report,
-                "before_mb": megabytes,
-                "removed_mb": freed,
-                "database_mb_after": round(report["database_bytes_after"] / 1e6, 2),
-                # An UPDATE leaves the old row version behind, so this does not fall until the tables are vacuumed.
-                "database_mb_change": round(
-                    (report["database_bytes_after"] - report["database_bytes_before"]) / 1e6, 2
-                ),
+                "calls": calls,
+                "shortened": totals,
+                **remaining,
+                "finished": not any(remaining.values()),
+                "before_mb": {name: round(before[f"{name}_bytes"] / 1e6, 2) for name in _TEXT_KINDS},
+                "after_mb": {name: round(after[f"{name}_bytes"] / 1e6, 2) for name in _TEXT_KINDS},
+                "removed_mb": {
+                    name: round((before[f"{name}_bytes"] - after[f"{name}_bytes"]) / 1e6, 2)
+                    for name in ("excerpt", "prototype", "quote")
+                },
+                # An UPDATE leaves the old row version behind, so this does not fall until the tables are vacuumed
+                # (docs/operations.md, "Trimming out-of-scope text").
+                "database_mb_change": round((after["database_bytes"] - before["database_bytes"]) / 1e6, 2),
                 # Kept apart from a collection run's own timing, which measures collection.
                 "trim_seconds": round(time.monotonic() - started, 1),
                 **_run_cost(repository, started),
@@ -941,6 +957,9 @@ def run_text_trim(keep: int) -> int:
         )
     )
     return 0
+
+
+_TEXT_KINDS = ("excerpt", "prototype", "quote", "database")
 
 
 def show_inference_metrics(run_id: str | None) -> int:
@@ -1235,6 +1254,8 @@ def run_signal_ingestion(company: str | None) -> int:
                     "affected_roles": len(summary.affected_role_ids),
                     "forecast_changes": changes,
                     "skipped": summary.skipped,
+                    # Children of a sitemap index that could not be read, so a site that stops serving one is visible.
+                    "unreadable_children": list(summary.unreadable_children[:20]),
                 },
                 started_at=started_at,
             )
@@ -1412,6 +1433,12 @@ def main() -> int:
         help="Keep only the first characters of the text held against out-of-scope roles (migration 202608140047)",
     )
     trim_parser.add_argument(
+        "--max-seconds",
+        type=float,
+        default=300.0,
+        help="Stop calling after this many seconds; the next run continues (default: 300)",
+    )
+    trim_parser.add_argument(
         "--keep",
         type=int,
         default=OUT_OF_SCOPE_TEXT_KEPT,
@@ -1543,7 +1570,7 @@ def main() -> int:
     if args.command == "register-ats-board":
         return run_ats_board_registration(args.company, args.tenant, args.adapter)
     if args.command == "trim-text":
-        return run_text_trim(args.keep)
+        return run_text_trim(args.keep, max_seconds=args.max_seconds)
     if args.command == "metrics":
         return show_inference_metrics(args.run_id)
     if args.command == "backtest":

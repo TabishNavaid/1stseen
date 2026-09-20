@@ -119,6 +119,24 @@ archive capture, a re-resolution, a scope review, a deploy, or a new model key m
 `firstseen enrich --force` enriches every company regardless. If the database lacks the fingerprint function, every
 company is enriched, as before.
 
+That skip never worked in production until 2026-09-20. The fingerprint hashed `to_jsonb(row)` of every observation,
+role, event and capture, which serialises the posting text, prototypes, quotes and archived page text: one company
+(Notion) took 6 to 9 seconds and all eighty took 90 seconds, against the eight-second `statement_timeout` PostgREST
+connects under. Every call timed out, a missing fingerprint means "not known to be unchanged", and so every company was
+enriched on every run: a pass with 591 new observations across eighty companies re-derived all eighty, which is most of
+why it took 26 minutes and downloaded 58 MB.
+
+Migration `202608140049` hashes the columns enrichment reads instead, and not the ones a digest the row already carries
+covers: a posting's `content_hash` stands for its text, title, company, location, employment type, URLs, publication
+date and capture time, an archived page's two hashes stand for its text and titles, a stored opening keeps its quote, and
+a role's prototype moves only with a resolution that also writes a match. Every exclusion is named in the migration with
+its reason, and `worker/tests/test_enrichment_fingerprint.py` fails if a column of those tables is neither hashed nor
+excluded there, which is what replaces the safety `to_jsonb` gave by covering a new column by default.
+
+Measured on hosted: one company fell from 6,018 ms to 166 ms, and the whole corpus from 90 s to **3.9 s over sixteen
+calls of five companies, the slowest 416 ms** — a nineteenfold margin on the timeout. A call that does time out costs
+only that chunk's skips, never the run.
+
 Proved on a scratch copy of the rig corpus with every derived row compared, timestamps included: a first pass, then a
 forced second pass that changed nothing for any company (51,676 rows identical), then a third pass that skipped all 58
 companies and left every row as it was, with 70 requests and 0.2 MB against 1,424 requests and 149 MB for the forced

@@ -260,6 +260,15 @@ Proved on a copy of the rig corpus in a rolled-back transaction: 30.3 MB of exce
 of quotes removed from a 246 MB database, with in-scope prototypes, in-scope quotes and unresolved excerpts untouched
 and a second call changing nothing.
 
+**A call has eight seconds.** PostgREST connects as `authenticator`, which carries `statement_timeout=8s`, and three
+full-table updates do not finish in that: the first scheduled run to call the one-statement form failed with 57014,
+"canceling statement due to statement timeout", and changed nothing (the collection run was unaffected, because the step
+cannot fail it). Migration `202608140048` shortens at most 200 rows a column a call and reports how many of each kind
+are still long, and `firstseen trim-text` calls it until nothing remains or its own `--max-seconds` is spent; whatever a
+run leaves, the next continues. 200 is measured: over a copy of the rig corpus the trim converged in 47 calls with the
+slowest taking 1.4 s, where 500 converged in 19 calls but one took 3.7 s, too near eight seconds on a machine faster
+than a shared production instance.
+
 **An UPDATE does not free space.** Postgres writes a new version of every row it shortens and leaves the old one dead,
 so immediately after the trim the reported size is *larger* (246 MB became 271 MB in that transaction). Autovacuum then
 marks the dead space reusable, which stops the corpus growing into new space but does not return the old space to the

@@ -611,6 +611,71 @@ class RegenerationScopeTests(unittest.TestCase):
         self.assertEqual(ScopedForecastRepository.saved_forecasts, 1)
 
 
+class TextTrimLoopTests(unittest.TestCase):
+    """The trim calls until nothing is left or its budget is spent, and says which happened.
+
+    PostgREST connects under an eight-second statement timeout, so one call shortens a chunk: the first scheduled run
+    to call the unchunked version failed with 57014 and changed nothing. A run that stops early is not a failure, since
+    every call is idempotent and the next run continues.
+    """
+
+    class TrimRepository:
+        """Reports work remaining for the first few calls, then none."""
+
+        def __init__(self, rounds: int) -> None:
+            self.rounds = rounds
+            self.calls = 0
+            self.byte_calls = 0
+
+        @classmethod
+        def from_settings(cls, settings):
+            return cls(3)
+
+        def out_of_scope_text_bytes(self):
+            self.byte_calls += 1
+            held = 9_000_000 if self.byte_calls == 1 else 2_000_000
+            return {
+                "excerpt_bytes": held, "prototype_bytes": held, "quote_bytes": held,
+                "database_bytes": 300_000_000 + self.byte_calls,
+            }
+
+        def trim_out_of_scope_text(self, *, keep=300, limit=200):
+            self.calls += 1
+            left = max(0, self.rounds - self.calls)
+            return {
+                "observations": 200 if left else 7, "roles": 200 if left else 3, "events": 200 if left else 1,
+                "remaining_observations": left, "remaining_roles": 0, "remaining_events": 0,
+            }
+
+    def run_trim(self, repository, **kwargs):
+        with patch.object(cli.IntelligenceRepository, "from_settings", staticmethod(lambda settings: repository)), \
+             redirect_stdout(StringIO()) as output:
+            code = cli.run_text_trim(300, **kwargs)
+        return code, json.loads(output.getvalue())
+
+    def test_it_calls_until_nothing_is_left(self):
+        repository = self.TrimRepository(3)
+        code, payload = self.run_trim(repository)
+        self.assertEqual(code, 0)
+        self.assertEqual(repository.calls, 3)
+        self.assertTrue(payload["finished"])
+        self.assertEqual(payload["shortened"], {"observations": 407, "roles": 403, "events": 401})
+        self.assertEqual(payload["removed_mb"]["excerpt"], 7.0)
+        self.assertIn("trim_seconds", payload)
+
+    def test_a_spent_budget_stops_it_and_says_what_is_left(self):
+        repository = self.TrimRepository(500)
+        code, payload = self.run_trim(repository, max_seconds=0.0)
+        self.assertEqual(code, 0, "stopping early is not a failure")
+        self.assertEqual(repository.calls, 0)
+        self.assertFalse(payload["finished"])
+
+    def test_the_two_byte_readings_are_the_ends_not_every_call(self):
+        repository = self.TrimRepository(3)
+        self.run_trim(repository)
+        self.assertEqual(repository.byte_calls, 2)
+
+
 class DeterministicRunTests(unittest.TestCase):
     """A collection run states whether any model answered it.
 
