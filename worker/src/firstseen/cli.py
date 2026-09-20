@@ -283,13 +283,18 @@ def _enrich_companies(
             )
             continue
         summaries.append(summary)
-        # A complete pass that left the inputs as it found them changed nothing, and would change nothing again.
-        if (
-            key is not None
-            and summary.complete
-            and repository.company_enrichment_fingerprints([company_id]).get(company_id) == before[company_id]
-        ):
-            noop_keys[str(company_id)] = key
+        # A complete pass that left the inputs as it found them changed nothing, and would change nothing again. The
+        # fingerprint is an optimisation, so failing to take it costs a future pass and never this company: a refused or
+        # timed-out call here used to be the one thing in the loop that could end the whole run.
+        if key is not None and summary.complete:
+            try:
+                unchanged_inputs = (
+                    repository.company_enrichment_fingerprints([company_id]).get(company_id) == before[company_id]
+                )
+            except APIError:
+                unchanged_inputs = False
+            if unchanged_inputs:
+                noop_keys[str(company_id)] = key
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",

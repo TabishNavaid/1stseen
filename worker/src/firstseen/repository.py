@@ -74,6 +74,8 @@ OUT_OF_SCOPE_TEXT_KEPT = 300
 # Rows a column one call shortens. Measured, not guessed: at 200 the whole trim converged over a copy of the rig corpus
 # in 47 calls with the slowest taking 1.4 s, against the eight-second statement timeout PostgREST connects under.
 OUT_OF_SCOPE_TRIM_CHUNK = 200
+# Companies whose fingerprint one call asks for (migration 202608140049).
+FINGERPRINT_CHUNK = 5
 # What trim_out_of_scope_text reports (migration 202608140048), in its order.
 TRIM_REPORT_FIELDS = (
     "observations",
@@ -413,9 +415,12 @@ class IntelligenceRepository:
         """Each company's enrichment-input fingerprint, computed in the database (migration 202608140046)."""
         fingerprints: dict[UUID, str] = {}
         ids = [str(item) for item in company_ids]
-        # Ten companies a call: the function hashes every row a company's enrichment reads, about 150 ms of database
-        # time per company, so a call stays far inside any statement timeout.
-        for chunk in (ids[index : index + 10] for index in range(0, len(ids), 10)):
+        # Five companies a call. Measured on hosted on 2026-09-20 with migration 049: a warm call over five takes about
+        # 200-350 ms and the whole corpus about 3.5 s, while the first call of a connection pays for cold buffer cache
+        # and has been seen at 6 s over ten companies -- close enough to the eight-second statement timeout to halve
+        # the work per call. A call that does time out costs only that chunk's skips: the caller treats a missing
+        # fingerprint as "not known to be unchanged" and enriches those companies.
+        for chunk in (ids[index : index + FINGERPRINT_CHUNK] for index in range(0, len(ids), FINGERPRINT_CHUNK)):
             # bounded: one row per company in the chunk, at most ten.
             response = self.client.rpc("company_enrichment_fingerprints", {"p_company_ids": chunk}).execute()
             for row in cast(list[dict[str, Any]], response.data or []):
