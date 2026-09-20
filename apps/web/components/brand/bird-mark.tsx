@@ -1,25 +1,29 @@
-import { BIRD_MARK, type BirdMarkGround } from "@/lib/brand/bird-mark";
+import { createElement, type ReactElement } from "react";
+import { BIRD_MARK, MARK_ID_SLOT, type BirdMarkKind, type MarkNode } from "@/lib/brand/bird-mark";
 import { cn } from "@/lib/utils";
 
 /**
- * The bird's head at mark weight (lib/brand/bird-mark.ts, drawn by scripts/build-brand-art.mjs): the head, the crest,
- * one eye and the beak, and nothing else, because a pose's legs and tail are a smudge below about 40 pixels.
+ * The mark, drawn inline from `lib/brand/bird-mark.ts` (which `scripts/build-brand-art.mjs` writes out of
+ * `design-refs/icon`). It never costs a request and never arrives after the word beside it.
  *
- * `ground` is what it is drawn on. On paper it keeps its ink outline; on the accent tile the outline is dropped and
- * the paper shape is the silhouette, which is the only way it survives 16 pixels.
+ * The drawing clips itself to its own tile, and a clip is reached by id, which is a name the whole document shares.
+ * A page wears the mark at both of its ends, so each copy is given its own `markId`; `brand-mark.tsx` names them and
+ * `tests/brand-mark.test.mjs` checks that a page never sends the same one twice.
  *
- * It is drawn inline like every other piece of the bird, so the wordmark never waits for a request, and it is
- * decoration: the word "1stSeen" beside it is what names the link.
+ * Every element is rendered as an element. Nothing here sets markup from a string, and nothing changes the drawing:
+ * the attributes are the file's own.
  */
-export function BirdMark({ ground = "paper", className }: { ground?: BirdMarkGround; className?: string }) {
-  const art = BIRD_MARK[ground];
+
+function element(node: MarkNode, id: string, key: number): ReactElement {
+  const attrs = Object.fromEntries(Object.entries(node.attrs).map(([name, value]) => [name, value.replaceAll(MARK_ID_SLOT, id)]));
+  return createElement(node.tag, { key, ...attrs }, node.children?.map((child, index) => element(child, id, index)));
+}
+
+export function BirdMark({ markId, kind = "mark", className }: { markId: string; kind?: BirdMarkKind; className?: string }) {
+  const art = BIRD_MARK[kind];
   return (
     <svg viewBox={art.viewBox} className={cn("shrink-0 select-none", className)} aria-hidden="true" focusable="false">
-      {art.shapes.map((shape, index) =>
-        shape.tag === "path" ? <path key={index} d={shape.d} fill={shape.fill} />
-          : shape.tag === "circle" ? <circle key={index} cx={shape.cx} cy={shape.cy} r={shape.r} fill={shape.fill} />
-            : <ellipse key={index} cx={shape.cx} cy={shape.cy} rx={shape.rx} ry={shape.ry} fill={shape.fill} />,
-      )}
+      {art.nodes.map((node, index) => element(node, markId, index))}
     </svg>
   );
 }

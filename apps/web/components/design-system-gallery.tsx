@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { BrandLockup } from "@/components/brand-mark";
+import { BirdMark } from "@/components/brand/bird-mark";
 import { Button } from "@/components/ui/button";
 import { Checkbox, RadioGroup } from "@/components/ui/choice";
 import { Combobox } from "@/components/ui/combobox";
@@ -42,26 +42,23 @@ export function DesignSystemGallery() {
       </header>
 
       <Section title="Brand mark">
-        <p className="text-xs text-ink-subtle">Three arrangements of the same drawing. One is live; the constant at the top of components/brand-mark.tsx decides which.</p>
-        <ul className="mt-4 grid list-none gap-3 p-0 sm:grid-cols-3">
-          {(["tile", "perched", "beside"] as const).map((lockup) => (
-            <li key={lockup} className="rounded-card border border-line bg-surface p-4">
-              <span className="inline-flex items-center gap-2"><BrandLockup lockup={lockup} /></span>
-              <p className="mt-3 font-mono text-micro text-ink-subtle">{lockup}</p>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-4 flex flex-wrap items-end gap-6 rounded-card bg-accent p-4">
-          {(["tile", "perched", "beside"] as const).map((lockup) => (
-            <span key={lockup} className="inline-flex items-center gap-2"><BrandLockup lockup={lockup} inverse /></span>
-          ))}
+        <p className="text-xs text-ink-subtle">One drawing, from design-refs/icon, written out by scripts/build-brand-art.mjs. The tile belongs to the drawing.</p>
+        <div className="mt-4 flex flex-wrap items-center gap-6">
+          <span className="inline-flex items-center gap-2 rounded-card border border-line bg-surface p-4">
+            <BirdMark markId="brand-mark-gallery" className="size-8" />
+            <span className="heading-display text-lg text-ink">1stSeen</span>
+          </span>
+          <span className="inline-flex items-center gap-2 rounded-card bg-accent p-4">
+            <BirdMark markId="brand-mark-gallery-inverse" className="size-8" />
+            <span className="heading-display text-lg text-ink-inverse">1stSeen</span>
+          </span>
         </div>
-        <p className="mt-5 text-xs text-ink-subtle">The tile a tab, a bookmark and a home screen show, at the sizes each of them draws it.</p>
-        <div className="mt-3 flex items-end gap-6">
-          {[16, 32, 180].map((pixels) => (
+        <p className="mt-5 text-xs text-ink-subtle">The icon a tab, a bookmark and a home screen show, at the size each of them draws it. The two smallest are the heavier drawing.</p>
+        <div className="mt-3 flex flex-wrap items-end gap-6">
+          {([[16, "/favicon.svg"], [32, "/icon-32.png"], [180, "/apple-touch-icon.png"]] as const).map(([pixels, src]) => (
             <span key={pixels} className="grid justify-items-center gap-2">
               {/* eslint-disable-next-line @next/next/no-img-element -- the shipped icon itself, at its shipped size */}
-              <img src="/favicon.svg" alt="" width={pixels} height={pixels} style={{ width: pixels, height: pixels }} />
+              <img src={src} alt="" width={pixels} height={pixels} style={{ width: pixels, height: pixels }} />
               <span className="font-mono text-micro text-ink-subtle">{pixels}px</span>
             </span>
           ))}

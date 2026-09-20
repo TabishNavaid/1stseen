@@ -14,7 +14,7 @@ export function SiteFooter() {
     <footer className="border-t border-line bg-surface-sunken">
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-6 md:grid-cols-[minmax(0,1fr)_auto] md:gap-10 md:px-6">
         <div className="max-w-3xl">
-          <BrandMark className="-ml-1" />
+          <BrandMark markId="brand-mark-foot" className="-ml-1" />
           <p className="mt-2 text-caption leading-5 text-ink-muted">
             Opening dates on 1stSeen are predictions from each program&apos;s public posting history, and their accuracy is
             not yet validated. 1stSeen is independent, and not affiliated with or endorsed by any company it lists.{" "}

@@ -24,11 +24,17 @@ the bird turns up small beside them, one to a screen, the way a signature does.
 Two poses stay in `design-refs/bird/` and are not written out: `sleeping` and `waving`. A pose nobody draws is ten
 kilobytes of a page for nothing, so `BIRDS` in `scripts/build-brand-art.mjs` is the list of the ones in use.
 
-The mark itself — the bird's head, beside the wordmark in the header and the footer, and on the tile a browser tab,
-a bookmark and a home screen show — is drawn by the same script rather than cut out of a pose, because a pose's legs,
-tail and wing are a smudge below about forty pixels. It comes in two arrangements: on paper it keeps its ink outline,
-and on the accent tile the outline is dropped so the paper shape is the whole silhouette. `apps/web/public/favicon.svg`,
-`icon-32.png`, `apple-touch-icon.png` and the corner of `og-image.png` are all written from that one drawing.
+The mark itself — beside the wordmark in the header and the footer, and on the icon a browser tab, a bookmark, a
+home screen and the corner of a link preview show — is its own pair of drawings, `design-refs/icon/icon-C.svg` and
+`design-refs/icon/favicon-C.svg`. They are the same bird; the second carries a heavier line, which is what lets it
+hold together at sixteen pixels, and it draws `favicon.svg` and `icon-32.png` while the first draws everything
+larger. The tile belongs to the drawings, so the wordmark supplies none.
+
+`scripts/build-brand-art.mjs` takes the provenance manifest off the copy that ships, shrinks the file, and writes the
+elements into `apps/web/lib/brand/bird-mark.ts`. It changes nothing else: not a point, not a colour, not a shape. At
+16, 32 and 180 pixels the optimised drawing and the file it came from render the same pixels. The one thing added is
+behind the home-screen icon, where the drawing's own tile colour fills the square, because a home screen rounds the
+corners itself and fills nothing behind them.
 
 The hand marks beside it (arrows, the stamp ring, the sticker edge, section rules) are drawn by the same script with
 [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (MIT) and written out as static geometry, so the

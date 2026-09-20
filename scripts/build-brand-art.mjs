@@ -44,7 +44,7 @@ const svgo = (svg, precision) => optimize(svg, {
   multipass: true,
   floatPrecision: precision,
   plugins: [
-    { name: "preset-default", params: { overrides: { removeViewBox: false, removeUnknownsAndDefaults: { keepAriaAttrs: true, keepRoleAttr: true } } } },
+    { name: "preset-default", params: { overrides: { removeUnknownsAndDefaults: { keepAriaAttrs: true, keepRoleAttr: true } } } },
     { name: "removeDimensions" },
   ],
 }).data;
@@ -161,85 +161,82 @@ const MARKS = {
   underline: { viewBox: "0 0 140 14", d: line([6, 8], [134, 6], { size: 4, taperStart: 40, taperEnd: 55 }) },
 };
 
-/** A leaf: two arcs from the same root to the same tip, bowed apart. The crest is made of these. */
-function leaf(base, tip, bulge = 0.3) {
-  const dx = tip[0] - base[0];
-  const dy = tip[1] - base[1];
-  const at = (side) => [base[0] + dx * 0.45 - dy * bulge * side, base[1] + dy * 0.45 + dx * bulge * side].map((value) => Math.round(value * 10) / 10);
-  return `M ${base[0]} ${base[1]} Q ${at(1).join(" ")} ${tip[0]} ${tip[1]} Q ${at(-1).join(" ")} ${base[0]} ${base[1]} Z`;
+/**
+ * The mark, from `design-refs/icon/`. Two drawings, not one: `icon-C.svg` is the mark itself, and `favicon-C.svg` is
+ * the same bird with the line weight a browser tab needs. They arrive finished, so nothing here redraws them. What
+ * this does is take the provenance manifest off the copy that ships, shrink the file, and hand the elements to the
+ * page as elements rather than as a string of markup.
+ *
+ * The tile is part of the drawing, so the wordmark no longer supplies one.
+ */
+const MARK_SOURCES = { mark: "icon-C", small: "favicon-C" };
+
+/** What the clip's id becomes, so a page that draws the mark twice can give each copy an id of its own. */
+const ID_SLOT = "__id__";
+
+function markSvg(name) {
+  const source = readFileSync(resolve(ROOT, "design-refs/icon", `${name}.svg`), "utf8");
+  const drawing = source.replace(/<metadata>[\s\S]*?<\/metadata>/g, "").replace(/\s*xmlns:c2pa="[^"]*"/g, "");
+  // Size only: nothing that would move a point or merge two shapes into one.
+  return optimize(drawing, {
+    multipass: true,
+    floatPrecision: 2,
+    plugins: [
+      {
+        name: "preset-default",
+        params: {
+          overrides: {
+            mergePaths: false,
+            convertShapeToPath: false,
+            convertPathData: { floatPrecision: 2, forceAbsolutePath: false, makeArcs: false },
+            cleanupIds: false,
+          },
+        },
+      },
+      { name: "removeDimensions" },
+    ],
+  }).data;
 }
 
-/** A closed shape from its corners, for the few pieces of the mark a pen would not wobble: the beak. */
-function polygon(points) {
-  return `M ${points.map(([x, y]) => `${x} ${y}`).join(" L ")} Z`;
-}
+const camel = (name) => name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 
 /**
- * The mark: the bird's head alone, at the weight it needs to survive a browser tab.
- *
- * It is drawn here rather than cut out of a pose. A pose is 19 shapes at 200 pixels and keeps its charm by having
- * legs, a tail, feather ticks and a wing; at 16 pixels every one of those is a smudge. What actually carries the
- * character that small is the round head, the coral beak, one eye and the sage crest, so that is what this draws,
- * with the same pen and the same palette.
- *
- * Two assemblies come out of it. On paper the ink outline is the drawing and the fill is the paper behind it. On the
- * tile the outline is dropped: the tile is the accent green, the paper shape is the whole silhouette, and the eye and
- * the beak are the only marks on it. Dropping the outline is what makes the tile legible at 16 pixels, where a 1.5
- * pixel ink line against a dark green ground is nothing at all.
+ * The drawing as a tree of elements, so the page can render each one. Every attribute is carried over as it is; the
+ * only thing changed is the clip's id, which becomes a slot the component fills.
  */
-function birdMark() {
-  const head = { tag: "ellipse", fill: "var(--color-drawn-paper)", cx: 19.3, cy: 23.2, rx: 13.4, ry: 12.3 };
-  const outline = { tag: "path", fill: "var(--color-drawn-ink)", d: ring({ cx: 19.3, cy: 23.2, rx: 13.4, ry: 12.3, size: 3, from: 0.12, turns: 1.06 }) };
-  // The crest the happy and waving poses wear: three leaves swept back off the crown, away from the beak, so
-  // the tuft reads as a tuft and not as a pair of ears.
-  const crest = {
-    tag: "path",
-    fill: "var(--color-drawn-sage)",
-    d: [leaf([19.6, 16.4], [9.8, 6.2], 0.3), leaf([20.6, 15.6], [15.4, 3.4], 0.26), leaf([21.8, 16.6], [22.6, 4.8], 0.24)].join(" "),
-  };
-  const beak = { tag: "path", fill: "var(--color-drawn-beak)", d: polygon([[29.8, 21], [37.4, 24.6], [29.6, 26.8]]) };
-  const eye = { tag: "circle", fill: "var(--color-drawn-ink)", cx: 23.8, cy: 20.8, r: 2.2 };
-  // The cheek is the one mark that turns to a second beak when it is small, so only the drawn size wears it.
-  const cheek = { tag: "ellipse", fill: "var(--color-drawn-beak)", cx: 22.6, cy: 27.4, rx: 3, ry: 1.8 };
-  return {
-    viewBox: "6 2 33 34",
-    label: "1stSeen",
-    onPaper: [head, outline, crest, cheek, eye, beak],
-    onTile: [head, crest, eye, beak],
-  };
+function markTree(svg) {
+  const viewBox = /viewBox="([^"]+)"/.exec(svg)?.[1] ?? "0 0 120 120";
+  const body = svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+  const roots = [];
+  const stack = [{ children: roots }];
+  const token = /<(\/?)([a-zA-Z][\w:-]*)((?:\s+[\w:-]+="[^"]*")*)\s*(\/?)>/g;
+  let read = 0;
+  for (const match of body.matchAll(token)) {
+    const [whole, closing, tag, attributes, selfClosing] = match;
+    read += whole.length;
+    if (closing) {
+      stack.pop();
+      continue;
+    }
+    const attrs = {};
+    for (const pair of attributes.matchAll(/([\w:-]+)="([^"]*)"/g)) {
+      if (pair[1] === "xmlns") continue;
+      const value = pair[2].replace(/url\(#[^)]*\)/, `url(#${ID_SLOT})`);
+      attrs[camel(pair[1])] = pair[1] === "id" ? ID_SLOT : value;
+    }
+    const node = { tag, attrs };
+    stack[stack.length - 1].children.push(node);
+    if (!selfClosing) {
+      node.children = [];
+      stack.push(node);
+    }
+  }
+  if (read !== body.length) throw new Error(`mark: read ${read} of ${body.length} characters`);
+  if (stack.length !== 1) throw new Error("mark: a tag was left open");
+  return { viewBox, nodes: roots };
 }
 
-const MARK = birdMark();
-
-/** The mark's colours where a stylesheet cannot reach: a favicon, a home-screen icon, a picture in someone's feed. */
-const ICON_COLORS = {
-  "var(--color-drawn-ink)": "#23332c",
-  "var(--color-drawn-paper)": "#fffdf8",
-  "var(--color-drawn-beak)": "#e8826a",
-  "var(--color-drawn-sage)": "#b9d4be",
-};
-
-function shapeSvg(shape) {
-  const fill = ICON_COLORS[shape.fill] ?? shape.fill;
-  if (shape.tag === "path") return `<path fill="${fill}" d="${shape.d}"/>`;
-  if (shape.tag === "circle") return `<circle fill="${fill}" cx="${shape.cx}" cy="${shape.cy}" r="${shape.r}"/>`;
-  return `<ellipse fill="${fill}" cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`;
-}
-
-/**
- * The tile, at whatever size is asked for: the accent green, rounded the way the wordmark's tile is rounded, with the
- * mark set in it at nine tenths of the width so the beak never touches an edge.
- */
-function tileSvg(size, radius = size * 0.25) {
-  const [minX, minY, width, height] = MARK.viewBox.split(" ").map(Number);
-  const scale = (size * 0.62) / Math.max(width, height);
-  const x = (size - width * scale) / 2 - minX * scale;
-  const y = (size - height * scale) / 2 - minY * scale;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">`
-    + `<rect width="${size}" height="${size}" rx="${radius}" fill="#183f35"/>`
-    + `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale.toFixed(4)})">${MARK.onTile.map(shapeSvg).join("")}</g>`
-    + `</svg>`;
-}
+const marks = Object.fromEntries(Object.entries(MARK_SOURCES).map(([key, name]) => [key, markTree(markSvg(name))]));
 
 const birds = Object.fromEntries(BIRDS.map((name) => [name, birdArt(name)]));
 const banner = "// Written by scripts/build-brand-art.mjs. Run `npm run build:brand-art` after changing a pose or a mark.";
@@ -272,60 +269,68 @@ export type HandMarkName = keyof typeof HAND_MARKS;
 
 writeFileSync(resolve(ROOT, "apps/web/lib/brand/bird-mark.ts"), `${banner}
 
-import type { BirdShape } from "./bird-art.ts";
+/** One element of the drawing, with its attributes as React spells them, and whatever it holds. */
+export type MarkNode = { tag: string; attrs: Readonly<Record<string, string>>; children?: readonly MarkNode[] };
 
-/** One arrangement of the mark: the box it is drawn in and the shapes it is made of. */
-export type BirdMarkArt = { viewBox: string; shapes: readonly BirdShape[] };
+/** One drawing: the box it was made in, and the elements it is made of. */
+export type MarkArt = { viewBox: string; nodes: readonly MarkNode[] };
 
 /**
- * The bird's head at mark weight, in the two arrangements it is ever drawn in.
+ * The mark, from design-refs/icon. \`mark\` is icon-C, which the header, the footer, the home-screen icon and the
+ * corner of a link preview draw; \`small\` is favicon-C, the same bird with the heavier line a browser tab needs, and
+ * it draws the tab's icon and the 32 pixel copy of it.
  *
- * On paper the ink outline is the drawing. On the accent tile the outline is dropped, because a dark line on a dark
- * ground is nothing: there the paper shape is the whole silhouette, and the crest, the eye and the beak are the only
- * marks on it. The same two arrangements make apps/web/public/favicon.svg and apple-touch-icon.png.
+ * The drawings are carried over as they are. Nothing here moves a point, merges two shapes or renames a colour: the
+ * build takes off the provenance manifest, shrinks the file, and hands over the elements. The tile belongs to the
+ * drawing, so the wordmark does not supply one.
+ *
+ * \`${ID_SLOT}\` is where the clip's id goes. A page that draws the mark at both of its ends needs two of them, so
+ * every copy is given an id of its own (components/brand/bird-mark.tsx).
  */
-export const BIRD_MARK = {
-  paper: ${JSON.stringify({ viewBox: MARK.viewBox, shapes: MARK.onPaper }, null, 2).replace(/\n/g, "\n  ")},
-  tile: ${JSON.stringify({ viewBox: MARK.viewBox, shapes: MARK.onTile }, null, 2).replace(/\n/g, "\n  ")},
-} as const satisfies Record<string, BirdMarkArt>;
+export const BIRD_MARK = ${JSON.stringify(marks, null, 2)} as const satisfies Record<string, MarkArt>;
 
-export type BirdMarkGround = keyof typeof BIRD_MARK;
+export type BirdMarkKind = keyof typeof BIRD_MARK;
+
+/** The placeholder a caller replaces with the id it has chosen for its copy. */
+export const MARK_ID_SLOT = ${JSON.stringify(ID_SLOT)};
 `);
 
-// The tab's icon, scalable, and a 32 pixel copy for the browsers that still want a raster one.
-writeFileSync(resolve(ROOT, "apps/web/public/favicon.svg"), `${svgo(tileSvg(64, 16), 2)}\n`);
-await sharp(Buffer.from(tileSvg(32, 8))).png({ compressionLevel: 9 }).toFile(resolve(ROOT, "apps/web/public/icon-32.png"));
-// A home screen draws its own rounded corners over this one, so the tile fills the square.
-await sharp(Buffer.from(tileSvg(180, 0))).png({ compressionLevel: 9 }).toFile(resolve(ROOT, "apps/web/public/apple-touch-icon.png"));
+const markFile = (name) => `${markSvg(name)}\n`;
+const markBuffer = (name) => Buffer.from(markSvg(name));
+
+// The tab's icon, scalable, and a 32 pixel copy for the browsers that still want a raster one. Both are the heavier
+// drawing, which is what it is for.
+writeFileSync(resolve(ROOT, "apps/web/public/favicon.svg"), markFile(MARK_SOURCES.small));
+await sharp(markBuffer(MARK_SOURCES.small)).resize(32, 32).png({ compressionLevel: 9 }).toFile(resolve(ROOT, "apps/web/public/icon-32.png"));
+
+/**
+ * A home screen rounds the icon itself and fills nothing behind it, so a tile with its own rounded corners would
+ * show four dark ones. The drawing is left alone and its own tile colour is put behind it instead, which is the
+ * colour those corners would have been.
+ */
+const TILE = /<rect[^>]*fill="(#[0-9a-f]{3,6})"/i.exec(markSvg(MARK_SOURCES.mark))?.[1];
+if (!TILE) throw new Error("mark: no tile colour to fill the home screen's corners with");
+await sharp(markBuffer(MARK_SOURCES.mark))
+  .resize(180, 180)
+  .flatten({ background: TILE })
+  .png({ compressionLevel: 9 })
+  .toFile(resolve(ROOT, "apps/web/public/apple-touch-icon.png"));
 
 /**
  * The link preview: the landing page as it was on the day it was photographed, with the mark set into its corner so
  * the picture carries the product's name even where the title is cropped away. Retake the photograph into
  * scripts/assets/og-source.png from the live site and run this again; the source is never written to.
  */
-const OG_MARK = 92;
+const OG_MARK = 96;
 await sharp(resolve(ROOT, "scripts/assets/og-source.png"))
-  .composite([{ input: await sharp(Buffer.from(tileSvg(OG_MARK, 32))).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }])
+  .composite([{ input: await sharp(markBuffer(MARK_SOURCES.mark)).resize(OG_MARK, OG_MARK).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }])
+  // A photograph has nothing to see through, and an alpha channel it never uses is a tenth of the file.
+  .flatten({ background: "#f3f1eb" })
+  .removeAlpha()
   .png({ compressionLevel: 9 })
   .toFile(resolve(ROOT, "apps/web/public/og-image.png"));
-
-/** Proof that the mark still reads small: the tile at the three sizes that matter, on the page's own canvas. */
-const proof = [16, 32, 180];
-{
-  let x = 28;
-  const pieces = proof.map((pixels) => {
-    const piece = `<g transform="translate(${x} ${28 + (180 - pixels) / 2})">${tileSvg(pixels, pixels * 0.25).replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}`
-      + `<text x="${pixels / 2}" y="${pixels + 22}" font-family="monospace" font-size="13" fill="#18221f" text-anchor="middle">${pixels}px</text></g>`;
-    x += pixels + 56;
-    return piece;
-  });
-  writeFileSync(
-    resolve(ROOT, "design-refs/mark/tile-proof.svg"),
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${x}" height="260"><rect width="100%" height="100%" fill="#f3f1eb"/>${pieces.join("")}</svg>`,
-  );
-}
 
 const size = (value) => `${(value / 1024).toFixed(1)} KB`;
 for (const [name, art] of Object.entries(birds)) process.stdout.write(`bird ${name.padEnd(9)} ${art.shapes.length} shapes, ${size(JSON.stringify(art.shapes).length)}\n`);
 for (const [name, mark] of Object.entries(MARKS)) process.stdout.write(`mark ${name.padEnd(13)} ${size(mark.d.length)}\n`);
-process.stdout.write(`mark ${"bird".padEnd(13)} ${MARK.onPaper.length} shapes, ${size(JSON.stringify(MARK.onPaper).length)}\n`);
+for (const [key, name] of Object.entries(MARK_SOURCES)) process.stdout.write(`mark ${key.padEnd(13)} ${name}, ${size(markSvg(name).length)} from ${size(readFileSync(resolve(ROOT, "design-refs/icon", `${name}.svg`), "utf8").length)}\n`);
