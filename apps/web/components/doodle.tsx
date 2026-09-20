@@ -44,7 +44,7 @@ export const DOODLES = {
   /** Sitting with a phone: the sign-in page, beside the form. */
   sitting: { src: "/illustrations/sitting.svg", width: 779, height: 720 },
   /** Reading, having found nothing: a search or a filter that matched none. */
-  readingSide: { src: "/illustrations/reading-side.svg", width: 978, height: 615 },
+  readingSide: { src: "/illustrations/reading-side.svg", width: 973, height: 609 },
 } as const satisfies Record<string, Doodle>;
 
 export type DoodleName = keyof typeof DOODLES;

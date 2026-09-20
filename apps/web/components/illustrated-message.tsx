@@ -17,10 +17,10 @@ export type Illustration = {
 };
 
 export const ILLUSTRATIONS = {
-  unboxing: { src: "/illustrations/unboxing.svg", width: 858, height: 675 },
-  reading: { src: "/illustrations/reading.svg", width: 619, height: 713, backdrop: "circle" },
-  zombieing: { src: "/illustrations/zombieing.svg", width: 727, height: 685, backdrop: "ground" },
-  clumsy: { src: "/illustrations/clumsy.svg", width: 992, height: 793 },
+  unboxing: { src: "/illustrations/unboxing.svg", width: 850, height: 668 },
+  reading: { src: "/illustrations/reading.svg", width: 608, height: 702, backdrop: "circle" },
+  zombieing: { src: "/illustrations/zombieing.svg", width: 717, height: 673, backdrop: "ground" },
+  clumsy: { src: "/illustrations/clumsy.svg", width: 987, height: 787 },
 } as const satisfies Record<string, Illustration>;
 
 export type IllustrationName = keyof typeof ILLUSTRATIONS;

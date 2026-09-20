@@ -33,10 +33,9 @@ required, credited here anyway).
 
 Changes from the originals, all mechanical: black recolored to the brand's deep green (`#1b3a31`), the pink recolored
 to the warm accent (`#f28b6b`), the view box cropped to the figure's own bounds, Sketch metadata, titles, and ids
-removed, path coordinates rounded, and the result run through svgo. The five prepared first (`clumsy`, `reading`,
-`reading-side`, `unboxing`, `zombieing`) round to one decimal place; the rest round to whole units, which is under a
-tenth of a percent of the view box and invisible at the sizes they are drawn. No page draws more than two, and the
-heaviest page's pair comes to well under 60 KB.
+removed, path coordinates rounded to whole units, and the result run through svgo. Whole units are under a tenth of a
+percent of a view box that is around 900 wide, so nothing moves at the sizes these are drawn. Every file is between 4
+and 22 KB; the page that asks for the most characters asks for about 30 KB of them.
 
 ## Typefaces
 
