@@ -71,9 +71,12 @@ npx supabase db push
 ```
 
 **Expected:** after `db push`, `migration list --linked` shows every migration on both sides, through
-`202608140047` (045 is the collectors' batched writes and 046 the enrichment fingerprints; without either, enrichment
+`202608140051` (045 is the collectors' batched writes and 046 the enrichment fingerprints; without either, enrichment
 fails for every company, because it calls functions those migrations add; 047 adds `trim_out_of_scope_text`, which
-every current-jobs run calls at the end, and without it that step logs a failure and the run continues). Three of them change what the hosted
+every current-jobs run calls at the end, and without it that step logs a failure and the run continues; 048 and 050
+keep each call and its measurement inside eight seconds, and 051 indexes the rows still to be shortened, without which
+the first call of every trim times out on hosted). Push 051 when no collection workflow is running: building its indexes
+holds writes to three tables for the build. Three of them change what the hosted
 database allows, so confirm each landed:
 `202608140031_guest_access` (anon loses every table grant; `npm run verify:supabase` reports
 `grants/anon-anywhere` PASS), `202608140032_scope_widening` (seven disciplines and the apprenticeship type), and

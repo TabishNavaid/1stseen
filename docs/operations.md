@@ -277,6 +277,19 @@ Migration `202608140050` reads the sizes from the catalogue instead, where a tab
 `firstseen trim-text` reports a failure to read them rather than raising. `pg_stats.avg_width` is not an alternative:
 for a TOASTed column it reports the pointer's width, 37 bytes for a column holding 73.7 MB.
 
+**Finding the rows reads no text.** With the measurement gone, the 20:32 UTC run on 2026-09-20 still failed with 57014
+on its first call: the function selects what to shorten, and counts what is left, with `length(<column>) > p_keep`,
+which reads and decompresses the text of every row it passes, and the three counts pass every row on every call.
+`p_limit` bounds the updates, not the counts. Migration `202608140051` adds three partial indexes holding only the rows
+whose text is still longer than 300 characters, so the planner reaches them without reading any text. On the rig
+corpus one call went from 27,505 TOAST blocks and 1,478 ms to 10,108 blocks and 236 ms (what remains is the text of the
+600 rows the call shortens), and the whole trim then converged in one run: 47 calls in 14.7 s, the slowest 691 ms,
+9,209 excerpts, 6,235 prototypes and 8,943 quotes shortened, 10 kB downloaded. A run with nothing left makes one call.
+The indexes are tied to `--keep 300`: a partial index serves only a query whose predicate matches its own, so a trim with
+any other `--keep` scans the text again. Every shortened quote is an updated opening, so migration 042's trigger writes
+one `role_evidence_changes` row for it, and the next forecast regeneration reads those rows once and skips their roles,
+which are out of scope.
+
 **An UPDATE does not free space.** Postgres writes a new version of every row it shortens and leaves the old one dead,
 so immediately after the trim the reported size is *larger* (246 MB became 271 MB in that transaction). Autovacuum then
 marks the dead space reusable, which stops the corpus growing into new space but does not return the old space to the

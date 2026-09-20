@@ -1,5 +1,8 @@
+import re
 import unittest
 from pathlib import Path
+
+from firstseen.repository import OUT_OF_SCOPE_TEXT_KEPT
 
 
 class SchemaContractTests(unittest.TestCase):
@@ -604,6 +607,40 @@ class SchemaContractTests(unittest.TestCase):
         self.assertIn("p_keep must be between 1 and 8192", schema)
         self.assertIn(") from public, anon, authenticated;", schema)
         self.assertIn(") to service_role;", schema)
+
+    def test_untrimmed_text_indexes_match_what_the_trim_keeps(self):
+        """Migration 202608140051: the trim finds its rows through partial indexes, which serve it only at p_keep = 300.
+
+        Selecting and counting the rows still to shorten with `length(<column>) > p_keep` reads the text of every row it
+        passes, and on hosted the first call timed out with nothing shortened. A partial index is used only by a query
+        whose predicate matches its own, so the kept length in the indexes, the function's default, and the worker's
+        constant must be one number: change one, and the trim quietly goes back to scanning the text.
+        """
+        root = Path(__file__).resolve().parents[2] / "supabase/migrations"
+        indexes = (root / "202608140051_untrimmed_text_indexes.sql").read_text()
+        chunked = (root / "202608140048_trim_in_chunks.sql").read_text()
+        # The statements, not the header that explains them.
+        body = "\n".join(line for line in indexes.splitlines() if not line.startswith("--"))
+        kept = {int(value) for value in re.findall(r"length\((?:evidence_excerpt|description_prototype|evidence_quote)\) > (\d+)", body)}
+        self.assertEqual(kept, {OUT_OF_SCOPE_TEXT_KEPT})
+        self.assertIn(f"p_keep integer default {OUT_OF_SCOPE_TEXT_KEPT}", chunked)
+        # One index per column the trim shortens, each on the same condition the function selects by.
+        for predicate in (
+            "on public.raw_job_observations (id)\n  where length(evidence_excerpt) >",
+            "on public.canonical_roles (id)\n  where scope_status = 'out_of_scope' and length(description_prototype) >",
+            "on public.historical_opening_events (canonical_role_id, id)\n  where length(evidence_quote) >",
+        ):
+            self.assertIn(predicate, body)
+        for condition in (
+            "length(o.evidence_excerpt) > p_keep",
+            "scope_status = 'out_of_scope'\n       and length(description_prototype) > p_keep",
+            "length(e.evidence_quote) > p_keep",
+        ):
+            self.assertIn(condition, chunked)
+        # Indexes only: the migration changes no rule of the trim, and drops nothing.
+        self.assertNotIn("create or replace function", body)
+        self.assertNotIn("drop ", body)
+        self.assertNotIn("concurrently", body)
 
     def test_scope_reviews_are_service_only_and_written_with_the_role_outcome(self):
         schema = (
