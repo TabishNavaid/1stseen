@@ -576,6 +576,9 @@ class SchemaContractTests(unittest.TestCase):
         for column in ("evidence_excerpt", "evidence_quote", "description_prototype"):
             self.assertNotIn(f"{column} = null", schema)
             self.assertNotIn(f"{column} = ''", schema)
+        # It reports what it changed and what it cost, because the run that calls it is the only record.
+        for field in ("excerpt_bytes_before", "excerpt_bytes_after", "database_bytes_before", "database_bytes_after"):
+            self.assertIn(field, schema)
         # Service-only, like every function the worker calls, and bounded.
         self.assertIn("p_keep must be between 1 and 8192", schema)
         self.assertIn(") from public, anon, authenticated;", schema)

@@ -71,6 +71,20 @@ if TYPE_CHECKING:
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
 # How much of an out-of-scope role's text is kept: enough for a citation and a weak matching prototype.
 OUT_OF_SCOPE_TEXT_KEPT = 300
+# What trim_out_of_scope_text reports (migration 202608140047), in its order.
+TRIM_REPORT_FIELDS = (
+    "observations",
+    "roles",
+    "events",
+    "excerpt_bytes_before",
+    "excerpt_bytes_after",
+    "prototype_bytes_before",
+    "prototype_bytes_after",
+    "quote_bytes_before",
+    "quote_bytes_after",
+    "database_bytes_before",
+    "database_bytes_after",
+)
 ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
@@ -332,11 +346,11 @@ class IntelligenceRepository:
         would download every byte it removes. In-scope and ambiguous roles keep everything, and so does a posting that
         has not been resolved yet, because resolution reads its text.
         """
-        # bounded: one row, three counts.
+        # bounded: one row, the counts it changed and the bytes each column held on both sides.
         response = self.client.rpc("trim_out_of_scope_text", {"p_keep": keep}).execute()
         rows = cast(list[dict[str, Any]], response.data or [])
         row = rows[0] if rows else {}
-        return {name: int(row.get(name) or 0) for name in ("observations", "roles", "events")}
+        return {name: int(row.get(name) or 0) for name in TRIM_REPORT_FIELDS}
 
     def source_fetch_times(self) -> dict[UUID, datetime | None]:
         """Each source's last fetch, so a run with a time budget can take the least recently collected first."""

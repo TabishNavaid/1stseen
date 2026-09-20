@@ -68,6 +68,35 @@ class OpsWorkflowTests(unittest.TestCase):
     def test_collection_health_raises_its_alert_from_regeneration(self) -> None:
         self.assertIn("node scripts/collection-health.mjs --alert", (WORKFLOWS / "forecast-regeneration.yml").read_text())
 
+    def test_the_trim_runs_after_collection_and_reports_apart_from_it(self) -> None:
+        """The trim is its own step, so its time is not counted as collection's.
+
+        A collection run's `elapsed_seconds` is the measurement the company-batch rollout is judged on, and the trim
+        happens in the database at a different cost entirely. It also never fails the run: the corpus is collected by
+        then, and the next run trims what this one did not.
+        """
+        source = (WORKFLOWS / "current-jobs.yml").read_text()
+        self.assertIn("python -m firstseen.cli trim-text", source)
+        self.assertLess(
+            source.index("trim-text"), source.index("Publish collection summary"), "the trim runs before the summary"
+        )
+        self.assertGreater(
+            source.index("trim-text"), source.index("--collection current"), "and after collection"
+        )
+        step = source[source.index("- name: Trim out-of-scope text") : source.index("trim-text")]
+        self.assertIn("continue-on-error: true", step)
+
+    def test_a_disabled_source_is_not_reported_as_failing(self) -> None:
+        """A streak is read from history, and turning a source off does not change history.
+
+        Four sources were disabled on 2026-09-20 -- three closed postings that answer 404 for ever, one page that
+        answers 403 -- and their streaks would have warned for the rest of the fourteen-day lookback, asking the owner
+        to act on work that will never run again. The check reads `enabled` and reports only sources still collected.
+        """
+        health = (Path(__file__).resolve().parents[2] / "scripts/collection-health.mjs").read_text()
+        self.assertIn("sources?select=id,url,adapter,enabled,companies(name)", health)
+        self.assertIn(".filter((entry) => entry.source?.enabled)", health)
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")
