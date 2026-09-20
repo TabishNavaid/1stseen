@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Doodle } from "@/components/doodle";
+import { Bird } from "@/components/brand/bird";
 import { Icon } from "@/components/ui/icon";
 import { humanize } from "@/lib/presentation";
 import { Button } from "@/components/ui/button";
@@ -163,7 +163,7 @@ export function RecruitingCalendar({
       {mode === "real" && watchedRoleCount === 0 && (
         <section className="panel mt-6 flex flex-col items-start gap-5 p-5 sm:flex-row sm:items-center" aria-labelledby="empty-title">
           {/* Nothing is booked yet: the character says so before the sentence does. */}
-          <Doodle name="laying" size="empty" className="shrink-0 max-sm:h-32" />
+          <Bird pose="sleeping" className="bob-once shrink-0 max-sm:h-32 max-sm:w-32" />
           <div>
           <h2 id="empty-title" className="text-sm font-semibold">Your watchlist is empty</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">

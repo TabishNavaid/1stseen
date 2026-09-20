@@ -84,6 +84,16 @@ test("the three evidence classes and the three date kinds never rely on color al
   }
 });
 
+test("the bands the landing page changes colour with keep every ink on them legible", () => {
+  const bands = ["butter", "butter-deep", "sage", "sage-deep"];
+  expectContrast(bands.flatMap((band) => [["ink", band], ["ink-muted", band], ["accent-ink", band]]), 4.5);
+  // A note or a link on a band is the warm ink, so it has to hold up there too.
+  expectContrast(bands.map((band) => ["warm-ink", band]), 4.5);
+  // A section fills with a light band and can hold a bordered control. The deep pair fills a small block behind a
+  // number and a word and never holds one, so it is asked for legible ink and nothing else.
+  expectContrast([["line-strong", "butter"], ["line-strong", "sage"]], 3);
+});
+
 test("the warm accent is legible: its text on its own surface and the page, ink on its fill, and its line on a panel", () => {
   expectContrast([["warm-ink", "warm-soft"], ["warm-ink", "surface"], ["warm-ink", "canvas"], ["ink", "warm"]], 4.5);
   expectContrast([["warm-line", "surface"], ["warm-line", "warm-soft"]], 3);

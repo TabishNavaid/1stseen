@@ -32,7 +32,9 @@
   },
   "devDependencies": {
     "lucide-react": "^1.31.0",
+    "perfect-freehand": "^1.2.3",
     "pg": "^8.23.0",
+    "svgo": "^4.1.0",
     "typescript": "5.9.3"
   },
   "type": "module"

@@ -1,3 +1,4 @@
+import { HandMark } from "@/components/brand/hand-mark";
 import { formatDay, formatShortDay } from "@/lib/dates";
 import type { LandingOpening, LandingForecastWindow } from "@/lib/landing-data";
 
@@ -63,6 +64,9 @@ export function OpeningTimeline({ openings, forecast }: { openings: readonly Lan
   const rows = byYear(openings);
   const blanks = Math.max(MIN_ROWS - rows.length, 0);
   const expected = forecast ? acrossYear(forecast.expectedOpening) : null;
+  // The newest opening: the note under the axis points at it, and says the year it happened in.
+  const newest = [...openings].sort((a, b) => b.openedOn.localeCompare(a.openedOn))[0];
+  const latest = newest ? { at: acrossYear(newest.openedOn), year: newest.openedOn.slice(0, 4) } : null;
   // The band waits for the dots, so the picture reads as history first and the prediction second.
   const bandDelay = rows.length * 140 + 220;
   const description = [
@@ -77,18 +81,24 @@ export function OpeningTimeline({ openings, forecast }: { openings: readonly Lan
     <figure className="m-0">
       <p className="sr-only">{description}</p>
 
-      {/* The window's label sits over the band, and keeps its line's height whether or not there is one. */}
-      <div className="relative h-5 pl-9 sm:pl-10" aria-hidden="true">
-        {/* A label anchored left of a late window runs off the card, so past halfway it grows leftwards instead. */}
+      {/*
+        The note over the band, in the one handwritten face, with an arrow onto the window it names. It is the chart's
+        only annotation above the axis and it is decoration: the card says the date in words, and the description
+        above says it again for a reader who cannot see any of this.
+      */}
+      <div className="relative h-11 pl-9 sm:pl-10" aria-hidden="true">
         {forecast && expected !== null && (
           <span
-            className="fade-in absolute whitespace-nowrap text-xs font-semibold text-accent-ink"
+            className="fade-in absolute bottom-0 flex items-end gap-1 whitespace-nowrap"
             style={{
-              ...(expected <= 52 ? { left: `${Math.max(expected - 1, 0)}%` } : { right: `${Math.max(99 - expected, 0)}%` }),
-              animationDelay: `${bandDelay + 120}ms`,
+              // Anchored at the window it names: the note grows away from it, and the arrow stays against it.
+              ...(expected <= 52 ? { left: `${Math.max(expected - 2, 0)}%` } : { right: `${Math.max(97 - expected, 0)}%` }),
+              animationDelay: `${bandDelay + 160}ms`,
             }}
           >
-            Likely around {formatDay(forecast.expectedOpening)}
+            {expected <= 52 && <HandMark name="arrowToDot" className="h-6 w-8 scale-x-[-1] text-warm-ink" />}
+            <span className="hand pb-1 text-lg leading-none text-warm-ink">probably around here next</span>
+            {expected > 52 && <HandMark name="arrowToDot" className="h-6 w-8 text-warm-ink" />}
           </span>
         )}
       </div>
@@ -130,7 +140,7 @@ export function OpeningTimeline({ openings, forecast }: { openings: readonly Lan
                     style={{ left: `${acrossYear(opening.openedOn)}%` }}
                   >
                     <span
-                      className="drop-in size-3 rounded-full bg-accent ring-2 ring-surface"
+                      className="drop-in size-3 rounded-full bg-warm-line ring-2 ring-surface"
                       style={{ animationDelay: `${(index + position) * 140}ms` }}
                     />
                   </a>
@@ -149,16 +159,31 @@ export function OpeningTimeline({ openings, forecast }: { openings: readonly Lan
       </div>
 
       {/* The months, once, along the bottom. */}
-      <div className="pl-9 sm:pl-10">
+      <div className="relative pl-9 sm:pl-10">
         <span className="block h-px w-full bg-line-strong" />
         <div className="flex" aria-hidden="true">
           {MONTHS.map((month, index) => (
             <span key={`${month}-${index}`} className="flex-1 pt-1 text-center text-xs tabular text-ink-subtle">{month}</span>
           ))}
         </div>
+        {/* The second note, under the axis so it cannot collide with the first, pointing back up at the last opening. */}
+        {latest && (
+          <span
+            className="fade-in absolute top-6 flex items-start gap-1 whitespace-nowrap"
+            style={{
+              ...(latest.at <= 52 ? { left: `${Math.max(latest.at - 2, 0)}%` } : { right: `${Math.max(97 - latest.at, 0)}%` }),
+              animationDelay: `${bandDelay + 320}ms`,
+            }}
+            aria-hidden="true"
+          >
+            {latest.at <= 52 && <HandMark name="arrowToWindow" className="h-6 w-8 scale-y-[-1] text-ink-subtle" />}
+            <span className="hand pt-1 text-lg leading-none text-ink-muted">opened here in {latest.year}</span>
+            {latest.at > 52 && <HandMark name="arrowToWindow" className="h-6 w-8 scale-x-[-1] scale-y-[-1] text-ink-subtle" />}
+          </span>
+        )}
       </div>
 
-      <figcaption className="mt-3 text-caption text-ink-muted">
+      <figcaption className="mt-9 text-caption text-ink-muted">
         {forecast
           ? `Window ${formatShortDay(forecast.windowStart)} – ${formatDay(forecast.windowEnd)}. Each dot links to the page it was seen on.`
           : "Each dot links to the page it was seen on."}

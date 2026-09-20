@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
+import { Bird } from "@/components/brand/bird";
 import { Doodle, type DoodleName } from "@/components/doodle";
+import type { BirdPose } from "@/lib/brand/bird-art";
 import { cn } from "@/lib/utils";
 import { Icon, type IconName } from "./icon";
 
@@ -74,6 +76,7 @@ export function LoadingRegion({ label, children, className }: { label: string; c
  */
 export function EmptyState({
   icon = "search",
+  bird,
   doodle,
   title,
   description,
@@ -82,6 +85,8 @@ export function EmptyState({
   className,
 }: {
   icon?: IconName;
+  /** The bird, for a state a person would feel something about. It wins over a doodle, and both win over the icon. */
+  bird?: BirdPose;
   /** A hand-drawn character for the moment, in place of the icon: one mark above the words, never both. */
   doodle?: DoodleName;
   title: ReactNode;
@@ -93,7 +98,9 @@ export function EmptyState({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   return (
     <div className={cn("flex flex-col items-center px-6 py-10 text-center", className)}>
-      {doodle ? <Doodle name={doodle} size="empty" className="mb-2" /> : <Icon name={icon} size={20} className="text-ink-subtle" />}
+      {bird ? <Bird pose={bird} className="bob-once mb-1" />
+        : doodle ? <Doodle name={doodle} size="empty" className="mb-2" />
+          : <Icon name={icon} size={20} className="text-ink-subtle" />}
       <Heading className="mt-3 text-sm font-semibold text-ink">{title}</Heading>
       {description && <p className="mt-1 max-w-sm text-xs leading-5 text-ink-subtle">{description}</p>}
       {action && <div className="mt-4">{action}</div>}

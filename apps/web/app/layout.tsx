@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist, Geist_Mono } from "next/font/google";
+import { Caveat, Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
@@ -8,6 +8,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 // Headings only. Self-hosted like Geist: the build downloads the files and serves them from this origin.
 const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axes: ["opsz", "SOFT"] });
+// The one handwritten voice: notes on the chart, and the words inside a sticker or a stamp. Nowhere else.
+const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["600", "700"] });
 
 // A screenshot of the production landing page at 1200 by 630, the size link previews expect. It shows real data as it
 // was on the day it was taken; retake it from the live site rather than from a development server.
@@ -44,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   // The page grows to fill the viewport and the footer follows it, so a short page ends at the bottom of the screen.
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} flex min-h-screen flex-col antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${caveat.variable} flex min-h-screen flex-col antialiased`}>
         {children}
         <SiteFooter />
       </body>

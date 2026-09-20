@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ConfidenceWord } from "@/components/confidence-word";
-import { companyInitials } from "@/components/landing/role-preview-card";
+import { CompanyMark } from "@/components/brand/company-mark";
 import { LikelyWindow } from "@/components/likely-window";
 import type { OpeningSoonRole } from "@/lib/landing-data";
 
@@ -13,7 +13,7 @@ export function OpeningSoonCard({ role }: { role: OpeningSoonRole }) {
   return (
     <li className="card lift relative flex h-full flex-col p-5">
       <span className="flex items-center gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-control bg-accent-soft text-xs font-bold text-accent-ink" aria-hidden="true">{companyInitials(role.company)}</span>
+        <CompanyMark company={role.company} size="sm" />
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold text-ink-muted">{role.company}</span>
           <span className="block text-caption text-ink-subtle">{role.programType}</span>

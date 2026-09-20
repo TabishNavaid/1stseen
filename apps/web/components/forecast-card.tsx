@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CompanyMark } from "@/components/brand/company-mark";
 import { locationLabel } from "@/lib/presentation";
 import { Icon } from "@/components/ui/icon";
 import type { ForecastRole } from "@firstseen/shared";
@@ -29,7 +30,7 @@ export function ForecastCard({
     <article className={cn("card p-4 transition-colors sm:p-5", active && "border-accent bg-surface-selected")}>
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(190px,.8fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="grid size-11 shrink-0 place-items-center rounded-control bg-accent-soft text-xs font-bold text-accent-ink" aria-hidden="true">{role.companyMark}</div>
+          <CompanyMark company={role.company} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-ink-muted">{role.company}</p>{role.status === "signal" && <span className="flex items-center gap-1 text-micro font-semibold text-warning-ink"><Icon name="radio" size={11} />new signal</span>}</div>
             <h3 className="mt-0.5 line-clamp-2 text-base font-semibold leading-snug text-ink" title={role.role}>

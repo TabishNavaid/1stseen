@@ -1,51 +1,30 @@
 import type { ReactNode } from "react";
 
+import { Bird } from "@/components/brand/bird";
+
 /**
- * The not-found and error pages' one layout: a large hand-drawn character first, then a headline, one sentence, one
- * primary action, and one small link, in a single centered column that fills the space between header and footer.
+ * The not-found and error pages' one layout: the bird first, then a headline, one sentence, one primary action, and
+ * one small link, in a single centered column that fills the space between header and footer.
  *
- * The characters are Open Doodles recoloured to the palette (docs/credits.md). Each is decorative: the headline says
- * what happened. The character bobs once when the page appears, and not at all under reduced motion (`bob-once`).
+ * The bird is confused here, which is the whole message before the words arrive: something looked and could not find
+ * it. It is decorative, because the headline says what happened. It bobs once as the page appears, and not at all
+ * under reduced motion (`bob-once`).
  */
-
-export type Illustration = {
-  src: string;
-  width: number;
-  height: number;
-  /** A soft circle behind the character, or a shadow under it. */
-  backdrop?: "circle" | "ground";
-};
-
-export const ILLUSTRATIONS = {
-  unboxing: { src: "/illustrations/unboxing.svg", width: 850, height: 668 },
-  reading: { src: "/illustrations/reading.svg", width: 608, height: 702, backdrop: "circle" },
-  zombieing: { src: "/illustrations/zombieing.svg", width: 717, height: 673, backdrop: "ground" },
-  clumsy: { src: "/illustrations/clumsy.svg", width: 987, height: 787 },
-} as const satisfies Record<string, Illustration>;
-
-export type IllustrationName = keyof typeof ILLUSTRATIONS;
 
 export const primaryActionClass =
   "focus-ring inline-flex min-h-touch items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse hover:bg-accent-hover";
 export const quietLinkClass = "focus-ring inline-flex min-h-touch items-center rounded-sm text-sm font-medium text-ink-muted underline decoration-line-strong underline-offset-4 hover:text-ink";
 
-function Character({ art }: { art: Illustration }) {
+function Character() {
   return (
-    <div className="relative flex h-60 items-end justify-center md:h-[360px]">
-      {art.backdrop === "circle" && (
-        <span aria-hidden="true" className="absolute left-1/2 top-1/2 aspect-square h-[92%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-warm-soft" />
-      )}
-      {art.backdrop === "ground" && (
-        <span aria-hidden="true" className="absolute -bottom-1 left-1/2 h-4 w-3/5 -translate-x-1/2 rounded-[50%] bg-line" />
-      )}
-      {/* eslint-disable-next-line @next/next/no-img-element -- a self-hosted SVG, drawn at its own size */}
-      <img src={art.src} alt="" width={art.width} height={art.height} className="bob-once relative h-full w-auto max-w-full" />
+    <div className="relative flex h-60 items-end justify-center md:h-[300px]">
+      <span aria-hidden="true" className="absolute left-1/2 top-1/2 aspect-square h-[88%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-warm-soft" />
+      <Bird pose="confused" className="bob-once relative h-full w-auto" />
     </div>
   );
 }
 
 export function IllustratedMessage({
-  art,
   titleId,
   title,
   text,
@@ -53,7 +32,6 @@ export function IllustratedMessage({
   secondary,
   alert = false,
 }: {
-  art: Illustration;
   titleId: string;
   title: string;
   text: string;
@@ -64,7 +42,7 @@ export function IllustratedMessage({
 }) {
   return (
     <section className="flex w-full max-w-2xl flex-col items-center text-center" aria-labelledby={titleId}>
-      <Character art={art} />
+      <Character />
       <h1 id={titleId} className="heading-display mt-8 text-4xl leading-tight text-ink sm:text-5xl">{title}</h1>
       <p role={alert ? "alert" : undefined} className="mt-3 max-w-lg text-lg leading-7 text-ink-muted">{text}</p>
       <div className="mt-8">{primary}</div>

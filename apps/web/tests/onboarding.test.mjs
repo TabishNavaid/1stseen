@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { REDUCED_MOTION_QUERY, confettiPieces } from "../lib/celebration.ts";
+import { REDUCED_MOTION_QUERY } from "../lib/celebration.ts";
 import { DISCIPLINES, PROGRAM_TYPES, dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
 import { dashboardTiles } from "../lib/dashboard-tiles.ts";
 import {
@@ -236,11 +236,7 @@ test("the payoff leads with the top six and puts the total in the subtitle; savi
   assert.doesNotMatch(flow, /get alerts|alerts\b/i);
 });
 
-test("reduced motion: no confetti is drawn, and the stylesheet stops every movement", () => {
-  assert.deepEqual(confettiPieces(true), []);
-  const pieces = confettiPieces(false);
-  assert.ok(pieces.length > 0);
-  assert.deepEqual(confettiPieces(false), pieces, "the burst is the same every time");
+test("reduced motion: nothing moves, and the save is stamped rather than burst over", () => {
   assert.equal(REDUCED_MOTION_QUERY, "(prefers-reduced-motion: reduce)");
 
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -248,12 +244,15 @@ test("reduced motion: no confetti is drawn, and the stylesheet stops every movem
   assert.match(block, /animation-duration: 0\.01ms !important/);
   assert.match(block, /transition-duration: 0\.01ms !important/);
   assert.match(block, /\.lift:hover \{ transform: none; \}/);
-  assert.match(block, /\.confetti \{ display: none; \}/);
+  // The stamp is already on the page rather than landing on it.
+  assert.match(block, /\.stamp-in \{ animation: none;/);
+  // Nothing bursts anywhere any more.
+  assert.doesNotMatch(css, /confetti/i);
 
-  // Before hydration the flow assumes reduced motion, so the server render never draws the burst.
+  // Before hydration the flow assumes reduced motion, so the server render never moves anything.
   const flow = readFileSync(new URL("../components/onboarding/onboarding-flow.tsx", import.meta.url), "utf8");
   assert.match(flow, /useSyncExternalStore\(subscribeReducedMotion, [^,]+, \(\) => true\)/);
-  assert.match(flow, /className="confetti /);
+  assert.doesNotMatch(flow, /confetti/i);
 });
 
 test("the first run is offered only to an account that has not finished it, skipped it, or followed anything", () => {

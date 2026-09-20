@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { ConfidenceWord } from "@/components/confidence-word";
-import { Doodle, type DoodleName } from "@/components/doodle";
+import { Bird } from "@/components/brand/bird";
+import { SavedStamp } from "@/components/brand/marks";
+import { Doodle } from "@/components/doodle";
 import { LikelyWindow } from "@/components/likely-window";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Chip } from "@/components/ui/status";
-import { REDUCED_MOTION_QUERY, confettiPieces } from "@/lib/celebration";
+import { REDUCED_MOTION_QUERY } from "@/lib/celebration";
 import { plainNoForecastReason } from "@/lib/forecast-gap";
 import {
   GUEST_ONBOARDING_KEY,
@@ -131,17 +133,11 @@ function ChoiceCard({
     </label>
   );
 }
-
-/**
- * One question of the first run. Its character marks the step it is on, and is left out on a phone, where the choices
- * themselves have to reach the fold.
- */
-function Question({ id, title, hint, children, headingRef, doodle }: { id: string; title: string; hint: string; children: ReactNode; headingRef: React.RefObject<HTMLHeadingElement | null>; doodle: DoodleName }) {
+/** One question of the first run. */
+function Question({ id, title, hint, children, headingRef }: { id: string; title: string; hint: string; children: ReactNode; headingRef: React.RefObject<HTMLHeadingElement | null> }) {
   return (
     <fieldset className="step-in m-0 border-0 p-0" aria-describedby={`${id}-hint`}>
-      {/* Inside the legend: a fieldset draws its legend at its own top edge, whatever the order of the elements. */}
       <legend className="p-0">
-        <Doodle name={doodle} size="small" hideOnPhone className="mb-4" />
         <h1 id={id} ref={headingRef} tabIndex={-1} className="heading-display text-3xl leading-tight text-ink outline-none sm:text-4xl">{title}</h1>
       </legend>
       <p id={`${id}-hint`} className="mt-3 text-base leading-7 text-ink-muted">{hint}</p>
@@ -163,25 +159,12 @@ function ProgressDots({ step }: { step: Step }) {
   );
 }
 
+/**
+ * The end of the first run, when there are programs to show: the bird waving. What was here before said "well
+ * done" in colour about something the reader had not done yet. `reducedMotion` still decides whether it bobs.
+ */
 function Celebration({ reducedMotion }: { reducedMotion: boolean }) {
-  const pieces = confettiPieces(reducedMotion);
-  const tone = { accent: "bg-accent", warm: "bg-warm", "warm-line": "bg-warm-line", success: "bg-success-line" } as const;
-  return (
-    <div className="relative mx-auto grid place-items-center" aria-hidden="true">
-      {pieces.length > 0 && (
-        <span className="confetti pointer-events-none absolute inset-0">
-          {pieces.map((piece, index) => (
-            <span
-              key={index}
-              className={cn("confetti-piece", tone[piece.tone])}
-              style={{ ["--confetti-x" as string]: `${piece.x}px`, ["--confetti-y" as string]: `${piece.y}px`, ["--confetti-r" as string]: `${piece.rotate}deg`, animationDelay: `${piece.delay}ms` }}
-            />
-          ))}
-        </span>
-      )}
-      <Doodle name="jumping" size="small" className="pop-in relative sm:h-32" />
-    </div>
-  );
+  return <Bird pose="waving" className={cn(!reducedMotion && "bob-once")} />;
 }
 
 function PayoffRoleRow({ role }: { role: OnboardingPayoff["roles"][number] }) {
@@ -389,7 +372,7 @@ export function OnboardingFlow({
 
       <main id="welcome-content" className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-8 md:px-6 md:pt-14">
         {step === 1 && (
-          <Question key="q1" doodle="meditating" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Tap one to go on.">
+          <Question key="q1" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Tap one to go on.">
             {/* Buttons, not radios: choosing one is the action that moves on, and a keyboard can reach and press each. */}
             <div className="grid gap-3" role="group" aria-labelledby="q-looking-for">
               {LOOKING_FOR.map((option) => (
@@ -421,7 +404,7 @@ export function OnboardingFlow({
         )}
 
         {step === 2 && (
-          <Question key="q2" doodle="coffee" id="q-fields" headingRef={headingRef} title="Which fields?" hint="Choose as many as you like. None means every field.">
+          <Question key="q2" id="q-fields" headingRef={headingRef} title="Which fields?" hint="Choose as many as you like. None means every field.">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {FIELDS.map((field) => (
                 <ChoiceCard
@@ -441,7 +424,7 @@ export function OnboardingFlow({
         )}
 
         {step === 3 && (
-          <Question key="q3" doodle="strolling" id="q-companies" headingRef={headingRef} title="Any companies you're watching?" hint="Optional. Their programs go to the top of your list.">
+          <Question key="q3" id="q-companies" headingRef={headingRef} title="Any companies you're watching?" hint="Optional. Their programs go to the top of your list.">
             <label htmlFor="company-search" className="text-sm font-semibold text-ink">Search companies</label>
             <div className="relative mt-2">
               <Icon name="search" size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-subtle" />
@@ -497,7 +480,13 @@ export function OnboardingFlow({
           <section aria-labelledby="payoff-title" className="step-in">
             <div className="grid justify-items-center text-center">
               {saved
-                ? <Doodle name="dancing" size="small" />
+                ? (
+                  // Saved: the bird pleased about it, and the stamp that says it landed.
+                  <span className="relative grid place-items-center">
+                    <Bird pose="happy" className="bob-once" />
+                    <SavedStamp className="absolute -bottom-2 -right-2" />
+                  </span>
+                )
                 : payoff.matchingRoles > 0
                   ? <Celebration reducedMotion={reducedMotion} />
                   : <Doodle name="readingSide" size="empty" />}

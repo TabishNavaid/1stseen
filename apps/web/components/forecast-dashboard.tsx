@@ -248,7 +248,7 @@ export function ForecastDashboard({
           {items.length === 0 && mode !== "unconfigured" && emptyWatchlist && (
             <div className="card mt-4">
               <EmptyState
-                doodle="plant"
+                bird="sleeping"
                 title="Your watchlist is empty"
                 description={
                   signedInAs

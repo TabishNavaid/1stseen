@@ -22,6 +22,8 @@
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Headings only: a characterful serif beside the sans body (the heading-display utility). */
   --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  /* The one handwritten voice: a note on the chart, a sticker, a stamp (the `hand` utility). Never body text. */
+  --font-hand: var(--font-caveat), ui-rounded, cursive;
 }
 
 @theme {
@@ -58,6 +60,26 @@
   --color-warm-soft: #fdebe3;
   --color-warm-line: #d0603c;
   --color-warm-ink: #a3401f;
+
+  /*
+   * The drawn palette: the five colours the bird is inked in, kept as the drawing has them so a pose cannot drift
+   * from the page (scripts/build-brand-art.mjs refuses a colour with no name here). They are fills inside one
+   * illustration, never text and never a boundary, so they carry no contrast duty of their own.
+   */
+  --color-drawn-ink: #23332c;
+  --color-drawn-paper: #fffdf8;
+  --color-drawn-beak: #e8826a;
+  --color-drawn-sage: #b9d4be;
+  --color-drawn-cool: #6fb1cf;
+
+  /*
+   * The bands the landing page changes colour with. Each is a page-level fill that only ever sits behind ink, and
+   * each is checked against ink in apps/web/tests/design-tokens.test.mjs.
+   */
+  --color-butter: #fbf3d9;
+  --color-butter-deep: #f7e7b4;
+  --color-sage: #e6efe7;
+  --color-sage-deep: #cfe0d3;
 
   /* Workspace navigation, a dark surface */
   --color-nav: #162720;
@@ -236,6 +258,17 @@
   letter-spacing: -0.02em;
 }
 
+/*
+ * The handwritten voice. A note pencilled onto the chart, the word inside a sticker, the word inside a stamp: things
+ * a person would have written by hand on a printout. Never a heading, never a label, never body text, and never the
+ * only place a fact appears, because a script face is harder to read than the sans beside it.
+ */
+@utility hand {
+  font-family: var(--font-caveat), ui-rounded, cursive;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 /* A step or payoff entering the screen. Under prefers-reduced-motion it appears without moving. */
 @utility step-in {
   animation: var(--animate-step-in);
@@ -382,22 +415,6 @@
   color: var(--color-source-community-ink);
 }
 
-/* The first run's celebration: a short burst from the checkmark. Each piece sets its own direction in custom properties. */
-@keyframes confetti-burst {
-  0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; }
-  100% { transform: translate(calc(-50% + var(--confetti-x)), calc(-50% + var(--confetti-y))) rotate(var(--confetti-r)); opacity: 0; }
-}
-
-@utility confetti-piece {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0.5rem;
-  height: 0.8rem;
-  border-radius: 2px;
-  animation: confetti-burst 1100ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
-}
-
 @utility pop-in {
   animation: var(--animate-pop);
 }
@@ -462,6 +479,20 @@
 /** Softened edges, so a strip that drifts does not end in a hard cut. */
 @utility edge-fade {
   mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
+/**
+ * A stamp landing: it arrives turned and a little large, and settles. One move, once, and not at all for a reader who
+ * asked for less motion (the end of this file).
+ */
+@keyframes stamp-in {
+  0% { opacity: 0; transform: rotate(-16deg) scale(1.5); }
+  60% { opacity: 1; transform: rotate(3deg) scale(0.94); }
+  100% { opacity: 1; transform: rotate(-4deg) scale(1); }
+}
+
+@utility stamp-in {
+  animation: stamp-in 520ms cubic-bezier(0.2, 0.8, 0.3, 1.1) both;
 }
 
 /** A button that gives a little under the press. */
@@ -549,10 +580,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
-  /* No movement at all: a lifted card stays put, and celebration confetti is not drawn. */
+  /* No movement at all: a lifted card stays put. */
   .lift:hover { transform: none; }
-  .confetti { display: none; }
   .bob-once, .rise, .fade-in, .drop-in { animation: none; }
+  /* The stamp is simply already on the page. */
+  .stamp-in { animation: none; transform: rotate(-4deg); }
   /* The strip would otherwise jump to the end of its loop. */
   .drift-track { animation: none; }
   .press:active { transform: none; }

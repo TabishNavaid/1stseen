@@ -6,6 +6,7 @@ import { AgentInvestigation } from "@/components/agent-investigation";
 import { ConfidenceWord } from "@/components/confidence-word";
 import { EvidenceMark } from "@/components/evidence-mark";
 import { FollowButton } from "@/components/follow-button";
+import { WindowCountdown, daysUntilWindow } from "@/components/brand/marks";
 import { LikelyWindow } from "@/components/likely-window";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { GenerateReadinessButton } from "@/components/generate-readiness-button";
@@ -115,6 +116,8 @@ function Detail({ id, title, note, children }: { id?: string; title: string; not
 export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView; welcome?: Exclude<PlanOutcome, "none"> | null }) {
   const fixture = view.origin === "fixture";
   const forecast = view.forecast;
+  // The window is a date; the countdown is what that date means from today. Null once the window has started.
+  const countdown = forecast ? daysUntilWindow(forecast.windowStart, new Date()) : null;
   // What the window mainly rests on, from the forecast's own date weights (lib/forecast-basis).
   const basis = forecast?.basis ?? null;
   const livePosting = view.currentPostings[0] ?? null;
@@ -169,7 +172,11 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
           </div>
           <div className="rounded-card bg-surface-sunken p-4 sm:p-5 lg:min-w-[320px]">
             {forecast ? (
-              <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
+              <>
+                <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
+                {/* How long that is from today, which is the thing a reader actually wants from a date in the future. */}
+                {countdown !== null && <WindowCountdown days={countdown} className="mt-3" />}
+              </>
             ) : (
               <div>
                 <p className="text-caption font-semibold text-ink-subtle">Likely around</p>

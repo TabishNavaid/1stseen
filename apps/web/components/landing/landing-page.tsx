@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { CountUp } from "@/components/count-up";
-import { Doodle } from "@/components/doodle";
+import { HandMark } from "@/components/brand/hand-mark";
+import { NewSticker, openedJustNow } from "@/components/brand/marks";
 import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { StatusLine } from "@/components/landing/status-line";
@@ -11,6 +12,7 @@ import { formatShortDay } from "@/lib/dates";
 import type { LandingData } from "@/lib/landing-data";
 import type { RealOpening } from "@/lib/real-data";
 import { sitePage } from "@/lib/site-links";
+import { cn } from "@/lib/utils";
 
 /** What people ask before they sign up. Answers are short and point at the methodology page for the detail. */
 const QUESTIONS: ReadonlyArray<{ question: string; answer: ReactNode }> = [
@@ -42,14 +44,37 @@ const QUESTIONS: ReadonlyArray<{ question: string; answer: ReactNode }> = [
   },
 ];
 
+/**
+ * How it works, in three steps, each on its own colour. The blocks are the page changing temperature as it goes
+ * down: butter, sage, coral, all light enough to leave every ink on them legible (tests/design-tokens.test.mjs).
+ */
+const HOW: ReadonlyArray<{ title: string; body: string; block: string }> = [
+  {
+    title: "We read the career pages",
+    body: "Company career pages, the job boards they post on, and archived copies of both. Every opening is recorded with the day it appeared and a link to where it was seen.",
+    block: "bg-butter",
+  },
+  {
+    title: "We learn each program's rhythm",
+    body: "Most programs come back around the same time each year. A statistical model turns those dates into the window the next one is likely to open in, with a confidence level.",
+    block: "bg-sage",
+  },
+  {
+    title: "You get a head start",
+    body: "Save the programs you care about and their dates go on your watchlist, with a plan that works back from each window so your résumé is ready first.",
+    block: "bg-warm-soft",
+  },
+];
+
 /** Days from today to a window's first day, for the section's heading. */
 function daysUntil(windowStart: string, now: Date): number {
   return Math.round((Date.parse(`${windowStart}T12:00:00Z`) - now.getTime()) / 86_400_000);
 }
 
-function OpenedCard({ opening, hidden = false }: { opening: RealOpening; hidden?: boolean }) {
+function OpenedCard({ opening, hidden = false, now }: { opening: RealOpening; hidden?: boolean; now: Date }) {
   return (
     <li className="card lift relative w-64 shrink-0 p-4" aria-hidden={hidden || undefined}>
+      {!hidden && openedJustNow(opening.openedOn, now) && <NewSticker />}
       <p className="text-micro font-semibold uppercase tracking-label text-warm-ink">Opened {formatShortDay(opening.openedOn)}</p>
       <p className="mt-2 truncate text-caption font-semibold text-ink-muted">{opening.company}</p>
       <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-ink">
@@ -121,35 +146,35 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
                 and a keyboard or a pointer stops the drift (globals.css). */}
             <div className="drift-strip edge-fade -mx-4 mt-3 overflow-x-auto px-4 pb-2 md:mx-0 md:overflow-hidden md:px-0">
               <ul className="drift-track flex w-max gap-3" aria-label="Programs that just opened">
-                {opened.openings.map((opening) => <OpenedCard key={opening.id} opening={opening} />)}
-                {opened.openings.map((opening) => <OpenedCard key={`${opening.id}-again`} opening={opening} hidden />)}
+                {opened.openings.map((opening) => <OpenedCard key={opening.id} opening={opening} now={now} />)}
+                {opened.openings.map((opening) => <OpenedCard key={`${opening.id}-again`} opening={opening} hidden now={now} />)}
               </ul>
             </div>
           </section>
         )}
 
         <section id="how" aria-labelledby="how-title" className="border-y border-line bg-surface">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:px-6 md:py-20">
-            <div>
-              <h2 id="how-title" className="heading-display text-3xl leading-tight sm:text-4xl">How it works</h2>
-              {/* Reading the pages, one year at a time: the work the two paragraphs beside this describe. */}
-              <Doodle name="sittingReading" size="hero" hideOnPhone className="mt-8" />
+          <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+            <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div>
+                <h2 id="how-title" className="heading-display text-3xl leading-tight sm:text-4xl">How it works</h2>
+                <p className="mt-4 max-w-sm text-base leading-7 text-ink-muted">
+                  Three steps between a program going up on a company&rsquo;s site and you knowing it is about to.
+                </p>
+              </div>
+              <ol className="m-0 grid list-none gap-4 p-0">
+                {HOW.map((step, index) => (
+                  <li key={step.title} className={cn("rounded-card p-5 sm:p-6", step.block)}>
+                    <p className="hand text-3xl leading-none text-warm-ink" aria-hidden="true">{index + 1}.</p>
+                    <h3 className="heading-display mt-2 text-xl leading-snug text-ink">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-ink-muted">{step.body}</p>
+                  </li>
+                ))}
+              </ol>
             </div>
-            <div className="max-w-2xl text-base leading-8 text-ink-muted">
-              <p>
-                1stSeen reads company career pages, the job boards they post on, and archived copies of both, and records
-                the day each program appeared. Most programs come back around the same time each year, so those dates
-                make a rhythm{preview ? ": the chart above shows one program's, year by year" : ", year by year"}.
-              </p>
-              <p className="mt-4">
-                A statistical model turns that history into the window a program is likely to open in next, with a
-                confidence level. Save the ones you care about and their dates go on your watchlist, with a plan that
-                works back from each window so your résumé is ready first.
-              </p>
-              <Link href={sitePage("methodology").href} className="link-accent focus-ring mt-5 inline-flex min-h-touch items-center gap-1 text-sm font-semibold">
-                How the forecasts are made<Icon name="arrow-right" size={14} />
-              </Link>
-            </div>
+            <Link href={sitePage("methodology").href} className="link-accent focus-ring mt-8 inline-flex min-h-touch items-center gap-1 text-sm font-semibold">
+              How the forecasts are made<Icon name="arrow-right" size={14} />
+            </Link>
           </div>
         </section>
 
@@ -169,6 +194,11 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
             </ul>
           </section>
         )}
+
+        {/* One drawn rule where the page turns from what it has to what it asks. */}
+        <div aria-hidden="true" className="mx-auto flex max-w-6xl justify-center px-4 md:px-6">
+          <HandMark name="divider" className="h-4 w-full max-w-md text-line-strong" />
+        </div>
 
         <section aria-labelledby="questions-title" className="border-t border-line bg-surface">
           <div className="mx-auto max-w-3xl px-4 py-16 md:px-6 md:py-20">
@@ -191,8 +221,6 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           <span className="glow glow-accent left-1/2 top-0 size-[34rem] -translate-x-1/2" aria-hidden="true" />
           <span className="glow glow-warm right-10 bottom-0 size-[22rem]" aria-hidden="true" />
           <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
-            {/* Off at a run: the page ends where watching starts. */}
-            <Doodle name="sprinting" size="hero" className="mb-6 max-sm:h-40" />
             <h2 id="start-title" className="heading-display text-3xl leading-tight sm:text-4xl">Start watching the programs you care about</h2>
             <p className="mt-3 max-w-lg text-base leading-7 text-ink-muted">Pick a few, and their likely dates and prep plan are waiting the next time you open 1stSeen.</p>
             <Link href="/welcome" className="press focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">

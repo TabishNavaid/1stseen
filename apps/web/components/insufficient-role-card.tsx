@@ -1,13 +1,9 @@
 import Link from "next/link";
+import { CompanyMark } from "@/components/brand/company-mark";
 import { Icon } from "@/components/ui/icon";
 import { roleMeta } from "@/components/role-meta";
 import type { DashboardListItem } from "@/lib/dashboard-query";
 import { plainNoForecastReason } from "@/lib/forecast-gap";
-
-function initials(company: string): string {
-  const parts = company.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase().slice(0, 2);
-}
 
 /**
  * An in-scope role the model did not forecast. It is listed and counted like every other role, with the plain reason
@@ -17,7 +13,7 @@ export function InsufficientRoleCard({ item }: { item: DashboardListItem }) {
   return (
     <article className="card grid gap-3 p-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(190px,1fr)] sm:items-center sm:p-5">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-control bg-surface-sunken text-xs font-bold text-ink-muted">{initials(item.company)}</div>
+        <CompanyMark company={item.company} />
         <div className="min-w-0">
           <p className="text-xs font-semibold text-ink-muted">{item.company}</p>
           <h3 className="mt-0.5 line-clamp-2 text-base font-semibold leading-snug text-ink">

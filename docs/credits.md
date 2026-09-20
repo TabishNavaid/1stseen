@@ -3,6 +3,27 @@
 Third-party artwork, typefaces, and icons the web app ships, where each came from, and its license. Every file listed
 here is served from 1stSeen's own origin; nothing is loaded from a third-party host at run time.
 
+## The bird
+
+1stSeen's own character, drawn for this product and kept in `design-refs/bird/` as six poses. Those files are the
+record and carry their own C2PA provenance manifests; what a page renders is their geometry, written into
+`apps/web/lib/brand/bird-art.ts` by `scripts/build-brand-art.mjs` with the palette's names in place of the hex values
+and without the manifest, the way the Open Doodles files below carry no Sketch metadata. Nothing is fetched to draw
+it: every pose is inline in the page that uses it.
+
+| Pose | Where it appears |
+| --- | --- |
+| `lookout` | The landing page's hero, watching over the chart |
+| `happy` | The confirmation after a program is saved |
+| `confused` | The not-found pages and the error page |
+| `sleeping` | A watchlist or a calendar with nothing on it yet |
+| `waving` | The sign-in page, and the end of the first run |
+| `letter` | The email digest |
+
+The hand marks beside it (arrows, the stamp ring, the sticker edge, section rules) are drawn by the same script with
+[perfect-freehand](https://github.com/steveruizok/perfect-freehand) (MIT) and written out as static geometry, so the
+library never reaches a browser.
+
 ## Illustrations
 
 From **Open Doodles** by Pablo Stanley, <https://www.opendoodles.com/>, released under

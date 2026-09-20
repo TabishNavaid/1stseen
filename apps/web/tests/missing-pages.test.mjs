@@ -8,7 +8,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CACHE_STATUS_HEADER, serveGuestPage } from "../cloudflare/guest-cache.ts";
 import { NOT_FOUND_MARKER, pageStatus, withPageStatus } from "../cloudflare/page-status.ts";
-import { NOT_FOUND_ROTATION, pickNotFoundArt } from "../lib/not-found-art.ts";
 import { pageLanguageLeaks, visibleText } from "./support/page-language.mjs";
 
 async function render(pathname, env = {}) {
@@ -37,7 +36,12 @@ const DEMO = { FIRSTSEEN_DEMO_MODE: "true" };
 const OUTAGE = { SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "an-unused-test-value", FIRSTSEEN_DEMO_MODE: "" };
 
 /** The page's own column: from the illustrated message to its end, without the site header's navigation. */
-const column = (html) => html.slice(html.indexOf('aria-labelledby="missing-title"'), html.indexOf("</main>"));
+// The column the page is, from its own section to the end of the main that holds it. The page streams a loading
+// main before its content, so the close has to be looked for after the section, not from the start of the document.
+const column = (html) => {
+  const start = html.indexOf('aria-labelledby="missing-title"');
+  return start < 0 ? "" : html.slice(start, html.indexOf("</main>", start));
+};
 
 test("an address that is not a page answers 404 with its headline, one sentence, one button, and one small link", async () => {
   for (const path of ["/this-page-does-not-exist", "/roles/northstar-swe-intern/extra"]) {
@@ -46,9 +50,9 @@ test("an address that is not a page answers 404 with its headline, one sentence,
     assert.equal(headers.get("cache-control"), "no-store", path);
     const text = visibleText(column(html));
     assert.match(text, /This page hasn’t opened yet\./);
-    assert.match(text, /We’ve checked every cycle\. No sign of it\./);
+    assert.match(text, /The bird has looked everywhere\. No sign of it\./);
     assert.match(column(html), /<a[^>]*href="\/"[^>]*>Take me home<\/a>/);
-    assert.match(column(html), /<a[^>]*href="\/roles"[^>]*>or browse all roles<\/a>/);
+    assert.match(column(html), /<a[^>]*href="\/roles"[^>]*>or browse all programs<\/a>/);
     // One way on, not a menu: no search box and no row of links.
     assert.doesNotMatch(column(html), /<form|<input|Just opened|Explore programs/);
     assert.equal((column(html).match(/<a /g) ?? []).length, 2, path);
@@ -63,7 +67,7 @@ test("a program the product does not list answers 404, says so, and sends the vi
     assert.equal(headers.get("cache-control"), "no-store", path);
     assert.match(visibleText(column(html)), /This program isn’t tracked anymore\./);
     // With no company known, the button is every role and the small link goes home.
-    assert.match(column(html), /<a[^>]*href="\/roles"[^>]*>Browse all roles<\/a>/);
+    assert.match(column(html), /<a[^>]*href="\/roles"[^>]*>Browse all programs<\/a>/);
     assert.match(column(html), /<a[^>]*href="\/"[^>]*>or go home<\/a>/);
     assert.match(html, /<title>Program no longer tracked · 1stSeen<\/title>/);
   }
@@ -86,7 +90,7 @@ test("a page that fails on the server answers 500, is not stored, and shows noth
   assert.match(view, /Something broke on our side\. Give it a minute and try again\./);
   assert.match(view, /onClick=\{reset\}[^>]*>(?:<[^>]+>)*Try again/);
   assert.match(view, /href="\/"[^>]*>Go home</);
-  assert.match(view, /ILLUSTRATIONS\.clumsy/);
+  assert.match(view, /<IllustratedMessage/);
   assert.doesNotMatch(view, /\.(?:digest|message|stack)\b|\berror\.\w/);
   for (const file of ["../app/error.tsx", "../app/global-error.tsx"]) {
     const source = readFileSync(new URL(file, import.meta.url), "utf8");
@@ -154,15 +158,17 @@ test("the guest edge cache stores neither a 404 nor a 500", async () => {
 
 test("the character leads the page, large and decorative, and bobs once unless motion is reduced", async () => {
   const { html } = await render("/this-page-does-not-exist", DEMO);
-  const image = /<img[^>]*src="\/illustrations\/([a-z-]+)\.svg"[^>]*>/.exec(column(html));
-  assert.ok(image, "the page draws an illustration");
-  assert.match(image[0], /alt=""/, "the headline carries the meaning");
-  assert.match(image[0], /class="[^"]*\bbob-once\b/);
-  // 240px tall on a phone and 360px from md up, ahead of the headline.
-  assert.match(column(html), /class="[^"]*\bh-60\b[^"]*md:h-\[360px\]/);
-  assert.ok(column(html).indexOf("<img") < column(html).indexOf("<h1"), "the illustration comes first");
+  const body = column(html);
+  const bird = /<svg[^>]*class="[^"]*\bbob-once\b[^"]*"[^>]*>/.exec(body);
+  assert.ok(bird, "the page draws the bird");
+  assert.match(bird[0], /aria-hidden="true"/, "the headline carries the meaning");
+  // Drawn in the page: nothing to fetch, and nothing that can arrive after the words.
+  assert.doesNotMatch(body, /<img\b|<image\b/);
+  // 240px tall on a phone and 300px from md up, ahead of the headline.
+  assert.match(body, /class="[^"]*\bh-60\b[^"]*md:h-\[300px\]/);
+  assert.ok(body.indexOf("<svg") < body.indexOf("<h1"), "the bird comes first");
   const credits = readFileSync(new URL("../../../docs/credits.md", import.meta.url), "utf8");
-  assert.match(credits, new RegExp(`illustrations/${image[1]}\\.svg`));
+  assert.match(credits, /design-refs\/bird/, "the drawing is credited where it came from");
 
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(css, /@utility bob-once \{[^}]*animation: bob-once [^;]* 1 both;/, "it plays once");
@@ -171,20 +177,16 @@ test("the character leads the page, large and decorative, and bobs once unless m
   assert.match(reduced, /\.bob-once[^}]*\{ animation: none; \}/);
 });
 
-test("each visit to a not-found page gets one of the three characters, at random", async () => {
-  assert.deepEqual(
-    [0, 0.34, 0.67, 0.9999, 1].map((value) => pickNotFoundArt(() => value)),
-    ["unboxing", "reading", "zombieing", "zombieing", "zombieing"],
-  );
-  const seen = new Set();
-  for (let visit = 0; visit < 24; visit += 1) {
-    const { status, html } = await render("/this-page-does-not-exist", DEMO);
-    assert.equal(status, 404);
-    seen.add(/<img[^>]*src="\/illustrations\/([a-z-]+)\.svg"/.exec(column(html))?.[1]);
-  }
-  assert.ok([...seen].every((name) => NOT_FOUND_ROTATION.includes(name)), [...seen].join(", "));
-  // Twenty-four visits showing one character only would happen about once in 10^11 runs.
-  assert.ok(seen.size >= 2, `every visit showed ${[...seen].join(", ")}`);
+test("a not-found page draws the bird, inline, and asks for nothing to draw it", async () => {
+  const { status, html } = await render("/this-page-does-not-exist", DEMO);
+  assert.equal(status, 404);
+  const body = column(html);
+  // The bird is one drawing in the page itself: no image element, and nothing to fetch before it can be seen.
+  assert.match(body, /<svg[^>]*aria-hidden="true"[^>]*>/);
+  assert.doesNotMatch(body, /<img[^>]*src="\/illustrations\//);
+  assert.doesNotMatch(body, /<image\b/);
+  // It is decoration: the heading is what says the page is not there.
+  assert.match(body, /This page hasn’t opened yet\./);
 });
 
 test("the not-found pages read as product copy", async () => {
