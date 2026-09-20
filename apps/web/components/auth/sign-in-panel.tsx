@@ -138,8 +138,7 @@ export function SignInPanel({ returnTo, initialMode = "sign_in" }: { returnTo: s
         {signingUp ? "Create an account" : "Sign in"}
       </h1>
       <p className="mt-3 text-sm leading-6 text-ink-muted">
-        Forecasts and evidence are public to this deployment. An account is only needed for your own state: a watchlist,
-        readiness milestones, calendar entries, and digests.
+        Browsing is open to everyone. An account keeps your watchlist, calendar, and prep plans.
       </p>
       <div role="group" aria-label="Account" className="mt-5 grid grid-cols-2 gap-1 rounded-md border border-line bg-surface-sunken p-1">
         {(["sign_in", "sign_up"] as const).map((option) => (

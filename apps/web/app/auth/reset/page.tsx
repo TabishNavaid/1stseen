@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 
 export default async function ResetPasswordPage() {
   if (!hasSupabaseConfig()) {
-    return <AuthShell eyebrow="Password reset"><h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em]">Choose a new password</h1><AuthUnavailable /></AuthShell>;
+    return <AuthShell><h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em]">Choose a new password</h1><AuthUnavailable /></AuthShell>;
   }
   return (
-    <AuthShell eyebrow="Password reset">
+    <AuthShell>
       <ResetPasswordFlow hasSession={Boolean(await currentSession())} />
     </AuthShell>
   );

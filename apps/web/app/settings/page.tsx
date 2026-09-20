@@ -76,7 +76,7 @@ export default async function SettingsPage() {
         <h2 id="watchlist-title" className="text-base font-semibold">Watchlist</h2>
         <div className="panel mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <p className="text-sm">{state.followedRoles === 1 ? "You watch 1 role." : `You watch ${state.followedRoles} roles.`}</p>
-          <Link href={state.followedRoles ? "/roles?watched=1" : "/roles"} className="link-accent focus-ring inline-flex min-h-touch items-center text-sm">{state.followedRoles ? "Open your watchlist" : "Browse roles to watch"}</Link>
+          <Link href={state.followedRoles ? "/roles?watched=1" : "/roles"} className="link-accent focus-ring inline-flex min-h-touch items-center text-sm">{state.followedRoles ? "Open your watchlist" : "Browse programs to watch"}</Link>
         </div>
         <p className="mt-2 text-caption text-ink-subtle">
           Google Calendar sync is on the <Link href="/calendar" className="link-accent focus-ring">recruiting calendar</Link>, and Gmail delivery is on{" "}

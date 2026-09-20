@@ -7,15 +7,16 @@ import { Icon } from "@/components/ui/icon";
  *
  * `aside` is the character that sits beside the form from `lg` up, where there is room either side of a 480px column.
  * It is decoration and is not drawn at all on a narrower screen, where the form itself should reach the fold.
+ *
+ * The page opens on its own heading. A label over it named a thing nobody had arrived at yet.
  */
-export function AuthShell({ eyebrow, aside, children }: { eyebrow: string; aside?: ReactNode; children: ReactNode }) {
+export function AuthShell({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
   return (
     <FocusedShell width="narrow" aside={aside}>
-      <p className="label-caps text-accent-ink">{eyebrow}</p>
       {children}
       <p className="mt-6 flex gap-2 text-xs leading-5 text-ink-muted">
         <Icon name="shield-check" size={14} className="mt-0.5" />
-        Your watchlist, plans, calendar, and digests are private to your account. Your session cookie cannot be read by page scripts.
+        Your watchlist and plans are private to you.
       </p>
     </FocusedShell>
   );

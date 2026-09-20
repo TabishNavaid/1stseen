@@ -17,7 +17,7 @@ export function FocusedShell({ status, children, aside, width = "regular" }: { s
           <span className="ml-auto flex items-center gap-3">
             {status && <span className="text-caption text-ink-subtle">{status}</span>}
             <Link href="/roles" className="focus-ring inline-flex min-h-touch items-center gap-1.5 rounded-chip px-3 text-sm font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">
-              <Icon name="arrow-left" size={15} />Browse roles
+              <Icon name="arrow-left" size={15} />Browse programs
             </Link>
           </span>
         </div>

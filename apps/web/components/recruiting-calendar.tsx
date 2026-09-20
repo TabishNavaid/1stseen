@@ -167,7 +167,7 @@ export function RecruitingCalendar({
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/welcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Set up your watchlist</Link>
-            <Link href="/roles" className="focus-ring inline-flex h-9 items-center rounded-chip border border-line-strong px-4 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch">Browse roles</Link>
+            <Link href="/roles" className="focus-ring inline-flex h-9 items-center rounded-chip border border-line-strong px-4 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch">Browse programs</Link>
           </div>
           </div>
         </section>

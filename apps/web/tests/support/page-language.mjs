@@ -38,6 +38,19 @@ const SELF_CONSCIOUS = [
 const MARKETING = [/\bseamless(?:ly)?\b/i, /\bunlock\b/i, /\bsupercharge\b/i, /\bempower(?:s|ing)?\b/i, /\bjourney\b/i, /\brevolutionar/i, /\bgame[- ]chang/i];
 
 /**
+ * Words from inside the build, in copy a person reads. Someone signing in has not arrived at a "workspace", does not
+ * have a "deployment", and has never thought about a session cookie; and what the site follows is a program, which it
+ * should be called on every page and not only on most of them. ("Readiness milestones" is the same kind of phrase and
+ * still reaches the calendar, digest, and Google Calendar pages; those are their own copy pass.)
+ */
+const INSIDE_OUT = [
+  /\brecruiting workspace\b/i,
+  /\bpublic to this deployment\b/i,
+  /\bsession cookie\b/i,
+  /\bBrowse (?:every )?roles?\b/,
+];
+
+/**
  * Every voice leak in the product's own words. This reads source files, not rendered pages: a company's job title can
  * carry an em dash or the word "honest", and that is their copy, not ours. Comments are stripped first, so only what
  * reaches a person is checked.
@@ -52,6 +65,7 @@ export function voiceLeaksInSource(source) {
   };
   for (const pattern of SELF_CONSCIOUS) find("self-conscious", pattern);
   for (const pattern of MARKETING) find("marketing", pattern);
+  for (const pattern of INSIDE_OUT) find("inside out", pattern);
   // An em dash is a writer's tic here: the product's sentences are short enough not to need one.
   find("em dash", /\u2014/);
   return leaks;

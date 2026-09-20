@@ -5,6 +5,7 @@ import { createPublicReader, type PublicReader } from "@/lib/public-read";
 import type { ForecastBasis } from "@/lib/forecast-basis";
 import { displayCompany, displayTitle } from "@/lib/display-names";
 import { hasServiceRoleConfig, loadForecastBasis, loadJustOpened, loadRecordedTitles, type RealOpening } from "@/lib/real-data";
+import { featuredOf, rhythmOf, type OpeningRhythm } from "@/lib/featured-program";
 import { fetchAllIn } from "@/lib/supabase/paging";
 import type { DatePrecision } from "@/lib/role-view";
 
@@ -91,9 +92,6 @@ export const PREVIEW_OPENINGS = 8;
  */
 export const FEATURED_CANDIDATES = 24;
 
-/** Three years of openings is the least that shows a rhythm rather than a pair of dots. */
-export const FEATURED_YEARS = 3;
-
 /** "Opening soon" shows at most this many roles, one per company, and is hidden when none has a current window. */
 export const OPENING_SOON_LIMIT = 6;
 
@@ -139,52 +137,36 @@ async function openingsOf(reader: PublicReader, roleId: string): Promise<Landing
 }
 
 /**
- * How many distinct calendar years each role's recorded openings cover, for the roles given.
+ * Each candidate role's rhythm, read from its own recorded openings (lib/featured-program.ts).
  *
- * The chart's whole claim is that a program comes back around the same time each year, so the number of years its
- * openings cover is what decides which program shows it best.
+ * The chart's whole claim is that a program comes back around the same time each year, so how many years its openings
+ * cover and how closely they land decide which program shows that claim best.
  */
-async function openingYears(reader: PublicReader, roleIds: string[]): Promise<Map<string, number>> {
-  const years = new Map<string, Set<string>>();
+async function openingRhythms(reader: PublicReader, roleIds: string[]): Promise<Map<string, OpeningRhythm>> {
   if (roleIds.length === 0) return new Map();
   const rows = await fetchAllIn<Record<string, unknown>>(
     (ids) => reader.from("historical_opening_events", "id,canonical_role_id,opened_on").in("canonical_role_id", ids),
     [...new Set(roleIds)],
-    "landing_opening_years",
+    "landing_opening_rhythms",
     "id",
   );
+  const openings = new Map<string, string[]>();
   for (const row of rows) {
     const roleId = String(row.canonical_role_id);
-    const seen = years.get(roleId) ?? new Set<string>();
-    seen.add(String(row.opened_on).slice(0, 4));
-    years.set(roleId, seen);
+    openings.set(roleId, [...(openings.get(roleId) ?? []), String(row.opened_on)]);
   }
-  return new Map([...years].map(([roleId, seen]) => [roleId, seen.size]));
-}
-
-/**
- * The featured program, by a stated rule rather than by hand: of the current forecasts, the one whose openings cover
- * the most distinct years, and among equals the one whose window comes first. FEATURED_YEARS is what makes a rhythm
- * visible; when nothing reaches it the most-covered program is still the clearest thing to show, so the same order
- * answers both cases.
- */
-function featuredOf(rows: PageRow[], years: Map<string, number>): PageRow | null {
-  return [...rows].sort((a, b) =>
-    (years.get(b.role_id) ?? 0) - (years.get(a.role_id) ?? 0)
-    || String(a.window_start ?? "").localeCompare(String(b.window_start ?? ""))
-    || a.role_id.localeCompare(b.role_id),
-  )[0] ?? null;
+  return new Map([...openings].map(([roleId, dates]) => [roleId, rhythmOf(dates)]));
 }
 
 /**
  * What the landing page shows, read through the public reader and nothing more.
  *
- * The preview role is chosen by a stated rule, never by hand (`featuredOf`): among current forecasts, the most years
- * of its own openings, then the soonest window. When no forecast qualifies at all, the role with the most recorded
- * dated openings, shown as its observed history with no window. "Opening soon" is every current forecast, soonest
- * window first, one role per company, up to six; a window that has already ended is not a coming opening and is left
- * out. "Just opened" is the start of the Just opened page's feed: newest first, no company taking more than two of
- * any six.
+ * The preview role is chosen by a stated rule, never by hand (`lib/featured-program.ts`): among current forecasts,
+ * the tightest rhythm over enough years to have one, then the soonest window. When no forecast qualifies at all, the
+ * role with the most recorded dated openings, shown as its observed history and no window. "Opening soon" is every
+ * current forecast, soonest window first, one role per company, up to six; a window that has already ended is not a
+ * coming opening and is left out. "Just opened" is the start of the Just opened page's feed: newest first, no company
+ * taking more than two of any six.
  */
 export async function loadLandingData(now: Date = new Date()): Promise<LandingData | null> {
   if (!hasServiceRoleConfig()) return null;
@@ -209,7 +191,7 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   if (candidates.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
 
   const current = ((candidates.data ?? []) as PageRow[]).filter((row) => row.forecastable && (row.window_end ?? "") >= today);
-  const featuredRow = featuredOf(current, await openingYears(reader, current.map((row) => row.role_id)));
+  const featuredRow = featuredOf(current, await openingRhythms(reader, current.map((row) => row.role_id)));
   const fallbackRow = ((byEvidence.data ?? []) as PageRow[])[0];
   const previewRow = featuredRow ?? fallbackRow ?? null;
   const soonRows = ((soonest.data ?? []) as PageRow[]).filter((row) => row.forecastable && (row.window_end ?? "") >= today).slice(0, OPENING_SOON_LIMIT);

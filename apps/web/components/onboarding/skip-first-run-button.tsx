@@ -42,7 +42,7 @@ export function SkipFirstRunButton({ label = "Skip for now" }: { label?: string 
       </Button>
       {error && (
         <p role="alert" className="text-caption text-danger-ink">
-          {error} <Link href="/roles" className="link-accent focus-ring">Browse roles</Link>
+          {error} <Link href="/roles" className="link-accent focus-ring">Browse programs</Link>
         </p>
       )}
     </div>

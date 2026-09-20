@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default function ConfirmPage() {
   return (
-    <AuthShell eyebrow="Account confirmation">
+    <AuthShell>
       {hasSupabaseConfig() ? <ConfirmEmail /> : <><h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em]">Confirm your email</h1><AuthUnavailable /></>}
     </AuthShell>
   );

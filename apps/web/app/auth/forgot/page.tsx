@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default function ForgotPasswordPage() {
   return (
-    <AuthShell eyebrow="Password reset">
+    <AuthShell>
       {hasSupabaseConfig() ? <ForgotPasswordForm /> : <><h1 className="mt-2 text-3xl font-semibold tracking-[-0.045em]">Reset your password</h1><AuthUnavailable /></>}
     </AuthShell>
   );

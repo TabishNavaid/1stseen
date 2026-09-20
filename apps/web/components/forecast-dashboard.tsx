@@ -271,7 +271,7 @@ export function ForecastDashboard({
                     {signedInAs
                       ? <Link href="/welcome" className="link-accent focus-ring text-xs">Set up your watchlist</Link>
                       : <Link href="/signin?return_to=%2Froles%3Fwatched%3D1" className="link-accent focus-ring text-xs">Sign in</Link>}
-                    <Link href={dashboardHref(filters, { watchedOnly: false })} className="link-accent focus-ring text-xs">Browse every role</Link>
+                    <Link href={dashboardHref(filters, { watchedOnly: false })} className="link-accent focus-ring text-xs">Browse every program</Link>
                   </div>
                 }
               />
