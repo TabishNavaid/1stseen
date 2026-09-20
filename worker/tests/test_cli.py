@@ -435,7 +435,15 @@ class AtsBoardRegistrationTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "registered")
-        self.assertEqual(BoardTransport.requested, ["https://boards-api.greenhouse.io/v1/boards/fixtureco"])
+        # The board's metadata names the company; the postings endpoint is what collection fetches every run, so its
+        # size is what a per-source read limit has to cover (SpaceX's board is far past the 10 MB cap).
+        self.assertEqual(
+            BoardTransport.requested,
+            [
+                "https://boards-api.greenhouse.io/v1/boards/fixtureco",
+                "https://boards-api.greenhouse.io/v1/boards/fixtureco/jobs?content=true",
+            ],
+        )
         (source,) = RegistrationRepository.saved_sources
         self.assertEqual((source.adapter, source.category, source.external_key), ("greenhouse", "ats", "fixtureco"))
         self.assertEqual(source.evidence[0].method, "structured_metadata")

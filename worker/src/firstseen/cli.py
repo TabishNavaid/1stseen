@@ -714,6 +714,14 @@ BOARD_ENDPOINTS: dict[str, str] = {
     "ashby": "https://api.ashbyhq.com/posting-api/job-board/{tenant}",
     "lever": "https://api.lever.co/v0/postings/{tenant}?mode=json",
 }
+# What the collector fetches every run, which is what a read limit has to cover. For Ashby and Lever that is the
+# endpoint above; Greenhouse confirms the company from small board metadata but collects the postings with their full
+# content, and SpaceX's 2,505 of those are far past the 10 MB cap — measuring the metadata told us nothing about that,
+# and both SpaceX and Rocket Lab failed their first collection as `source_response_too_large`.
+COLLECTED_ENDPOINTS: dict[str, str] = {
+    **BOARD_ENDPOINTS,
+    "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{tenant}/jobs?content=true",
+}
 
 
 def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = "greenhouse") -> int:
@@ -765,13 +773,11 @@ def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = 
     posting_quote = ""
     board_bytes = 0
     reason: str | None = None
+    transport = UrlLibTransport(settings)
     try:
         # The whole board, up to the per-source ceiling: OpenAI's Ashby board is 13.6 MB, and a board that cannot be
         # read whole cannot be confirmed or collected.
-        document = UrlLibTransport(settings).get(
-            metadata_url, accept="application/json", max_bytes=SOURCE_BYTES_CEILING
-        )
-        board_bytes = len(document.body)
+        document = transport.get(metadata_url, accept="application/json", max_bytes=SOURCE_BYTES_CEILING)
         if document.status >= 400:
             reason = "board_not_found"
         elif adapter == "greenhouse":
@@ -780,6 +786,14 @@ def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = 
             naming, read, posting_quote = postings_naming_company(
                 cast(AdapterName, adapter), document.text, company_name, domain
             )
+        # The read limit has to cover what collection fetches, not what confirmed the company.
+        collected_url = COLLECTED_ENDPOINTS[adapter].format(tenant=tenant)
+        collected = (
+            document
+            if collected_url == metadata_url
+            else transport.get(collected_url, accept="application/json", max_bytes=SOURCE_BYTES_CEILING)
+        )
+        board_bytes = len(collected.body)
     except (OSError, ValueError) as exc:
         reason = f"board_metadata_unavailable: {type(exc).__name__}"
 
