@@ -125,7 +125,9 @@ test("auth pages render labelled, described fields, and stay out of search index
     // No browser-side Supabase client ships with the page any more.
     assert.doesNotMatch(signin, /createBrowserClient|supabase\.co\/auth\/v1/);
   } else {
-    assert.match(signin, /Supabase authentication is not configured for this deployment/);
+    // Only a build with no NEXT_PUBLIC_SUPABASE_* reaches this. A checkout with a root .env inlines them, so this
+    // branch never runs on a developer's machine and only CI sees it: keep its copy in step by hand.
+    assert.match(signin, /Supabase authentication is not configured here/);
   }
 
   const forgot = await page("/auth/forgot");
