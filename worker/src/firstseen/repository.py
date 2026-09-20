@@ -69,6 +69,8 @@ if TYPE_CHECKING:
     from .enrichment_session import CompanyEnrichmentSession
 
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
+# How much of an out-of-scope role's text is kept: enough for a citation and a weak matching prototype.
+OUT_OF_SCOPE_TEXT_KEPT = 300
 ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
@@ -321,6 +323,20 @@ class IntelligenceRepository:
                 )
             )
         return configs
+
+    def trim_out_of_scope_text(self, *, keep: int = OUT_OF_SCOPE_TEXT_KEPT) -> dict[str, int]:
+        """Shorten the text held against roles nobody can apply to (migration 202608140047).
+
+        Half the corpus is the text of postings that are not early-career technical roles, and it is also most of what
+        a question about a company downloads. The work happens in the database: reading the text out to shorten it
+        would download every byte it removes. In-scope and ambiguous roles keep everything, and so does a posting that
+        has not been resolved yet, because resolution reads its text.
+        """
+        # bounded: one row, three counts.
+        response = self.client.rpc("trim_out_of_scope_text", {"p_keep": keep}).execute()
+        rows = cast(list[dict[str, Any]], response.data or [])
+        row = rows[0] if rows else {}
+        return {name: int(row.get(name) or 0) for name in ("observations", "roles", "events")}
 
     def source_fetch_times(self) -> dict[UUID, datetime | None]:
         """Each source's last fetch, so a run with a time budget can take the least recently collected first."""

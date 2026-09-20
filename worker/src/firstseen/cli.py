@@ -45,7 +45,12 @@ from .readiness import (
     SupabaseReadinessPlanStore,
 )
 from .recruiting_paths import page_source_allowed
-from .repository import BacktestDataset, ForecastEvidence, IntelligenceRepository
+from .repository import (
+    OUT_OF_SCOPE_TEXT_KEPT,
+    BacktestDataset,
+    ForecastEvidence,
+    IntelligenceRepository,
+)
 from .role_identity_migration import (
     RoleIdentityMigrationService,
     RoleIdentityPlan,
@@ -885,6 +890,19 @@ def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = 
     )
 
 
+def run_text_trim(keep: int) -> int:
+    """Shorten the text held against roles nobody can apply to, and report what moved.
+
+    Run after collection: a pass classifies the roles it resolved, and this keeps what those classifications imply
+    about storage. It is idempotent, so running it when nothing is out of scope costs one request.
+    """
+    started = time.monotonic()
+    repository = IntelligenceRepository.from_settings(get_settings())
+    counts = repository.trim_out_of_scope_text(keep=keep)
+    print(json.dumps({"kept_characters": keep, **counts, **_run_cost(repository, started)}, indent=2))
+    return 0
+
+
 def show_inference_metrics(run_id: str | None) -> int:
     repository = IntelligenceRepository.from_settings(get_settings())
     parsed_run_id = UUID(run_id) if run_id else None
@@ -1349,6 +1367,16 @@ def main() -> int:
         choices=sorted(BOARD_ENDPOINTS),
         help="Which ATS the tenant belongs to (default: greenhouse)",
     )
+    trim_parser = subparsers.add_parser(
+        "trim-text",
+        help="Keep only the first characters of the text held against out-of-scope roles (migration 202608140047)",
+    )
+    trim_parser.add_argument(
+        "--keep",
+        type=int,
+        default=OUT_OF_SCOPE_TEXT_KEPT,
+        help=f"Characters to keep (default: {OUT_OF_SCOPE_TEXT_KEPT})",
+    )
     metrics = subparsers.add_parser(
         "metrics", help="Show admin-ready deterministic inference efficiency metrics"
     )
@@ -1474,6 +1502,8 @@ def main() -> int:
         return run_discovery(args.company, ingest=args.ingest)
     if args.command == "register-ats-board":
         return run_ats_board_registration(args.company, args.tenant, args.adapter)
+    if args.command == "trim-text":
+        return run_text_trim(args.keep)
     if args.command == "metrics":
         return show_inference_metrics(args.run_id)
     if args.command == "backtest":

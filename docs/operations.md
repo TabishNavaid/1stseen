@@ -249,6 +249,33 @@ times 12.6 KB that is the daily growth, and 169 MB divided by it is the days lef
 frees about 93 MB and halves the cost of every future posting, and not storing what a giant board's non-early-career
 postings say at all.
 
+**Trimming out-of-scope text, and why the size does not drop on its own.** Half the corpus is the text of postings
+that are not early-career technical roles. `firstseen trim-text` (migration `202608140047`, run at the end of every
+current-jobs run) keeps only the first 300 characters of an out-of-scope role's description prototype, its opening
+events' quotes, and the excerpts of postings that resolved to nothing but out-of-scope roles. In-scope and ambiguous
+roles keep everything, and so does a posting that has not been resolved yet, because resolution reads its text. The
+work happens in the database, so none of the text it removes is downloaded.
+
+Proved on a copy of the rig corpus in a rolled-back transaction: 30.3 MB of excerpts, 20.2 MB of prototypes and 24.8 MB
+of quotes removed from a 246 MB database, with in-scope prototypes, in-scope quotes and unresolved excerpts untouched
+and a second call changing nothing.
+
+**An UPDATE does not free space.** Postgres writes a new version of every row it shortens and leaves the old one dead,
+so immediately after the trim the reported size is *larger* (246 MB became 271 MB in that transaction). Autovacuum then
+marks the dead space reusable, which stops the corpus growing into new space but does not return the old space to the
+filesystem, so **Supabase's database-size figure stays high until the three tables are rewritten**:
+
+```sql
+vacuum (full, analyze) public.raw_job_observations;
+vacuum (full, analyze) public.canonical_roles;
+vacuum (full, analyze) public.historical_opening_events;
+```
+
+Each takes an exclusive lock on its table for the rewrite — seconds to a minute at this size, during which reads of
+that table wait, so the site's data pages stall rather than error — and needs about as much free space again while it
+runs. Run it once after the first trim, when a backup artifact exists, and not on a schedule: later trims only touch
+the newly out-of-scope rows, and autovacuum's reusable space absorbs them.
+
 **Auth rate limits, and why they are raised.** Supabase Auth counts its limits per IP address: by default 30 sign-ups
 and sign-ins, and 30 verifications of an emailed link, every five minutes. The app's `/api/auth/*` routes call Supabase
 from the Worker, so every visitor reaches Supabase from a Cloudflare address and those buckets are shared by everyone
