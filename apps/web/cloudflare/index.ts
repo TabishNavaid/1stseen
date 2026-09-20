@@ -11,7 +11,15 @@ import {
   type GuestAgentLimits,
 } from "./guest-agent";
 import { frontDoorRedirect } from "./front-door";
-import { durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
+import { durableAuthLimits, durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
+import {
+  AUTH_ATTEMPTS_PER_ADDRESS,
+  AUTH_LIMITED_ROUTES,
+  AUTH_LIMIT_PERIOD_SECONDS,
+  AUTH_VERIFICATIONS_PER_ADDRESS,
+  authLimitAllowance,
+  authLimitResponse,
+} from "./auth-limits";
 import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache";
 import { withPageStatus } from "./page-status";
 import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers";
@@ -144,6 +152,22 @@ const worker = {
     headers.set("content-security-policy", policy);
     // Only this entry may tell the agent route that a signed-out question passed the guest limits.
     headers.delete(GUEST_AGENT_HEADER);
+    // Supabase Auth counts its own limits per IP, and every visitor reaches it from this Worker's address, so each
+    // visitor's share is counted here instead (auth-limits.ts).
+    const authRoute = request.method === "POST" ? AUTH_LIMITED_ROUTES[url.pathname] : undefined;
+    if (authRoute && env.GUEST_QUESTION_LIMITER) {
+      const decision = await authLimitAllowance(
+        request,
+        authRoute,
+        durableAuthLimits(
+          env.GUEST_QUESTION_LIMITER,
+          AUTH_ATTEMPTS_PER_ADDRESS,
+          AUTH_VERIFICATIONS_PER_ADDRESS,
+          AUTH_LIMIT_PERIOD_SECONDS,
+        ),
+      );
+      if (!decision.allowed) return withSecurityHeaders(authLimitResponse(decision), policy);
+    }
     if (request.method === "POST" && url.pathname === "/api/recruiting-agent" && !hasSessionCookie(request)) {
       const limits = env.GUEST_QUESTION_LIMITER
         ? durableGuestLimits(env.GUEST_QUESTION_LIMITER, GUEST_QUESTIONS_PER_ADDRESS, GUEST_QUESTIONS_OVERALL, GUEST_LIMIT_PERIOD_SECONDS)

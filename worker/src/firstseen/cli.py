@@ -11,25 +11,28 @@ from datetime import UTC, date, datetime
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid5
 
 from postgrest.exceptions import APIError
 from pydantic import HttpUrl, ValidationError
 
-from .adapters.base import UrlLibTransport
+from .adapters.base import SOURCE_BYTES_CEILING, AdapterName, SourceConfig, UrlLibTransport
 from .adapters.reddit import RedditDataApiClient, RedditSignalAdapter
 from .adapters.registry import AdapterRegistry
 from .backtesting import BacktestRunner
 from .config import get_settings
 from .discovery import (
+    BOARD_POSTINGS_NAMING_COMPANY,
     DiscoveredSource,
     DiscoverRecruitingSources,
     DiscoveryEvidence,
     IdentifyCompany,
     LlmIdentityResolver,
+    _ats_board_url,
     _canonical_url,
     board_names_company,
+    postings_naming_company,
 )
 from .enrichment import EnrichmentSummary, EvidenceEnrichmentService
 from .enrichment_fingerprints import UNCHANGED_RESULT, skip_key, worker_fingerprint
@@ -42,7 +45,12 @@ from .readiness import (
     SupabaseReadinessPlanStore,
 )
 from .recruiting_paths import page_source_allowed
-from .repository import BacktestDataset, ForecastEvidence, IntelligenceRepository
+from .repository import (
+    OUT_OF_SCOPE_TEXT_KEPT,
+    BacktestDataset,
+    ForecastEvidence,
+    IntelligenceRepository,
+)
 from .role_identity_migration import (
     RoleIdentityMigrationService,
     RoleIdentityPlan,
@@ -86,7 +94,7 @@ def _run_cost(repository: IntelligenceRepository, started: float) -> dict[str, o
     }
 
 
-def run_ingestion(company: str | None, *, collection: str = "all") -> int:
+def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: float | None = None) -> int:
     started = time.monotonic()
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
@@ -95,7 +103,15 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
     if collection == "current":
         sources = [source for source in sources if source.adapter not in {"wayback", "reddit"}]
     elif collection == "historical":
-        sources = [source for source in sources if source.adapter == "wayback"]
+        # One archived company took 497 s on 2026-09-19 (Datadog, 45 captures at the 1.5 s courtesy interval), so the
+        # 50 configured Wayback sources cannot all run inside one job. The run takes the least recently collected
+        # first and stops starting sources when its budget is spent, so consecutive weekly runs rotate through every
+        # company without a cursor to keep, and a company that gains sources cannot starve the rest.
+        fetched = repository.source_fetch_times()
+        sources = sorted(
+            (source for source in sources if source.adapter == "wayback"),
+            key=lambda source: (fetched.get(source.id) is not None, fetched.get(source.id) or datetime.min.replace(tzinfo=UTC), str(source.id)),
+        )
     fingerprint = sha256("|".join(sorted(str(source.id) for source in sources)).encode()).hexdigest()
     run_id = repository.start_agent_run(
         agent_name="source_ingestion",
@@ -112,7 +128,11 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
     failures = degraded = 0
     diagnostic_counts: dict[str, int] = {}
     detected = created = changed = unchanged = 0
+    collected: list[SourceConfig] = []
     for source in sources:
+        if max_seconds is not None and time.monotonic() - started > max_seconds:
+            break
+        collected.append(source)
         started_at = datetime.now(UTC)
         try:
             summary = service.ingest(source, observed_at=started_at)
@@ -157,14 +177,16 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
     # pass over exactly the companies whose sources were just collected.
     enrichment_summaries, enrichment_failures, enrichment_unchanged = _enrich_companies(
         repository,
-        sorted({source.company_id for source in sources}, key=str),
+        sorted({source.company_id for source in collected}, key=str),
         run_id=run_id,
         router=router,
     )
     enrichment = _enrichment_totals(enrichment_summaries, enrichment_failures, enrichment_unchanged)
+    # Sources the budget left for the next run are not a failure: the run did what it had time for.
+    deferred = len(sources) - len(collected)
     status = (
         "failed"
-        if failures == len(sources) and sources
+        if failures == len(collected) and collected
         else "partial"
         if failures or degraded or enrichment["failures"]
         else "succeeded"
@@ -174,7 +196,8 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
         json.dumps(
             {
                 "collection": collection,
-                "sources": len(sources),
+                "sources": len(collected),
+                "sources_deferred_to_next_run": deferred,
                 "detected": detected,
                 "created": created,
                 "changed": changed,
@@ -190,7 +213,7 @@ def run_ingestion(company: str | None, *, collection: str = "all") -> int:
             indent=2,
         )
     )
-    return 1 if status == "failed" and sources else 0
+    return 1 if status == "failed" and collected else 0
 
 
 def _enrich_companies(
@@ -688,22 +711,48 @@ def run_discovery(company: str, *, ingest: bool) -> int:
 
 
 GREENHOUSE_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+# Lever and Ashby tenants may contain dots; see _BOARD_TENANT in discovery.py.
+BOARD_TENANT = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+# Each ATS's endpoint for one whole board, and what that endpoint proves about whose board it is.
+BOARD_ENDPOINTS: dict[str, str] = {
+    "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{tenant}",
+    "ashby": "https://api.ashbyhq.com/posting-api/job-board/{tenant}",
+    "lever": "https://api.lever.co/v0/postings/{tenant}?mode=json",
+}
+# What the collector fetches every run, which is what a read limit has to cover. For Ashby and Lever that is the
+# endpoint above; Greenhouse confirms the company from small board metadata but collects the postings with their full
+# content, and SpaceX's 2,505 of those are far past the 10 MB cap — measuring the metadata told us nothing about that,
+# and both SpaceX and Rocket Lab failed their first collection as `source_response_too_large`.
+COLLECTED_ENDPOINTS: dict[str, str] = {
+    **BOARD_ENDPOINTS,
+    "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{tenant}/jobs?content=true",
+}
 
 
-def run_ats_board_registration(company_domain: str, tenant: str) -> int:
-    """Register a Greenhouse board that discovery could not observe on the company's own pages.
+def run_ats_board_registration(company_domain: str, tenant: str, adapter: str = "greenhouse") -> int:
+    """Register an ATS board that discovery could not observe on the company's own pages.
 
-    A tenant is accepted only from an observed ATS URL or an official structured endpoint,
-    never from a company name alone. The operator supplies the tenant, and it is accepted only
-    when Greenhouse's own board metadata endpoint names this company. That response is stored as
-    the source's `structured_metadata` provenance; anything else is refused and nothing is saved.
+    A tenant is accepted only from an observed ATS URL or an official structured endpoint, never from a company name
+    alone. The operator supplies the tenant, and the ATS itself has to confirm the company:
+
+    - Greenhouse publishes a board name, so the name has to name this company.
+    - Ashby and Lever publish no board name, so the board's own postings have to name this company, several of them
+      (BOARD_POSTINGS_NAMING_COMPANY). That is what refuses a tenant that turns out to be somebody else's board:
+      `greenhouse/purestorage` is Everpure's, `greenhouse/linkedin` is a test board, and ClickHouse's careers page
+      links Langfuse's.
+
+    The confirming response is stored as the source's `structured_metadata` provenance; anything else is refused and
+    nothing is saved. A board larger than MAX_SOURCE_BYTES records its own read limit on the source, so one oversized
+    board never raises the cap for the others.
     """
 
     def report(payload: dict[str, Any], code: int) -> int:
         print(json.dumps(payload, indent=2))
         return code
 
-    if not GREENHOUSE_TENANT.fullmatch(tenant):
+    if adapter not in BOARD_ENDPOINTS:
+        return report({"status": "refused", "reason": "unsupported_adapter", "adapter": adapter}, 1)
+    if not (GREENHOUSE_TENANT if adapter == "greenhouse" else BOARD_TENANT).fullmatch(tenant):
         return report({"status": "refused", "reason": "invalid_tenant"}, 1)
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
@@ -716,32 +765,56 @@ def run_ats_board_registration(company_domain: str, tenant: str) -> int:
     domain = str(company["domain"])
     if repository.company_hold(company_id) is not None:
         return report({"status": "refused", "reason": "company_collection_held", "domain": domain}, 1)
-    metadata_url = f"https://boards-api.greenhouse.io/v1/boards/{tenant}"
+    metadata_url = BOARD_ENDPOINTS[adapter].format(tenant=tenant)
     started_at = datetime.now(UTC)
     run_id = repository.start_agent_run(
         agent_name="ats_board_registration",
-        purpose=f"Verify and register the Greenhouse board {tenant} for {domain}",
-        input_fingerprint=sha256(f"greenhouse|{domain}|{tenant}".encode()).hexdigest(),
+        purpose=f"Verify and register the {adapter} board {tenant} for {domain}",
+        input_fingerprint=sha256(f"{adapter}|{domain}|{tenant}".encode()).hexdigest(),
     )
 
     board_name = ""
+    naming = read = 0
+    posting_quote = ""
+    board_bytes = 0
     reason: str | None = None
+    transport = UrlLibTransport(settings)
     try:
-        document = UrlLibTransport(settings).get(metadata_url, accept="application/json")
+        # The whole board, up to the per-source ceiling: OpenAI's Ashby board is 13.6 MB, and a board that cannot be
+        # read whole cannot be confirmed or collected.
+        document = transport.get(metadata_url, accept="application/json", max_bytes=SOURCE_BYTES_CEILING)
         if document.status >= 400:
             reason = "board_not_found"
-        else:
+        elif adapter == "greenhouse":
             board_name = str(json.loads(document.text).get("name") or "").strip()
+        else:
+            naming, read, posting_quote = postings_naming_company(
+                cast(AdapterName, adapter), document.text, company_name, domain
+            )
+        # The read limit has to cover what collection fetches, not what confirmed the company.
+        collected_url = COLLECTED_ENDPOINTS[adapter].format(tenant=tenant)
+        collected = (
+            document
+            if collected_url == metadata_url
+            else transport.get(collected_url, accept="application/json", max_bytes=SOURCE_BYTES_CEILING)
+        )
+        board_bytes = len(collected.body)
     except (OSError, ValueError) as exc:
         reason = f"board_metadata_unavailable: {type(exc).__name__}"
 
-    if reason is None and not (board_name and board_names_company(board_name, company_name, domain)):
-        reason = "board_name_mismatch"
+    if reason is None and adapter == "greenhouse":
+        if not (board_name and board_names_company(board_name, company_name, domain)):
+            reason = "board_name_mismatch"
+    elif reason is None:
+        if read == 0:
+            reason = "board_has_no_postings"
+        elif naming < BOARD_POSTINGS_NAMING_COMPANY:
+            reason = "company_not_named_in_postings"
 
     if reason is not None:
         repository.record_tool_call(
             run_id,
-            tool_name="ats_board_registration.greenhouse",
+            tool_name=f"ats_board_registration.{adapter}",
             status="failed",
             input_redacted={"domain": domain, "tenant": tenant},
             output_redacted={"board_name": board_name[:200]},
@@ -754,28 +827,46 @@ def run_ats_board_registration(company_domain: str, tenant: str) -> int:
             1,
         )
 
-    board_url = _canonical_url(f"https://boards.greenhouse.io/{tenant}")
+    board_url = _canonical_url(_ats_board_url(cast(AdapterName, adapter), tenant))
+    quote = (
+        f'Greenhouse board metadata at {metadata_url} names the board "{board_name}".'
+        if adapter == "greenhouse"
+        else f"{naming} of the {read} postings at {metadata_url} name {company_name}, the first of them “{posting_quote}”."
+    )
+    # A board whose one response is larger than the cap carries its own limit, with room for the postings it gains
+    # between runs, so the global cap stays where it is (adapters/base.py, SOURCE_BYTES_CEILING).
+    options: dict[str, Any] = {}
+    if board_bytes > settings.max_source_bytes:
+        headroom = min(SOURCE_BYTES_CEILING, -(-int(board_bytes * 1.5) // 1_000_000) * 1_000_000)
+        options["max_source_bytes"] = headroom
     source = DiscoveredSource(
         id=uuid5(company_id, board_url),
         company_id=company_id,
         url=HttpUrl(board_url),
         category="ats",
-        adapter="greenhouse",
+        adapter=cast(AdapterName, adapter),
         external_key=tenant,
         trust_score=0.95,
+        options=options,
         evidence=[
             DiscoveryEvidence(
                 method="structured_metadata",
                 evidence_url=HttpUrl(metadata_url),
-                quote=f'Greenhouse board metadata at {metadata_url} names the board "{board_name}".',
-                metadata={"board_name": board_name, "verified_at": started_at.isoformat()},
+                quote=quote,
+                metadata={
+                    "board_name": board_name,
+                    "postings_naming_company": naming,
+                    "postings_read": read,
+                    "board_bytes": board_bytes,
+                    "verified_at": started_at.isoformat(),
+                },
             )
         ],
     )
     configs = repository.save_discovered_sources(company_id, company_name, [source])
     repository.record_tool_call(
         run_id,
-        tool_name="ats_board_registration.greenhouse",
+        tool_name=f"ats_board_registration.{adapter}",
         status="succeeded",
         input_redacted={"domain": domain, "tenant": tenant},
         output_redacted={"board_name": board_name[:200], "source_id": str(configs[0].id)},
@@ -786,13 +877,30 @@ def run_ats_board_registration(company_domain: str, tenant: str) -> int:
         {
             "status": "registered",
             "domain": domain,
-            "adapter": "greenhouse",
+            "adapter": adapter,
             "tenant": tenant,
             "board_name": board_name,
+            "postings_naming_company": naming,
+            "postings_read": read,
+            "board_bytes": board_bytes,
+            "max_source_bytes": options.get("max_source_bytes"),
             "source_id": str(configs[0].id),
         },
         0,
     )
+
+
+def run_text_trim(keep: int) -> int:
+    """Shorten the text held against roles nobody can apply to, and report what moved.
+
+    Run after collection: a pass classifies the roles it resolved, and this keeps what those classifications imply
+    about storage. It is idempotent, so running it when nothing is out of scope costs one request.
+    """
+    started = time.monotonic()
+    repository = IntelligenceRepository.from_settings(get_settings())
+    counts = repository.trim_out_of_scope_text(keep=keep)
+    print(json.dumps({"kept_characters": keep, **counts, **_run_cost(repository, started)}, indent=2))
+    return 0
 
 
 def show_inference_metrics(run_id: str | None) -> int:
@@ -1238,15 +1346,37 @@ def main() -> int:
         default="all",
         help="Limit collection to current recruiting sources or Wayback enrichment",
     )
+    ingest.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="Stop starting sources after this many seconds; the rest are left for the next run",
+    )
     discover = subparsers.add_parser("discover", help="Discover and persist recruiting sources")
     discover.add_argument("--company", required=True, help="Official domain or company name")
     discover.add_argument("--ingest", action="store_true", help="Immediately ingest every discovered source")
     register = subparsers.add_parser(
         "register-ats-board",
-        help="Register a Greenhouse board after its official metadata endpoint confirms the company",
+        help="Register an ATS board after the ATS itself confirms the company (board name, or its postings)",
     )
     register.add_argument("--company", required=True, help="Exact domain of an already discovered company")
-    register.add_argument("--tenant", required=True, help="Greenhouse board token")
+    register.add_argument("--tenant", required=True, help="Board token on that ATS")
+    register.add_argument(
+        "--adapter",
+        default="greenhouse",
+        choices=sorted(BOARD_ENDPOINTS),
+        help="Which ATS the tenant belongs to (default: greenhouse)",
+    )
+    trim_parser = subparsers.add_parser(
+        "trim-text",
+        help="Keep only the first characters of the text held against out-of-scope roles (migration 202608140047)",
+    )
+    trim_parser.add_argument(
+        "--keep",
+        type=int,
+        default=OUT_OF_SCOPE_TEXT_KEPT,
+        help=f"Characters to keep (default: {OUT_OF_SCOPE_TEXT_KEPT})",
+    )
     metrics = subparsers.add_parser(
         "metrics", help="Show admin-ready deterministic inference efficiency metrics"
     )
@@ -1365,11 +1495,15 @@ def main() -> int:
     if args.command in {"sources", "withdraw-company"}:
         return run_takedown_command(args)
     if args.command == "ingest":
-        return run_ingestion(args.company if not args.all else None, collection=args.collection)
+        return run_ingestion(
+            args.company if not args.all else None, collection=args.collection, max_seconds=args.max_seconds
+        )
     if args.command == "discover":
         return run_discovery(args.company, ingest=args.ingest)
     if args.command == "register-ats-board":
-        return run_ats_board_registration(args.company, args.tenant)
+        return run_ats_board_registration(args.company, args.tenant, args.adapter)
+    if args.command == "trim-text":
+        return run_text_trim(args.keep)
     if args.command == "metrics":
         return show_inference_metrics(args.run_id)
     if args.command == "backtest":

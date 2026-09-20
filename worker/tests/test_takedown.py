@@ -26,7 +26,7 @@ from pydantic import HttpUrl
 from firstseen import cli
 from firstseen.agent import SupabaseRecruitingKnowledge
 from firstseen.backtesting import BacktestRunner
-from firstseen.discovery import DiscoveredSource, DiscoveryEvidence
+from firstseen.discovery import CompanyDiscoveryResult, CompanyIdentity, DiscoveredSource, DiscoveryEvidence
 from firstseen.repository import IntelligenceRepository
 from firstseen.takedown import CollectionHeldError, TakedownRefused, TakedownService
 
@@ -178,6 +178,31 @@ class DiscoveryRespectsTakedownTests(unittest.TestCase):
         self.assertTrue(source_writes)
         self.assertTrue(all("enabled" not in payload for payload in source_writes))
         self.assertFalse(subject.client.tables["sources"][0]["enabled"])  # type: ignore[attr-defined]
+
+    def test_rediscovery_keeps_the_read_limit_an_oversized_board_was_given(self):
+        # Anduril's 42 MB Greenhouse board carries its own `max_source_bytes`, and discovery carries no options. If a
+        # save replaced the metadata wholesale, one `discover --force` would drop that limit and the board would fail
+        # every run against the 10 MB cap.
+        url = "https://takedown-fixture.example/careers"
+        subject = repository(
+            {
+                "collection_takedowns": [],
+                "sources": [
+                    {
+                        "id": SOURCE_A,
+                        "company_id": COMPANY,
+                        "url": url,
+                        "adapter": "generic",
+                        "enabled": True,
+                        "metadata": {"options": {"max_source_bytes": 50_000_000}, "external_key": "fixture"},
+                    }
+                ],
+                "source_discovery_evidence": [],
+            }
+        )
+        subject.save_discovered_sources(UUID(COMPANY), "Takedown Fixture", [discovered(url)])
+        stored = subject.client.tables["sources"][0]["metadata"]["options"]  # type: ignore[attr-defined]
+        self.assertEqual(stored, {"max_source_bytes": 50_000_000})
 
     def test_a_new_source_of_an_unheld_company_is_created_enabled(self):
         subject = repository({"collection_takedowns": [], "sources": [], "source_discovery_evidence": []})
@@ -526,3 +551,40 @@ class HeldDiscoveryCommandTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StoredCompanyNameTests(unittest.TestCase):
+    """A company keeps the name it is stored under; a page's name for itself does not overwrite it.
+
+    Ten of the 80 stored names read as page titles on 2026-09-20 and were corrected by hand. Discovery re-reads those
+    same pages, so without this every correction would be undone the next time a company was discovered.
+    """
+
+    def result(self, name: str) -> CompanyDiscoveryResult:
+        url = HttpUrl("https://takedown-fixture.example/")
+        evidence = [DiscoveryEvidence(method="input_domain", evidence_url=url, quote="Fixture")]
+        return CompanyDiscoveryResult(
+            query="takedown-fixture.example",
+            identity=CompanyIdentity(
+                id=UUID(COMPANY), name=name, domain="takedown-fixture.example", official_url=url, evidence=evidence
+            ),
+            sources=[],
+        )
+
+    def test_a_stored_name_is_kept_and_a_new_company_takes_the_discovered_one(self):
+        stored = repository(
+            {
+                "collection_takedowns": [],
+                "companies": [{"id": COMPANY, "domain": "takedown-fixture.example", "name": "Fixture Robotics"}],
+                "sources": [],
+                "source_discovery_evidence": [],
+            }
+        )
+        stored.save_company_discovery(self.result("Fixture Robotics Homepage | Careers"))
+        written = [payload for table, _, payload in stored.client.writes if table == "companies"]  # type: ignore[attr-defined]
+        self.assertEqual([payload["name"] for payload in written], ["Fixture Robotics"])
+
+        fresh = repository({"collection_takedowns": [], "companies": [], "sources": [], "source_discovery_evidence": []})
+        fresh.save_company_discovery(self.result("Fixture Robotics"))
+        created = [payload for table, _, payload in fresh.client.writes if table == "companies"]  # type: ignore[attr-defined]
+        self.assertEqual([payload["name"] for payload in created], ["Fixture Robotics"])

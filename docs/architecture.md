@@ -266,6 +266,33 @@ ingest them immediately:
 The tool's `CompanyDiscoveryResult.source_configs()` output is the native input to the existing
 source ingestion service; no hand-written ATS configuration is required.
 
+### Registering a board no page links
+
+Many companies render their board with JavaScript, so discovery sees no ATS link to follow. The board can
+still be registered by hand, but only if the ATS itself confirms whose board it is:
+
+```bash
+.venv/bin/firstseen register-ats-board --company example.com --tenant exampleco
+.venv/bin/firstseen register-ats-board --company openai.com --tenant openai --adapter ashby
+```
+
+- **Greenhouse** publishes a board name, so the name has to name the company.
+- **Ashby and Lever** publish none, so at least `BOARD_POSTINGS_NAMING_COMPANY` of the board's own postings
+  have to name the company, counting only what a posting *says*: every posting carries its own board URL, and
+  counting that would let any tenant spelled like the company confirm itself.
+
+A tenant that exists is not evidence it is the right company's. Of 176 candidates surveyed on 2026-09-19,
+three tenant guesses were other companies' boards: `greenhouse/linkedin` is a board named "LI Test Company",
+`greenhouse/purestorage` belongs to Everpure, and ClickHouse's careers page links Langfuse's board. The
+postings rule is weaker than a board name and can be satisfied by a company's former name (Everpure's
+postings still say "Pure Storage"), so the count and one matching posting title are stored as the source's
+provenance for later audit rather than treated as proof.
+
+A board whose single response exceeds `MAX_SOURCE_BYTES` records its own `max_source_bytes` on the source,
+with room for the postings it gains between runs and bounded by `SOURCE_BYTES_CEILING`. Anduril's Greenhouse
+board is 42 MB and OpenAI's Ashby board is 13.6 MB; the global cap stays where it is. Re-running discovery
+keeps that limit, because a save merges into the options a source already has.
+
 ## AI model routing
 
 `ModelRouter` exposes four stable capabilities: `extract`, `classify`, `normalize`, and `reason`.

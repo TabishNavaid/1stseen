@@ -92,7 +92,12 @@ both load fixture data into the real database.
    trailing slash. With Supabase's default templates (`{{ .ConfirmationURL }}`) Supabase verifies the link itself:
    the account is confirmed, but the page cannot sign the user in, and says so. The sign-up row of the smoke test
    (section 8) is what proves the templates are the right ones: the confirmation link must land signed in on `/welcome`.
-7. **Authentication → Attack Protection:** leave **CAPTCHA off**. The app's sign-in routes do not send a
+7. **Authentication → Rate Limits:** the app's routes call Supabase from the Worker, so every visitor arrives from a
+   Cloudflare address and Supabase's per-IP limits are shared by everyone (docs/operations.md, "Auth rate limits").
+   Set **sign-ups and sign-ins** to `150` per 5 minutes and **token verifications** to `150` per 5 minutes; leave token
+   refreshes at `150`; set **emails sent** to what the SMTP sender allows per hour. Each visitor is held to 12 of each
+   in the Worker, so one address can never spend this.
+8. **Authentication → Attack Protection:** leave **CAPTCHA off**. The app's sign-in routes do not send a
    CAPTCHA token, so turning it on breaks every sign-in.
 
 Supabase's built-in email sender is for testing and is tightly rate-limited (the dashboard's

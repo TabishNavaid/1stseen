@@ -77,6 +77,18 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: python -m firstseen.cli ingest --company "$TARGET_COMPANY" --collection current > current-jobs-summary.json
+      # After collection, because a pass classifies the roles it resolved: keep only the first characters of the text
+      # held against roles nobody can apply to (migration 202608140047, docs/operations.md). One request, no download,
+      # and idempotent, so a run with nothing new out of scope costs nothing. Never fails the run: the corpus is
+      # already collected, and the next run trims what this one did not.
+      - name: Trim out-of-scope text
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m firstseen.cli trim-text >> "$GITHUB_STEP_SUMMARY"
+
       - name: Publish collection summary
         if: ${{ always() }}
         run: |

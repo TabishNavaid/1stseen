@@ -552,6 +552,35 @@ class SchemaContractTests(unittest.TestCase):
         self.assertIn(") from public, anon, authenticated;", schema)
         self.assertIn(") to service_role;", schema)
 
+    def test_trimming_out_of_scope_text_spares_in_scope_ambiguous_and_unresolved_rows(self):
+        """Migration 202608140047: what the trim may shorten, and what it may never touch.
+
+        Half the corpus is the text of postings nobody can apply to. Shortening it cannot be undone from the database,
+        so the rows it spares are part of the contract: an ambiguous role is waiting on a person's judgement and that
+        person needs the text, and an unresolved posting's text is what resolution reads.
+        """
+        schema = (
+            Path(__file__).resolve().parents[2]
+            / "supabase/migrations/202608140047_trim_out_of_scope_text.sql"
+        ).read_text()
+        # Only out-of-scope roles' own text.
+        self.assertIn("where scope_status = 'out_of_scope'", schema)
+        self.assertIn("and r.scope_status = 'out_of_scope'", schema)
+        # A posting is spared unless it is resolved and no role it matches is in scope or ambiguous.
+        self.assertIn("exists (select 1 from public.observation_role_matches m where m.observation_id = o.id)", schema)
+        self.assertIn("and r.scope_status in ('in_scope', 'ambiguous')", schema)
+        self.assertIn("not exists (", schema)
+        # It shortens; it never deletes a row or empties a column.
+        self.assertIn("left(", schema)
+        self.assertNotIn("delete from", schema)
+        for column in ("evidence_excerpt", "evidence_quote", "description_prototype"):
+            self.assertNotIn(f"{column} = null", schema)
+            self.assertNotIn(f"{column} = ''", schema)
+        # Service-only, like every function the worker calls, and bounded.
+        self.assertIn("p_keep must be between 1 and 8192", schema)
+        self.assertIn(") from public, anon, authenticated;", schema)
+        self.assertIn(") to service_role;", schema)
+
     def test_scope_reviews_are_service_only_and_written_with_the_role_outcome(self):
         schema = (
             Path(__file__).resolve().parents[2] / "supabase/migrations/202608140033_role_scope_reviews.sql"

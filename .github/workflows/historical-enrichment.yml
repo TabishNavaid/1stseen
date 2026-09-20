@@ -58,7 +58,10 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-        run: python -m firstseen.cli ingest --all --collection historical > historical-enrichment-summary.json
+        # 70 minutes of the 90-minute timeout: one archived company took 497 s on 2026-09-19, so the 50 configured
+        # Wayback sources cannot all run in one job. The run takes the least recently collected first and leaves the
+        # rest to next Sunday, which rotates through every company without a cursor to keep.
+        run: python -m firstseen.cli ingest --all --collection historical --max-seconds 4200 > historical-enrichment-summary.json
       - name: Enrich one company's Wayback sources
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.company != '' }}
         env:

@@ -12,7 +12,7 @@ GitHub schedules use UTC, run only from the default branch, and can start late w
 | Workflow | Schedule (UTC) | Timeout | Purpose |
 | --- | --- | --- | --- |
 | `current-jobs.yml` | 00:17, 12:17 | 45 min | Current ATS, career-page, feed, and sitemap job observations, then enrichment |
-| `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
+| `career-page-signals.yml` | 01:37, 13:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
 | `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | 25 min | Only roles affected by changed persisted evidence, then readiness plans and the health report |
 | `historical-enrichment.yml` | Sunday 04:07 | 90 min | Wayback captures and archived recruiting observations, then enrichment |
 | `backtest.yml` | 3rd of the month 05:23, and by hand | 45 min | Leak-free rolling-origin evaluation (60-day cutoff when scheduled), then the scored-case history |
@@ -24,6 +24,19 @@ took 487 s (97 configured sources project to about 17 minutes), 6 Wayback source
 about 38 minutes), a preloaded regeneration pass over 3,451 roles took about 12 s, and a 4,574-target
 backtest took 7.4 s. Signal collection has never run against a real corpus, so its 45 minutes is an
 estimate to revisit after the first production run.
+
+### Historical collection runs a slice, not the whole corpus
+
+One archived company took 497 s on hosted (Datadog, 45 captures at the 1.5 s courtesy interval for
+web.archive.org), so the 50 configured Wayback sources cannot finish inside one 90-minute job, and adding
+companies makes that worse rather than better. The weekly run therefore takes the **least recently collected**
+Wayback sources first (`sources.last_fetched_at`, never-fetched first) and stops starting sources once
+`--max-seconds 4200` is spent. The sources it did not reach are reported as `sources_deferred_to_next_run`
+and are not failures: next Sunday they sort to the front, so consecutive runs rotate through every company
+with no cursor to keep, and a company that gains sources cannot starve the others.
+
+Enrichment afterwards covers exactly the companies whose sources this run collected, so a deferred company
+keeps whatever it had rather than being half-enriched.
 
 ### Round trips to the hosted database
 
@@ -55,8 +68,27 @@ resolved) took 16 minutes end to end with 3,277 requests, well inside the 45-min
 steady-state pass over Figma (324 observations, 144 roles, nothing new to resolve) took 1,251 requests and 78 s before
 and 26 requests and 4.7 s after.
 
-What a run still reads is every company's evidence: its observations' text, its stored opening events, and its archive
-captures, because reconstruction re-derives every role from them. On Figma that is about 2.5 KB per observation on the
+### An opening keeps the quote it was created with
+
+Reconstruction rebuilds a role's whole history every pass. It used to write each event with the quote it derived that
+pass, which had two costs: an opening dated 2025 was rewritten with text its posting carried in 2026, and every pass
+read the text of every observation of every role, which was the largest part of what enrichment downloaded. A stored
+event now keeps its quote (`IntelligenceRepository.event_payloads`), so an opening is evidenced by what was visible
+when it was established, and the text a pass reads is only what it needs: the postings it resolves, and the postings a
+role has no opening of its own for yet.
+
+Measured on hosted over five companies of different sizes, a whole pass fell from 4,578 to 3,598 bytes per
+observation; corpus-wide the posting text a settled pass reads falls from 73.7 MB to 16.7 MB. The remainder is the
+postings that merge into another's cycle: several postings of one cycle collapse into a single opening, and the ones
+merged away keep a role match without ever carrying an event, so their text is read every pass even though the merge
+discards it. Reading it only for the candidates that survive the merge would need the quote to be resolved after
+merging rather than before, which is the next step if that 16.7 MB matters.
+
+One consequence to know: a quote recorded poorly stays poor. If a posting's text was missing when its opening was
+first recorded, the event keeps the title it fell back to, and a later pass will not improve it.
+
+What a run still reads is every company's evidence: its observations' text where an opening has yet to be recorded, its
+stored opening events, and its archive captures, because reconstruction re-derives every role from them. On Figma that is about 2.5 KB per observation on the
 wire, so about 45 MB per current-jobs run over the whole corpus. Four runs a day would be about 5.5 GB a month, more
 than Supabase Free's 5 GB of egress before anything else is counted, so current jobs run twice a day (about 2.7 GB).
 
@@ -190,6 +222,14 @@ clean `collection_checkpoints` cursor. It skips roles whose newly computed forec
 the latest stored version. The cursor advances only when every affected role succeeds. On a partial failure,
 successful forecast versions remain committed, the old cursor remains, and the next run safely retries the
 range; already-saved roles then skip by input fingerprint.
+
+A stored posting keeps the row id it was first written with. Wayback derives an observation id from the
+capture it came from (`source|captured_at|original|digest`), so the same posting seen in a new capture
+recomputes a different id while keeping its identity key. Writing that id onto the existing row moved a
+primary key that `historical_opening_events` references, which Postgres refuses (FK 23503) — the first weekly
+historical run failed that way on 2026-09-19, after its own first pass had created the events. The write now
+keeps the stored id and updates the row's archive fields, so the second and later passes over a company are
+ordinary updates.
 
 Every source and role is audited independently in `agent_tool_calls`. A partial run exits successfully so one
 unavailable source does not discard other sources' work. A run fails only when all non-empty scoped sources

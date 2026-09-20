@@ -83,6 +83,38 @@ DEFAULT_COMPANIES=(
   abbvie.com
   celonis.com
   veeva.com
+  # Third company expansion (batch 1), approved 2026-09-19 after a survey of 176 candidates. Rocket Lab and Zipline
+  # are listed under the domains their own sites resolve to (rocketlabcorp.com after the rebrand, zipline.com), which
+  # is what discovery verifies and stores. Every board below was
+  # confirmed against the board's own metadata name, or, on Ashby, against several of its postings naming the company.
+  # Not here, and why: qube-rt.com answers the crawler with HTTP 403 at every path, so its identity cannot be verified
+  # over HTTP, exactly as rubrik.com could not. Reddit and Pinterest are discovered through the domains that allow a
+  # crawler at all: reddit.com and pinterest.com both refuse us in robots.txt, while redditinc.com and
+  # pinterestcareers.com allow everything.
+  rocketlabcorp.com
+  spacex.com
+  zipline.com
+  astranis.com
+  varda.com
+  figure.ai
+  relativityspace.com
+  anthropic.com
+  glean.com
+  together.ai
+  airbnb.com
+  pinterestcareers.com
+  redditinc.com
+  discord.com
+  twilio.com
+  brex.com
+  janestreet.com
+  xtxmarkets.com
+  openai.com
+  sierra.ai
+  abridge.com
+  sentry.io
+  cursor.com
+  supabase.com
 )
 
 FORCE=0
@@ -228,23 +260,59 @@ VERIFIED_GREENHOUSE_BOARDS=(
   nuro.ai:nuro
   id.me:idmeuniversityrecruiting
   celonis.com:celonis
+  # Third company expansion (batch 1), each confirmed on 2026-09-19 by the board's own metadata naming the company.
+  rocketlabcorp.com:rocketlab
+  spacex.com:spacex
+  zipline.com:flyzipline
+  astranis.com:astranis
+  varda.com:vardaspace
+  figure.ai:figureai
+  relativityspace.com:relativity
+  anthropic.com:anthropic
+  glean.com:gleanwork
+  together.ai:togetherai
+  airbnb.com:airbnb
+  pinterestcareers.com:pinterest
+  redditinc.com:reddit
+  discord.com:discord
+  twilio.com:twilio
+  brex.com:brex
+  janestreet.com:janestreet
+  xtxmarkets.com:xtxmarketstechnologies
+)
+
+# Ashby boards no company page links, each confirmed on 2026-09-19 by several of the board's own postings naming the
+# company (`firstseen register-ats-board --adapter ashby`). Ashby publishes no board name to check instead.
+VERIFIED_ASHBY_BOARDS=(
+  openai.com:openai
+  sierra.ai:Sierra
+  abridge.com:Abridge
+  sentry.io:sentry
+  cursor.com:cursor
+  supabase.com:supabase
 )
 BOARD_LINES=()
 board_failures=0
-if [ "$DRY_RUN" -eq 0 ]; then
-  echo
-  echo "Greenhouse boards (verified against official board metadata):"
-  for pair in "${VERIFIED_GREENHOUSE_BOARDS[@]}"; do
+register_boards() {
+  local adapter="$1"; shift
+  for pair in "$@"; do
     domain="${pair%%:*}" tenant="${pair#*:}"
-    log="$LOG_DIR/board_${tenant}.json"
-    if "$FIRSTSEEN" register-ats-board --company "$domain" --tenant "$tenant" > "$log" 2>&1; then
-      BOARD_LINES+=("$(printf '  %-18s %-12s registered' "$domain" "$tenant")")
+    log="$LOG_DIR/board_${adapter}_${tenant}.json"
+    if "$FIRSTSEEN" register-ats-board --company "$domain" --tenant "$tenant" --adapter "$adapter" > "$log" 2>&1; then
+      BOARD_LINES+=("$(printf '  %-22s %-12s %-12s registered' "$domain" "$adapter" "$tenant")")
     else
       reason="$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).reason)}catch{console.log("see log")}' "$log")"
-      BOARD_LINES+=("$(printf '  %-18s %-12s REFUSED (%s)' "$domain" "$tenant" "$reason")")
+      BOARD_LINES+=("$(printf '  %-22s %-12s %-12s REFUSED (%s)' "$domain" "$adapter" "$tenant" "$reason")")
       board_failures=$((board_failures+1))
     fi
   done
+}
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  echo
+  echo "ATS boards (Greenhouse verified against its board metadata, Ashby against its own postings):"
+  register_boards greenhouse "${VERIFIED_GREENHOUSE_BOARDS[@]}"
+  register_boards ashby "${VERIFIED_ASHBY_BOARDS[@]}"
   printf '%s\n' "${BOARD_LINES[@]}"
 fi
 

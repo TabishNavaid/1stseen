@@ -69,6 +69,8 @@ if TYPE_CHECKING:
     from .enrichment_session import CompanyEnrichmentSession
 
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
+# How much of an out-of-scope role's text is kept: enough for a citation and a weak matching prototype.
+OUT_OF_SCOPE_TEXT_KEPT = 300
 ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
@@ -322,6 +324,31 @@ class IntelligenceRepository:
             )
         return configs
 
+    def trim_out_of_scope_text(self, *, keep: int = OUT_OF_SCOPE_TEXT_KEPT) -> dict[str, int]:
+        """Shorten the text held against roles nobody can apply to (migration 202608140047).
+
+        Half the corpus is the text of postings that are not early-career technical roles, and it is also most of what
+        a question about a company downloads. The work happens in the database: reading the text out to shorten it
+        would download every byte it removes. In-scope and ambiguous roles keep everything, and so does a posting that
+        has not been resolved yet, because resolution reads its text.
+        """
+        # bounded: one row, three counts.
+        response = self.client.rpc("trim_out_of_scope_text", {"p_keep": keep}).execute()
+        rows = cast(list[dict[str, Any]], response.data or [])
+        row = rows[0] if rows else {}
+        return {name: int(row.get(name) or 0) for name in ("observations", "roles", "events")}
+
+    def source_fetch_times(self) -> dict[UUID, datetime | None]:
+        """Each source's last fetch, so a run with a time budget can take the least recently collected first."""
+        rows = fetch_all_rows(
+            lambda: self.client.table("sources").select("id,last_fetched_at").eq("enabled", True),
+            key="id",
+        )
+        return {
+            UUID(str(row["id"])): datetime.fromisoformat(str(row["last_fetched_at"])) if row.get("last_fetched_at") else None
+            for row in rows
+        }
+
     def collection_checkpoint(self, pipeline: str) -> datetime | None:
         # bounded: one row, the checkpoint keyed by its primary key (pipeline).
         response = (
@@ -448,14 +475,18 @@ class IntelligenceRepository:
         identity = discovery.identity
         # bounded: an existence check on the unique company domain, one row at most.
         company_query = (
-            self.client.table("companies").select("id").eq("domain", identity.domain).limit(1).execute()
+            self.client.table("companies").select("id,name").eq("domain", identity.domain).limit(1).execute()
         )
         company_rows = cast(list[dict[str, Any]], company_query.data or [])
         if company_rows:
             # A company that asked to be left alone is not re-identified or re-sourced (docs/takedown.md).
             self._refuse_if_held(UUID(str(company_rows[0]["id"])), identity.domain)
         company_payload: dict[str, Any] = {
-            "name": identity.name,
+            # A company keeps the name it is already stored under. A page's name for itself is a starting point, not a
+            # correction: ten of the 80 stored names read as page titles on 2026-09-20 ("Reddit Inc Homepage",
+            # "Snowflake AI Data Cloud") and were corrected by hand, and re-running discovery would otherwise put every
+            # one of them back.
+            "name": str(company_rows[0]["name"]) if company_rows and company_rows[0].get("name") else identity.name,
             "domain": identity.domain,
             "careers_url": str(identity.careers_url) if identity.careers_url else None,
             "recruiting_url": str(identity.recruiting_url) if identity.recruiting_url else None,
@@ -513,7 +544,7 @@ class IntelligenceRepository:
             # bounded: an existence check on the unique (company, url, adapter) source, one row at most.
             existing_query = (
                 self.client.table("sources")
-                .select("id,enabled")
+                .select("id,enabled,metadata")
                 .eq("company_id", str(company_id))
                 .eq("url", source_url)
                 .eq("adapter", source.adapter)
@@ -523,6 +554,10 @@ class IntelligenceRepository:
             existing_rows = cast(list[dict[str, Any]], existing_query.data or [])
             source_id = UUID(str(existing_rows[0]["id"])) if existing_rows else source.id
             enabled = bool(existing_rows[0].get("enabled", True)) if existing_rows else True
+            # A stored source keeps the options it was given, with anything this save names winning. Discovery
+            # carries no options, so re-running it must not drop the read limit an oversized board was given: without
+            # this, one `discover --force` would put Anduril's 42 MB board back over the cap and fail it every run.
+            stored_options = cast(dict[str, Any], (existing_rows[0].get("metadata") or {}).get("options") or {}) if existing_rows else {}
             source_payload: dict[str, Any] = {
                 "company_id": str(company_id),
                 "url": source_url,
@@ -531,7 +566,7 @@ class IntelligenceRepository:
                 "trust_score": source.trust_score,
                 "metadata": {
                     "external_key": source.external_key,
-                    "options": source.options,
+                    "options": {**stored_options, **source.options},
                     "discovery_category": source.category,
                 },
             }
@@ -719,6 +754,10 @@ class IntelligenceRepository:
             self.client.table("raw_job_observations").insert(payload).execute()
             return "created"
         existing = rows[0]
+        # The stored row keeps its id whatever the observation recomputes, because historical events and role matches
+        # reference it: moving a primary key the database still has references to is refused outright (FK 23503, which
+        # is how the first weekly historical run failed on 2026-09-19).
+        payload["id"] = str(existing["id"])
         if existing["content_hash"] == observation.content_hash:
             seen: dict[str, Any] = {
                 "last_seen_at": observation.last_seen_at.isoformat(),
@@ -767,12 +806,10 @@ class IntelligenceRepository:
                 outcomes.append("unchanged")
             else:
                 payload["first_seen_at"] = row["first_seen_at"]
-                if payload.setdefault("id", row["id"]) != row["id"]:
-                    # A posting whose own id differs from its stored row's: upsert_job's update would move the row
-                    # to the new id, which an upsert on id cannot do. It is written exactly that way.
-                    self.upsert_job(observation)
-                else:
-                    changed.append((observation, payload))
+                # As in upsert_job: the stored row keeps its id, so a posting whose recomputed id differs is written
+                # onto the row it already has rather than moving a primary key that events and matches reference.
+                payload["id"] = str(row["id"])
+                changed.append((observation, payload))
                 outcomes.append("changed")
         for chunk in write_chunks([payload for _, payload in created]):
             self._write_or_replay(
@@ -841,15 +878,58 @@ class IntelligenceRepository:
         )
         return int(response.count or 0)
 
+    def _stored_archive_rows(self, source_ids: set[str]) -> tuple[dict[tuple[str, str, datetime], str], dict[tuple[str, str, datetime], str]]:
+        """What the database already holds for each (source, archived URL, capture time): its observation and capture.
+
+        Wayback derives a capture's id, and the page observation's with it, from the archive digest, which archive.org
+        can report differently for a capture it served before. The rows themselves are keyed by the capture instead
+        (`archive_captures` is unique on source, URL, and capture time; the observation carries the same three
+        columns), so a second pass finds them here rather than inventing ids the database would refuse.
+        """
+        if not source_ids:
+            return {}, {}
+        ids = sorted(source_ids)
+        observations = fetch_all_rows(
+            lambda: self.client.table("raw_job_observations")
+            .select("id,source_id,archive_original_url,archive_capture_at")
+            .in_("source_id", ids)
+            .not_.is_("archive_capture_at", "null"),
+            key="id",
+        )
+        captures = fetch_all_rows(
+            lambda: self.client.table("archive_captures")
+            .select("id,source_id,original_url,captured_at")
+            .in_("source_id", ids),
+            key="id",
+        )
+        def key(row: dict[str, Any], url_column: str, time_column: str) -> tuple[str, str, datetime] | None:
+            url, moment = row.get(url_column), row.get(time_column)
+            if not url or not moment:
+                return None
+            return str(row["source_id"]), str(url), datetime.fromisoformat(str(moment))
+
+        return (
+            {item: str(row["id"]) for row in observations if (item := key(row, "archive_original_url", "archive_capture_at"))},
+            {item: str(row["id"]) for row in captures if (item := key(row, "original_url", "captured_at"))},
+        )
+
     def record_archive_captures(self, captures: list[ArchiveCapture]) -> None:
         if not captures:
             return
+        stored_observations, stored_captures = self._stored_archive_rows({str(capture.source_id) for capture in captures})
+
+        def identity(capture: ArchiveCapture) -> tuple[str, str, datetime]:
+            return str(capture.source_id), str(capture.original_url), capture.captured_at
+
         self.client.table("archive_captures").upsert(
             [
                 {
-                    "id": str(capture.id),
+                    # A capture the database already holds keeps its own id and the observation it points at: its
+                    # observation_id is unique and references raw_job_observations, and that row kept the id it was
+                    # first written with (upsert_job).
+                    "id": stored_captures.get(identity(capture), str(capture.id)),
                     "source_id": str(capture.source_id),
-                    "observation_id": str(capture.observation_id),
+                    "observation_id": stored_observations.get(identity(capture), str(capture.observation_id)),
                     "original_url": str(capture.original_url),
                     "archive_url": str(capture.archive_url),
                     "captured_at": capture.captured_at.isoformat(),
@@ -866,7 +946,10 @@ class IntelligenceRepository:
                 }
                 for capture in captures
             ],
-            on_conflict="id",
+            # The schema's natural key, not the generated id: a capture re-read with a different digest recomputes a
+            # different id, and inserting it beside the stored row violates unique (source_id, original_url,
+            # captured_at) — which is how the first weekly historical run failed on 2026-09-19.
+            on_conflict="source_id,original_url,captured_at",
         ).execute()
 
     def save_historical_openings(self, events: list[HistoricalOpeningEvent]) -> None:
@@ -876,9 +959,48 @@ class IntelligenceRepository:
         # reconstruction updates the existing cycle instead of inserting a duplicate
         # alongside a row that was created with a different identifier.
         self.client.table("historical_opening_events").upsert(
-            [self.event_payload(event) for event in events],
+            self.event_payloads(events, self.stored_event_quotes(events)),
             on_conflict=self.EVENT_KEY,
         ).execute()
+
+    def stored_event_quotes(self, events: Sequence[HistoricalOpeningEvent]) -> dict[tuple[str, str, str], str]:
+        """The quote each of these events is already stored with, by natural key."""
+        keys = {str(event.canonical_role_id) for event in events}
+        rows = self._rows_in(
+            "historical_opening_events",
+            "canonical_role_id,opened_on,observation_id,evidence_quote",
+            "canonical_role_id",
+            sorted(keys),
+        )
+        return {
+            (str(row["canonical_role_id"]), str(row["opened_on"]), str(row["observation_id"])): str(row["evidence_quote"])
+            for row in rows
+            if row.get("evidence_quote")
+        }
+
+    @classmethod
+    def event_payloads(
+        cls,
+        events: Sequence[HistoricalOpeningEvent],
+        stored_quotes: dict[tuple[str, str, str], str],
+    ) -> list[dict[str, Any]]:
+        """Each event's row, with a stored event keeping the quote it was created with.
+
+        An opening is dated from the evidence that was visible when it was established, and reconstruction runs again
+        over the same cycle every pass. Re-deriving the quote each time rewrote an opening dated 2025 with text a
+        posting carried in 2026, and made every pass read the text of every observation of every role, which was the
+        largest part of what enrichment downloaded. The quote a stored event was created with is kept.
+        """
+        payloads = []
+        for event in events:
+            payload = cls.event_payload(event)
+            stored = stored_quotes.get(
+                (payload["canonical_role_id"], str(payload["opened_on"]), payload["observation_id"])
+            )
+            if stored:
+                payload["evidence_quote"] = stored
+            payloads.append(payload)
+        return payloads
 
     EVENT_KEY = "canonical_role_id,opened_on,observation_id"
 
@@ -1439,12 +1561,17 @@ class IntelligenceRepository:
             self.match_payload(resolution), on_conflict="observation_id,canonical_role_id"
         ).execute()
 
-    _OBSERVATION_COLUMNS = (
+    # Everything an observation carries except its evidence excerpt, which averages 3,041 bytes on hosted and is about
+    # three fifths of what enriching one company downloads. Two decisions read it: resolving an observation for the
+    # first time, and quoting an opening the first time that opening is recorded. It is read for those and no others
+    # (`observation_excerpts`).
+    _OBSERVATION_COLUMNS_SLIM = (
         "id,source_id,external_job_id,identity_key,source_url,apply_url,raw_title,company_name,"
         "location,employment_type,published_at,first_seen_at,last_seen_at,content_hash,source_type,"
-        "source_reliability,extraction_method,evidence_excerpt,archive_capture_at,archive_url,"
+        "source_reliability,extraction_method,archive_capture_at,archive_url,"
         "archive_original_url,archive_digest"
     )
+    _OBSERVATION_COLUMNS = f"{_OBSERVATION_COLUMNS_SLIM},evidence_excerpt"
 
     @staticmethod
     def _observation_from_row(row: dict[str, Any]) -> JobObservation | None:
@@ -1503,16 +1630,24 @@ class IntelligenceRepository:
 
         return CompanyEnrichmentSession(self, company_id)
 
-    def company_observation_rows(self, source_ids: list[str]) -> list[dict[str, Any]]:
-        """Every stored observation of these sources, including rows without an identity key."""
+    def company_observation_rows(self, source_ids: list[str], *, with_excerpt: bool = True) -> list[dict[str, Any]]:
+        """Every stored observation of these sources, including rows without an identity key.
+
+        Without `with_excerpt` the rows carry no `evidence_excerpt` key at all, so a reader that needs one asks for it
+        (`observation_excerpts`) instead of quietly seeing an empty string where the database holds text.
+        """
         if not source_ids:
             return []
+        columns = self._OBSERVATION_COLUMNS if with_excerpt else self._OBSERVATION_COLUMNS_SLIM
         return fetch_all_rows(
-            lambda: self.client.table("raw_job_observations")
-            .select(self._OBSERVATION_COLUMNS)
-            .in_("source_id", source_ids),
+            lambda: self.client.table("raw_job_observations").select(columns).in_("source_id", source_ids),
             key="id",
         )
+
+    def observation_excerpts(self, observation_ids: list[str]) -> dict[str, str]:
+        """The evidence excerpt of each of these observations, read in chunks."""
+        rows = self._rows_in("raw_job_observations", "id,evidence_excerpt", "id", sorted(set(observation_ids)))
+        return {str(row["id"]): str(row.get("evidence_excerpt") or "") for row in rows}
 
     def observation_matches_for_sources(self, source_ids: list[str]) -> list[dict[str, Any]]:
         """Every role match, primary or not, of an observation from these sources."""
@@ -1608,15 +1743,18 @@ class IntelligenceRepository:
         visible there, not that the observation's own identity is settled. Oldest evidence comes first so the earliest
         observation of a program establishes its canonical identity and later cycles match into it.
         """
-        matched = {str(item["observation_id"]) for item in matches if item.get("is_primary")}
         observations = [
             observation
-            for row in rows
-            if row.get("identity_key") is not None
-            and str(row["id"]) not in matched
-            and (observation := cls._observation_from_row(row)) is not None
+            for row in cls.unresolved_rows(rows, matches)
+            if (observation := cls._observation_from_row(row)) is not None
         ]
         return sorted(observations, key=lambda item: (item.first_seen_at, str(item.id)))
+
+    @classmethod
+    def unresolved_rows(cls, rows: list[dict[str, Any]], matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The rows `unresolved_among` builds from, so a caller can prepare them before it does."""
+        matched = {str(item["observation_id"]) for item in matches if item.get("is_primary")}
+        return [row for row in rows if row.get("identity_key") is not None and str(row["id"]) not in matched]
 
     def list_recurring_roles(self, company_id: UUID) -> list[RecurringRoleIdentity]:
         rows = fetch_all_rows(

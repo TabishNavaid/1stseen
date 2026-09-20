@@ -310,7 +310,17 @@ def _path_depth(url: str) -> int:
 
 
 def _canonical_url(value: str, base: str | None = None) -> str:
-    parsed = urlparse(urljoin(base or value, value))
+    """One URL in canonical form, or "" for a string that is not a URL at all.
+
+    Pages supply these: hrefs, robots.txt Sitemap lines, and URL-shaped matches inside inline scripts. One of them
+    only has to hold an unbalanced "[" for the standard library to refuse the whole string ("Invalid IPv6 URL"), and
+    on 2026-09-19 one such string in twilio.com's homepage scripts ended that company's discovery with nothing saved.
+    Callers already skip anything that is not a web URL, so a string that cannot be parsed is not one either.
+    """
+    try:
+        parsed = urlparse(urljoin(base or value, value))
+    except ValueError:
+        return ""
     scheme = parsed.scheme.casefold() or "https"
     hostname = (parsed.hostname or "").casefold()
     netloc = hostname
@@ -390,6 +400,67 @@ def identity_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.casefold())
 
 
+# How many of a board's postings must name the company before an unlinked Ashby or Lever board is accepted as
+# theirs. Those two APIs publish no board name, so the postings are the only thing the ATS itself says about whose
+# board it is; one mention could be a customer or a competitor, so several are required.
+BOARD_POSTINGS_NAMING_COMPANY = 3
+
+
+def postings_naming_company(
+    adapter: AdapterName, text: str, company_name: str, domain: str
+) -> tuple[int, int, str]:
+    """How many of a board's postings name this company, how many were read, and one posting title that does.
+
+    Only the company's full name and its domain label count, matched as whole words. A first word does not: "Physical"
+    would accept any board that mentions physical work, and the point of this check is to refuse a board that is
+    somebody else's.
+    """
+    labels = {company_name.strip(), domain.split(".")[-2] if "." in domain else domain} - {""}
+    pattern = re.compile("|".join(rf"\b{re.escape(label)}\b" for label in sorted(labels)), re.IGNORECASE)
+    postings = _board_postings(adapter, text)
+    naming, quote = 0, ""
+    for posting in postings:
+        if pattern.search(_posting_words(posting)):
+            naming += 1
+            if not quote:
+                quote = str(posting.get("title") or posting.get("text") or "").strip()[:200]
+    return naming, len(postings), quote
+
+
+def _posting_words(posting: Any) -> str:
+    """A posting's words, with its links and identifiers left out.
+
+    Every posting carries its own board URL, which holds the tenant: counting that would make the check circular and
+    accept any tenant spelled like the company. `greenhouse/purestorage` is Everpure's board, and its postings say
+    Everpure; only what a posting *says* may confirm whose board it is.
+    """
+    if isinstance(posting, str):
+        return "" if posting.strip().lower().startswith(("http://", "https://", "www.")) else posting
+    if isinstance(posting, dict):
+        return " ".join(
+            _posting_words(value)
+            for key, value in posting.items()
+            if not re.search(r"url|link|href|\bid\b|^id$|slug|path", str(key), re.IGNORECASE)
+        )
+    if isinstance(posting, list):
+        return " ".join(_posting_words(item) for item in posting)
+    return ""
+
+
+def _board_postings(adapter: AdapterName, text: str) -> list[dict[str, Any]]:
+    """The postings in one board API response, for the two APIs that publish no board name of their own."""
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return []
+    if adapter == "ashby" and isinstance(payload, dict):
+        jobs = payload.get("jobs")
+        return [job for job in jobs if isinstance(job, dict)] if isinstance(jobs, list) else []
+    if adapter == "lever" and isinstance(payload, list):
+        return [job for job in payload if isinstance(job, dict)]
+    return []
+
+
 def board_names_company(board_name: str, company_name: str, domain: str) -> bool:
     """Whether an ATS board's own name names this company: its full name, first word, or domain label."""
     labels = domain.split(".")
@@ -405,6 +476,29 @@ def board_names_company(board_name: str, company_name: str, domain: str) -> bool
 _TITLE_SEPARATOR = re.compile(r"\s+[|–—·:-]\s+|\s*\|\s*")
 
 
+# Words a page adds after a company's name, which are not part of it. A name is cut at the first of them.
+_NOT_PART_OF_A_NAME = re.compile(
+    r"\s+(?:homepage|home|official\s+(?:site|website)|website|careers?|jobs?|store|shop|blog|login|sign\s?in)\b.*$",
+    re.IGNORECASE,
+)
+# Legal forms, which a company writes on a contract and not on its own front page.
+_LEGAL_FORM = re.compile(
+    r"[,\s]+(?:inc|inc\.|incorporated|llc|l\.l\.c\.|ltd|ltd\.|limited|corp|corp\.|corporation|plc|gmbh|ag|sa|s\.a\.|bv|b\.v\.|nv|pty|pte)\.?$",
+    re.IGNORECASE,
+)
+
+
+def _tidy_identity_name(name: str) -> str:
+    """One page-supplied name with what a page adds to it removed: "Reddit, Inc. Homepage" is "Reddit"."""
+    tidied = _NOT_PART_OF_A_NAME.sub("", name).strip().strip("-–—|·:,")
+    for _ in range(2):  # "Example Holdings Ltd, Inc." — two at most, and never past the whole name
+        shorter = _LEGAL_FORM.sub("", tidied).strip()
+        if shorter == tidied or not shorter:
+            break
+        tidied = shorter
+    return tidied or name.strip()
+
+
 def _identity_name(page: _Page, domain: str) -> str | None:
     """The page's own name for the company, when one of its names spells the domain.
 
@@ -412,19 +506,36 @@ def _identity_name(page: _Page, domain: str) -> str | None:
     segment of its title says "AbbVie". A name that spells the domain ("AbbVie" at abbvie.com, "Shield AI"
     at shield.ai) is chosen first, then one that begins with it ("Scale AI" at scale.com). None means no
     name spells it, and the structured name is used as before.
+
+    A page says the same name in several ways, and the stored one is read by people, so among the names that spell the
+    domain the most written-out form wins: "Jane Street" over "Janestreet", "Figure AI" over "FigureAI". Whichever is
+    chosen, what the page adds around it goes: "Pinterest Careers" is Pinterest, "Reddit, Inc. Homepage" is Reddit,
+    "Epic Games Store" is Epic Games, "VIRTU Financial Inc." is VIRTU Financial. Each of those was stored as a
+    company's name on 2026-09-20, before this.
+
+    Where a name ends is not guessed. "Snowflake AI Data Cloud" is a tagline and "Scale AI" is a name, and nothing on
+    either page distinguishes them, so a trailing phrase that is neither page furniture nor a legal form is kept: the
+    first is corrected in the data once, and `save_company_discovery` then leaves a stored name alone.
     """
     labels = domain.split(".")
     stem = identity_key(labels[-2] if len(labels) > 1 else domain)
+    accepted = {stem, identity_key(domain)}
     names = [
         html_unescape(value).strip()
         for value in (page.organization_name, page.site_name, *_TITLE_SEPARATOR.split(page.title or ""))
         if value and value.strip()
     ]
-    spelled = [name for name in names if identity_key(name) in {stem, identity_key(domain)}]
+    spelled = [name for name in names if identity_key(name) in accepted]
     if spelled:
-        return next((name for name in spelled if name != name.casefold()), spelled[0])
+        # Written out beats squashed together, and mixed case beats one case, before the page's own order decides.
+        chosen = min(
+            spelled,
+            key=lambda name: (-name.count(" "), name == name.casefold() or name == name.upper(), names.index(name)),
+        )
+        return _tidy_identity_name(chosen)
     if len(stem) >= 4:
-        return next((name for name in names if identity_key(name).startswith(stem)), None)
+        begins = next((name for name in names if identity_key(name).startswith(stem)), None)
+        return _tidy_identity_name(begins) if begins else None
     return None
 
 

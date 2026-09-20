@@ -725,3 +725,70 @@ class RefusedSourceTests(unittest.TestCase):
             sorted(str(source.url) for source in result.sources if source.category == "related_career_page"),
             ["https://careers.desk-jobs.example/early-careers", "https://www.desk-trading.example/students"],
         )
+
+
+class MalformedUrlTests(unittest.TestCase):
+    """A URL-shaped string a page happens to contain cannot end the company's discovery.
+
+    twilio.com's homepage scripts held one with an unbalanced "[", which the standard library refuses outright
+    ("Invalid IPv6 URL"). Discovery crashed there on 2026-09-19 and saved nothing for the company.
+    """
+
+    def test_a_string_that_cannot_be_parsed_is_not_a_url(self):
+        from firstseen.discovery import _canonical_url, _is_web_url
+
+        for value in ("https://[example", "http://[::1", "https://ho[st/careers", "//[bad]]/x"):
+            self.assertEqual(_canonical_url(value), "", value)
+            self.assertEqual(_canonical_url(value, "https://example.test/"), "", value)
+            self.assertFalse(_is_web_url(_canonical_url(value)), value)
+
+    def test_ordinary_urls_are_unaffected(self):
+        from firstseen.discovery import _canonical_url
+
+        self.assertEqual(_canonical_url("/careers", "https://example.test/x"), "https://example.test/careers")
+        self.assertEqual(_canonical_url("https://boards.greenhouse.io/acme/"), "https://boards.greenhouse.io/acme")
+
+
+class IdentityNameTests(unittest.TestCase):
+    """A company's stored name is read by people, so it is the company's name and not the page's furniture.
+
+    Ten of the 80 stored names read as page titles on 2026-09-20: "Reddit Inc Homepage", "Pinterest Careers",
+    "Janestreet", "FigureAI", "Epic Games Store", "Snowflake AI Data Cloud", "VIRTU Financial Inc.",
+    "Westerndigital". Where a name ends is not guessed, though: "Scale AI" is a name and "Snowflake AI Data Cloud" is
+    a tagline, and nothing on either page tells them apart, so a trailing phrase that is neither page furniture nor a
+    legal form is kept.
+    """
+
+    class Page:
+        def __init__(self, org=None, site=None, title=None):
+            self.organization_name, self.site_name, self.title = org, site, title
+
+    def name(self, domain, **kwargs):
+        from firstseen.discovery import _identity_name
+
+        return _identity_name(self.Page(**kwargs), domain)
+
+    def test_page_furniture_and_legal_forms_are_not_part_of_the_name(self):
+        self.assertEqual(self.name("redditinc.com", title="Reddit, Inc. Homepage"), "Reddit")
+        self.assertEqual(self.name("pinterestcareers.com", title="Pinterest Careers"), "Pinterest")
+        self.assertEqual(self.name("epicgames.com", title="Epic Games Store"), "Epic Games")
+        self.assertEqual(self.name("virtu.com", org="VIRTU Financial Inc."), "VIRTU Financial")
+
+    def test_the_most_written_out_form_wins(self):
+        # Both spell the domain; one is how the company writes it.
+        self.assertEqual(self.name("janestreet.com", site="Janestreet", title="Jane Street"), "Jane Street")
+        self.assertEqual(self.name("figure.ai", site="FigureAI", title="Figure AI | Home"), "Figure AI")
+        self.assertEqual(self.name("westerndigital.com", site="Westerndigital", title="Western Digital"), "Western Digital")
+
+    def test_a_trailing_phrase_that_is_part_of_the_name_is_kept(self):
+        self.assertEqual(self.name("scale.com", title="Scale AI"), "Scale AI")
+        self.assertEqual(self.name("shield.ai", title="Shield AI"), "Shield AI")
+        self.assertEqual(self.name("snowflake.com", title="Snowflake AI Data Cloud"), "Snowflake AI Data Cloud")
+
+    def test_a_name_that_does_not_spell_the_domain_is_left_to_the_structured_name(self):
+        self.assertEqual(
+            self.name("abbvie.com", org="Pharmaceutical Research & Development",
+                      title="Global Biopharmaceutical Company | AbbVie"),
+            "AbbVie",
+        )
+        self.assertIsNone(self.name("example.test", title="Something Else Entirely"))

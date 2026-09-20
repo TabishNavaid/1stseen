@@ -7,13 +7,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { displayCompany, displayPlace, displayTitle, foldTitle, tidyTitle, withoutLeadingTags } from "../lib/display-names.ts";
 
-test("company names read as the companies write them", () => {
-  assert.equal(displayCompany("Imc"), "IMC");
-  assert.equal(displayCompany("Jumptrading"), "Jump Trading");
-  assert.equal(displayCompany("Vercel Inc."), "Vercel");
-  assert.equal(displayCompany("Hudson River Trading"), "Hudson River Trading");
-  assert.equal(displayCompany("DRW"), "DRW");
-  assert.equal(displayCompany("ID.me"), "ID.me");
+test("a company name is shown as stored, with no correction list in front of it", () => {
+  // The ten stored names that read as page titles were corrected in the data on 2026-09-20, and discovery no longer
+  // takes a page's furniture or legal form as part of a name (worker/src/firstseen/discovery.py, _identity_name). A
+  // name that reads wrongly is a row to fix; a rule here would hide it and drift from what every other surface shows.
+  for (const name of ["IMC", "Jump Trading", "Vercel", "Hudson River Trading", "DRW", "ID.me", "Figure AI"]) {
+    assert.equal(displayCompany(name), name);
+  }
+  assert.equal(displayCompany("  Reddit  "), "Reddit", "only surrounding space is dropped");
 });
 
 test("a stored title is tidied: Co-op, joining words in lower case, and acronyms in capitals", () => {

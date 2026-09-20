@@ -67,6 +67,9 @@ class Query:
     def is_(self, *_: Any) -> Query:
         return self
 
+    def limit(self, *_: Any) -> Query:
+        return self
+
     @property
     def not_(self) -> Query:
         return self
@@ -85,6 +88,10 @@ class Query:
 
     def upsert(self, payload: Any, **options: Any) -> Query:
         self.op, self.payload, self.options = "upsert", payload, options
+        return self
+
+    def update(self, payload: Any, **options: Any) -> Query:
+        self.op, self.payload, self.options = "update", payload, options
         return self
 
     def execute(self) -> Any:
@@ -351,5 +358,118 @@ class ScopeBulkSaveTests(unittest.TestCase):
         self.assertEqual((summary.written, summary.failures, summary.by_status["in_scope"]), (2, 1, 2))
 
 
+
+
+class StoredRowKeepsItsIdTests(unittest.TestCase):
+    """A posting written onto a row that already exists never moves that row's primary key.
+
+    Historical events and role matches reference an observation by id, so an update that changed the id was refused by
+    the database (FK 23503 on historical_opening_events) and failed the whole source. That is how the first weekly
+    historical run failed on 2026-09-19: a Wayback posting whose recomputed id no longer matched its stored row.
+    """
+
+    def stored(self) -> list[dict[str, Any]]:
+        return [{"id": "row-stored", "identity_key": f"{7:064x}", "first_seen_at": "2025-01-01T00:00:00+00:00",
+                 "content_hash": "b" * 64}]
+
+    def changed_posting(self) -> JobObservation:
+        # A posting carrying its own id, different from the stored row's, and different content.
+        observation = posting(7, content="c")
+        return observation.model_copy(update={"id": UUID("00000000-0000-4000-8000-0000000007ff")})
+
+    def test_the_batched_write_keeps_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        outcomes = repository(client).upsert_jobs([self.changed_posting()])
+        self.assertEqual(outcomes, ["changed"])
+        written = [payload for table, op, payload, _ in client.requests if table == "raw_job_observations" and op != "select"]
+        self.assertEqual(len(written), 1, "one bulk write, not a per-posting fallback")
+        self.assertEqual([row["id"] for row in written[0]], ["row-stored"])
+        self.assertEqual(written[0][0]["first_seen_at"], "2025-01-01T00:00:00+00:00", "the first sighting is kept")
+
+    def test_the_per_posting_write_keeps_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        self.assertEqual(repository(client).upsert_job(self.changed_posting()), "changed")
+        updates = [payload for table, op, payload, _ in client.requests if op == "update"]
+        self.assertEqual([payload["id"] for payload in updates], ["row-stored"])
+
+    def test_an_unchanged_posting_is_touched_on_the_stored_id(self) -> None:
+        client = Client({"raw_job_observations": self.stored()})
+        observation = posting(7, content="b").model_copy(update={"id": UUID("00000000-0000-4000-8000-0000000007ff")})
+        self.assertEqual(repository(client).upsert_jobs([observation]), ["unchanged"])
+        touched = [payload for name, op, payload, _ in client.requests if op == "rpc"]
+        self.assertEqual([row["id"] for row in touched[0]["p_rows"]], ["row-stored"])
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchiveCaptureWriteTests(unittest.TestCase):
+    """A second pass over an archived page updates the capture it already stored.
+
+    Wayback derives a capture's id, and its page observation's with it, from the archive digest, which archive.org can
+    report differently for a capture it served before. The rows are keyed by the capture instead, so a recomputed id
+    must not insert a second row (unique source_id, original_url, captured_at — how the first weekly historical run
+    failed on 2026-09-19) or point at an observation id the database does not have.
+    """
+
+    URL = "https://careers.example.test/early-careers/"
+    CAPTURED = datetime(2022, 11, 17, 23, 22, 42, tzinfo=UTC)
+
+    def capture(self, suffix: str) -> Any:
+        from firstseen.models import ArchiveCapture
+
+        return ArchiveCapture(
+            id=UUID(f"00000000-0000-4000-8000-00000000c0{suffix}"),
+            observation_id=UUID(f"00000000-0000-4000-8000-00000000d0{suffix}"),
+            source_id=SOURCE_ID,
+            original_url=self.URL,
+            archive_url=f"https://web.archive.org/web/20221117232242/{self.URL}",
+            captured_at=self.CAPTURED,
+            status_code=200,
+            change_kind="unchanged",
+            completeness=0.9,
+            is_partial=False,
+            evidence_excerpt="Early careers at Example",
+        )
+
+    def client_with_stored_rows(self) -> Client:
+        return Client(
+            {
+                "raw_job_observations": [
+                    {"id": "stored-observation", "source_id": str(SOURCE_ID),
+                     "archive_original_url": self.URL, "archive_capture_at": self.CAPTURED.isoformat()}
+                ],
+                "archive_captures": [
+                    {"id": "stored-capture", "source_id": str(SOURCE_ID),
+                     "original_url": self.URL, "captured_at": self.CAPTURED.isoformat()}
+                ],
+            }
+        )
+
+    def written(self, client: Client) -> tuple[Any, dict[str, Any]]:
+        writes = [(payload, options) for table, op, payload, options in client.requests
+                  if table == "archive_captures" and op == "upsert"]
+        self.assertEqual(len(writes), 1)
+        return writes[0]
+
+    def test_a_capture_already_stored_keeps_its_id_and_its_observation(self):
+        client = self.client_with_stored_rows()
+        repository(client).record_archive_captures([self.capture("11")])
+        payload, options = self.written(client)
+        self.assertEqual(payload[0]["id"], "stored-capture")
+        self.assertEqual(payload[0]["observation_id"], "stored-observation")
+        self.assertEqual(options["on_conflict"], "source_id,original_url,captured_at")
+        self.assertEqual(payload[0]["change_kind"], "unchanged", "the capture's own data is still written")
+
+    def test_a_new_capture_is_written_with_its_own_ids(self):
+        client = Client({"raw_job_observations": [], "archive_captures": []})
+        repository(client).record_archive_captures([self.capture("22")])
+        payload, _ = self.written(client)
+        self.assertEqual(payload[0]["id"], "00000000-0000-4000-8000-00000000c022")
+        self.assertEqual(payload[0]["observation_id"], "00000000-0000-4000-8000-00000000d022")
+
+    def test_no_captures_reads_nothing(self):
+        client = Client({})
+        repository(client).record_archive_captures([])
+        self.assertEqual(client.requests, [])
