@@ -28,7 +28,9 @@
     "preflight": "node scripts/preflight.mjs",
     "test": "npm run test:shared && npm run test:worker && npm run test:web",
     "check": "npm run lint && npm run typecheck && npm test && .venv/bin/ruff check worker/src worker/tests && .venv/bin/mypy worker/src && .venv/bin/python -m firstseen.cli dry-run",
-    "measure:guest-limits": "node scripts/measure-guest-agent-limits.mjs"
+    "measure:guest-limits": "node scripts/measure-guest-agent-limits.mjs",
+    "build:brand-art": "node scripts/build-brand-art.mjs",
+    "fetch:company-logos": "node scripts/fetch-company-logos.mjs"
   },
   "devDependencies": {
     "lucide-react": "^1.31.0",
