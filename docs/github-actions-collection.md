@@ -68,6 +68,23 @@ resolved) took 16 minutes end to end with 3,277 requests, well inside the 45-min
 steady-state pass over Figma (324 observations, 144 roles, nothing new to resolve) took 1,251 requests and 78 s before
 and 26 requests and 4.7 s after.
 
+### No model answers a scheduled run, and the run says so
+
+No `LLM_*` repository variable and no model API key exist, so the only route a run has is the checked-in default,
+`ollama/qwen2.5:7b` at `http://localhost:11434`, where nothing listens on a GitHub runner. **Every extraction and
+classification in production is deterministic**, and the generic career-page and sitemap extractors fall back to their
+deterministic path, as they are built to.
+
+Each attempt used to cost a refused connection and a `model_usage` row: 14,723 of them on hosted by 2026-09-20, all
+recording the same refusal, about 2.6 MB of the database. A refused connection is not a transient fault, so a route
+that refuses one is dropped for the rest of the run: one request and one row per run instead of thousands, while a
+timeout or a 5xx is still retried, because the provider answered or might. Every run's summary carries a `models`
+block saying how many attempts were made, how many answered, which route was unreachable, and, when none answered,
+that the run was deterministic.
+
+Configuring a model is a decision about cost, not a default: the free tiers of Gemini and Groq would serve these
+capabilities, and `LLM_EXTRACT_ROUTES` with the matching key is all it takes.
+
 ### An opening keeps the quote it was created with
 
 Reconstruction rebuilds a role's whole history every pass. It used to write each event with the quote it derived that

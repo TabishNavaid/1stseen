@@ -134,11 +134,51 @@ def _failure_kind(exc: Exception) -> FailureKind | None:
         return "rate_limit"
     if status and 500 <= int(status) <= 599:
         return "temporary_provider"
-    if any(marker in name for marker in ("serviceunavailable", "apiconnection", "internalserver")):
+    if any(
+        marker in name
+        for marker in ("serviceunavailable", "apiconnection", "internalserver", "connectionrefused", "connecterror")
+    ):
         return "temporary_provider"
-    if any(marker in message for marker in ("temporarily unavailable", "connection reset", "try again")):
+    if any(
+        marker in message
+        for marker in ("temporarily unavailable", "connection reset", "try again", "connection refused", "failed to connect")
+    ):
         return "temporary_provider"
     return None
+
+
+def _is_unreachable(exc: Exception) -> bool:
+    """Whether this failure means the route cannot be reached at all, rather than failing this once.
+
+    A refused connection is not a transient provider fault: nothing is listening, and it will still not be listening
+    in a second. `_failure_kind` folds it in with timeouts and 5xx as "temporary_provider", which is right for
+    retrying a hosted provider and wrong for a local one that is not running. On 2026-09-20 the hosted project held
+    14,723 rows recording the same refusal of `http://localhost:11434` from GitHub Actions, where no model runs.
+
+    A timeout or a 5xx is deliberately not this: the provider answered, or might.
+    """
+    if isinstance(exc, TimeoutError):
+        return False
+    if isinstance(exc, ConnectionError):
+        return True
+    name = type(exc).__name__.casefold()
+    message = str(exc).casefold()
+    if "timeout" in name or "timed out" in message:
+        return False
+    if "apiconnection" in name or "connecterror" in name or "connectionrefused" in name:
+        return True
+    return any(
+        marker in message
+        for marker in (
+            "connection refused",
+            "failed to connect",
+            "cannot connect",
+            "could not connect",
+            "name or service not known",
+            "nodename nor servname",
+            "no route to host",
+        )
+    )
 
 
 def _structured_response_format(model: type[BaseModel]) -> dict[str, Any]:
@@ -217,6 +257,11 @@ class ModelRouter:
         self.backend = backend or LiteLLMBackend()
         self.tracker = tracker
         self.timeout_seconds = timeout_seconds
+        # Routes that refused a connection in this run: not called again, and not recorded again. One run is one
+        # process, so this forgets itself when the run ends and a route that comes back is tried afresh next time.
+        self._unreachable: set[tuple[ProviderName, str]] = set()
+        self.attempts_made = 0
+        self.attempts_succeeded = 0
 
     @classmethod
     def from_settings(
@@ -299,6 +344,10 @@ class ModelRouter:
         fallback_reason: str | None = None
         for route in configured_routes:
             if route.provider in blocked_providers:
+                continue
+            if self._route_key(route) in self._unreachable:
+                # Nothing is listening: no request, and no row recording that there was none.
+                fallback_reason = fallback_reason or f"unreachable: {route.model}"
                 continue
             started = monotonic()
             try:
@@ -387,7 +436,36 @@ class ModelRouter:
                 fallback_reason = reason
                 if kind in {"rate_limit", "quota_exhausted"}:
                     blocked_providers.add(route.provider)
+                if _is_unreachable(exc):
+                    self._unreachable.add(self._route_key(route))
         raise ModelRoutingError(capability, attempts)
+
+    @staticmethod
+    def _route_key(route: ModelRoute) -> tuple[ProviderName, str]:
+        return route.provider, route.api_base or ""
+
+    def model_summary(self) -> dict[str, Any]:
+        """What models this run used, and if it used none, why in one line.
+
+        A deployment with no reachable model is the normal one: GitHub Actions configures no provider, so collection
+        extracts and classifies deterministically. That is a fact about the run worth stating rather than leaving to be
+        inferred from an absence.
+        """
+        unreachable = sorted(f"{provider} at {base or 'its default endpoint'}" for provider, base in self._unreachable)
+        deterministic_only = self.attempts_succeeded == 0
+        summary: dict[str, Any] = {
+            "attempts": self.attempts_made,
+            "succeeded": self.attempts_succeeded,
+            "deterministic_only": deterministic_only,
+        }
+        if unreachable:
+            summary["unreachable"] = unreachable
+        if deterministic_only:
+            summary["note"] = (
+                "No model answered, so every extraction and classification was deterministic"
+                + (f"; unreachable: {', '.join(unreachable)}" if unreachable else "")
+            )
+        return summary
 
     @staticmethod
     def _attempt(
@@ -418,6 +496,8 @@ class ModelRouter:
         )
 
     def _track(self, attempt: ModelAttempt) -> None:
+        self.attempts_made += 1
+        self.attempts_succeeded += 1 if attempt.success else 0
         if self.tracker:
             self.tracker.record_model_attempt(attempt)
 

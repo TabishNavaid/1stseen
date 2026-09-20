@@ -611,6 +611,24 @@ class RegenerationScopeTests(unittest.TestCase):
         self.assertEqual(ScopedForecastRepository.saved_forecasts, 1)
 
 
+class DeterministicRunTests(unittest.TestCase):
+    """A collection run states whether any model answered it.
+
+    GitHub Actions configures no provider, so every extraction and classification is deterministic. That is the normal
+    deployment, and a run that says nothing about it leaves a reader to infer it from an absence.
+    """
+
+    @patch.object(cli, "IntelligenceRepository", Repository)
+    def test_the_summary_carries_the_model_state(self):
+        with patch.object(sys, "argv", ["firstseen", "ingest", "--all"]), redirect_stdout(StringIO()) as output:
+            self.assertEqual(cli.main(), 0)
+        summary = json.loads(output.getvalue())
+        self.assertIn("models", summary)
+        self.assertEqual(summary["models"]["attempts"], 0)
+        self.assertTrue(summary["models"]["deterministic_only"])
+        self.assertIn("deterministic", summary["models"]["note"])
+
+
 class HistoricalSliceRepository(Repository):
     """Three Wayback sources with different last-fetch times, plus two current sources that must be left alone."""
 

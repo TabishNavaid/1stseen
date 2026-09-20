@@ -206,6 +206,9 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
                 "degraded_sources": degraded,
                 "diagnostics": diagnostic_counts,
                 "enrichment": enrichment,
+                # Whether any model answered. A deployment with none is the normal one, and a run should say so
+                # rather than leave it to be inferred (providers.py, ModelRouter.model_summary).
+                "models": router.model_summary(),
                 **_run_cost(repository, started),
                 "status": status,
                 "run_id": str(run_id),
@@ -341,7 +344,18 @@ def run_enrichment(company: str | None, *, force: bool = False) -> int:
         else "succeeded"
     )
     repository.finish_agent_run(run_id, status=status)
-    print(json.dumps({**totals, **_run_cost(repository, started), "status": status, "run_id": str(run_id)}, indent=2))
+    print(
+        json.dumps(
+            {
+                **totals,
+                "models": router.model_summary(),
+                **_run_cost(repository, started),
+                "status": status,
+                "run_id": str(run_id),
+            },
+            indent=2,
+        )
+    )
     return 1 if status == "failed" and company_ids else 0
 
 
