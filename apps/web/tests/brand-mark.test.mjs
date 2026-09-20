@@ -82,9 +82,19 @@ test("the tab's icon is plain vector, optimised, and carries no manifest", () =>
 
 test("the raster icons are the sizes the browsers and the home screen ask for", () => {
   assert.deepEqual(png("icon-32.png"), { width: 32, height: 32, colourType: 6 });
-  assert.deepEqual(png("og-image.png"), { width: 1200, height: 630, colourType: 2 });
   // A home screen rounds the icon itself and fills nothing behind it, so this one has no transparent corners.
   assert.deepEqual(png("apple-touch-icon.png"), { width: 180, height: 180, colourType: 2 });
+});
+
+test("the link preview is the size a preview is cropped to, opaque, and small enough to arrive", () => {
+  const preview = png("og-image.png");
+  assert.equal(preview.width, 1200);
+  assert.equal(preview.height, 630);
+  // 4 and 6 are the colour types that carry an alpha channel, and a photograph has nothing to see through.
+  assert.ok(![4, 6].includes(preview.colourType), `og-image.png carries an alpha channel it never uses`);
+  // A photograph of this page is a few flat colours, a gradient and the grain, so a palette holds it in a tenth
+  // of the bytes; a full-colour screenshot of it is over half a megabyte in front of a link.
+  assert.ok(readFileSync(asset("og-image.png")).length < 150_000, "the link preview stays small");
 });
 
 test("a page names all three icons, draws the mark inline at both ends, and repeats no id", async () => {

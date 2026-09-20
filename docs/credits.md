@@ -24,11 +24,14 @@ the bird turns up small beside them, one to a screen, the way a signature does.
 Two poses stay in `design-refs/bird/` and are not written out: `sleeping` and `waving`. A pose nobody draws is ten
 kilobytes of a page for nothing, so `BIRDS` in `scripts/build-brand-art.mjs` is the list of the ones in use.
 
-The mark itself — beside the wordmark in the header and the footer, and on the icon a browser tab, a bookmark, a
-home screen and the corner of a link preview show — is its own pair of drawings, `design-refs/icon/icon-C.svg` and
+The mark itself — beside the wordmark in the header and the footer, and on the icon a browser tab, a bookmark and a
+home screen show — is its own pair of drawings, `design-refs/icon/icon-C.svg` and
 `design-refs/icon/favicon-C.svg`. They are the same bird; the second carries a heavier line, which is what lets it
 hold together at sixteen pixels, and it draws `favicon.svg` and `icon-32.png` while the first draws everything
 larger. The tile belongs to the drawings, so the wordmark supplies none.
+
+A link preview carries the mark too, but only because the photograph it is made of has the header in it; nothing is
+set into its corner (`scripts/build-brand-art.mjs`).
 
 `scripts/build-brand-art.mjs` takes the provenance manifest off the copy that ships, shrinks the file, and writes the
 elements into `apps/web/lib/brand/bird-mark.ts`. It changes nothing else: not a point, not a colour, not a shape. At

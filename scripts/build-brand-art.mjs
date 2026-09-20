@@ -331,17 +331,29 @@ await sharp(markBuffer(MARK_SOURCES.mark))
   .toFile(resolve(ROOT, "apps/web/public/apple-touch-icon.png"));
 
 /**
- * The link preview: the landing page as it was on the day it was photographed, with the mark set into its corner so
- * the picture carries the product's name even where the title is cropped away. Retake the photograph into
- * scripts/assets/og-source.png from the live site and run this again; the source is never written to.
+ * The link preview: the landing page as it was on the day it was photographed. Retake it from the live site into
+ * scripts/assets/og-source.png at 1200 by 630, which is the size a preview is cropped to, and run this again; the
+ * source is never written to, so a later change to this step does not need another photograph.
+ *
+ * The mark is no longer set into a corner. It was put there when the photograph was of a site whose header carried
+ * no mark at all; now the header in the photograph is the mark, drawn larger and in its right place, and a second
+ * copy in the corner only covered the card it sat on. Turn CORNER_MARK back on to have both.
+ *
+ * A screenshot of this page is a few flat colours, a gradient and the page's grain, so a palette of 128 holds it at
+ * a mean error of 1.3 of 255 and about a tenth of the bytes. What that costs is a little dither in the warm wash on
+ * the right, which at preview size reads as the grain that is already there.
  */
+const CORNER_MARK = false;
 const OG_MARK = 96;
-await sharp(resolve(ROOT, "scripts/assets/og-source.png"))
-  .composite([{ input: await sharp(markBuffer(MARK_SOURCES.mark)).resize(OG_MARK, OG_MARK).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }])
+const preview = sharp(resolve(ROOT, "scripts/assets/og-source.png"));
+if (CORNER_MARK) {
+  preview.composite([{ input: await sharp(markBuffer(MARK_SOURCES.mark)).resize(OG_MARK, OG_MARK).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }]);
+}
+await preview
   // A photograph has nothing to see through, and an alpha channel it never uses is a tenth of the file.
   .flatten({ background: "#f3f1eb" })
   .removeAlpha()
-  .png({ compressionLevel: 9 })
+  .png({ compressionLevel: 9, palette: true, colours: 128, dither: 1 })
   .toFile(resolve(ROOT, "apps/web/public/og-image.png"));
 
 const size = (value) => `${(value / 1024).toFixed(1)} KB`;

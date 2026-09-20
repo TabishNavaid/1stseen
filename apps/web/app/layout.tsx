@@ -18,9 +18,9 @@ const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axe
 // The one handwritten voice: notes on the chart, and the words inside a sticker or a stamp. Nowhere else.
 const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["600", "700"], preload: false });
 
-// A photograph of the production landing page at 1200 by 630, the size link previews expect, with the bird's tile set
-// into its corner. It shows real data as it was on the day it was taken: retake it from the live site into
-// scripts/assets/og-source.png and run `npm run build:brand-art`, never from a development server.
+// A photograph of the production landing page at 1200 by 630, the size link previews expect. It shows real data as it
+// was on the day it was taken: retake it from the live site into scripts/assets/og-source.png and run
+// `npm run build:brand-art`, which is what shrinks it, never from a development server.
 const SOCIAL_IMAGE = {
   url: "/og-image.png",
   width: 1200,
