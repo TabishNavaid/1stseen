@@ -4,13 +4,18 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
-import { BIRD_MARK, MARK_ID_SLOT } from "../lib/brand/bird-mark.ts";
+import { BIRD_MARK, MARK_ID_SLOT, MARK_SOURCES } from "../lib/brand/bird-mark.ts";
 
 const asset = (name) => new URL(`../public/${name}`, import.meta.url);
-const reference = (name) => readFileSync(new URL(`../../../design-refs/icon/${name}.svg`, import.meta.url), "utf8");
 const colours = (svg) => [...new Set([...svg.matchAll(/#[0-9a-fA-F]{3,8}/g)].map((match) => match[0].toLowerCase()))].sort();
+
+// The drawings live in design-refs, which is not in the repository, so a checkout without it checks what shipped
+// against itself and a checkout with it also checks that against the drawing.
+const referencePath = (kind) => new URL(`../../../${MARK_SOURCES[kind].file}`, import.meta.url);
+const haveReferences = Object.keys(MARK_SOURCES).every((kind) => existsSync(referencePath(kind)));
 
 async function render(pathname, env = {}) {
   const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
@@ -40,27 +45,39 @@ function png(name) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), colourType: bytes[25] };
 }
 
-test("the shipped mark is the drawing it came from, in both weights", () => {
-  const sources = { mark: "icon-C", small: "favicon-C" };
-  for (const [kind, name] of Object.entries(sources)) {
-    const art = BIRD_MARK[kind];
+test("the shipped mark is one drawing at two weights, in the palette it arrived in", () => {
+  const shipped = Object.entries(BIRD_MARK);
+  for (const [kind, art] of shipped) {
     assert.ok(art.nodes.length > 0, kind);
-    // Not one colour renamed, dropped or added between the drawing and what a page draws.
-    assert.deepEqual(colours(JSON.stringify(art)), colours(reference(name).replace(/<metadata>[\s\S]*?<\/metadata>/g, "")), kind);
-    assert.equal(art.viewBox, /viewBox="([^"]+)"/.exec(reference(name))[1], kind);
+    assert.equal(art.viewBox, "0 0 120 120", kind);
+    // The clip is reached by a name, and the name is a slot until a page fills it.
+    assert.match(JSON.stringify(art), new RegExp(MARK_ID_SLOT), kind);
   }
-  // The two weights are two drawings, not one drawing twice.
+  // Two weights of one bird: the same colours, a different line.
+  assert.deepEqual(colours(JSON.stringify(BIRD_MARK.mark)), colours(JSON.stringify(BIRD_MARK.small)));
   assert.notDeepEqual(BIRD_MARK.mark.nodes, BIRD_MARK.small.nodes);
+  // The tab's icon is the heavier drawing itself, not a copy that drifted from it.
+  assert.deepEqual(colours(readFileSync(asset("favicon.svg"), "utf8")), colours(JSON.stringify(BIRD_MARK.small)));
 });
 
-test("the tab's icon is the heavier drawing, plain vector, and carries no manifest", () => {
+test("what shipped is the drawing it came from, where the drawing is at hand", { skip: haveReferences ? false : "design-refs is not in this checkout" }, () => {
+  for (const [kind, source] of Object.entries(MARK_SOURCES)) {
+    const file = readFileSync(referencePath(kind));
+    assert.equal(createHash("sha256").update(file).digest("hex"), source.sha256, `${source.file} changed; run npm run build:brand-art`);
+    const svg = file.toString("utf8").replace(/<metadata>[\s\S]*?<\/metadata>/g, "");
+    // Not one colour renamed, dropped or added between the drawing and what a page draws.
+    assert.deepEqual(colours(JSON.stringify(BIRD_MARK[kind])), colours(svg), kind);
+    assert.equal(BIRD_MARK[kind].viewBox, /viewBox="([^"]+)"/.exec(svg)[1], kind);
+  }
+});
+
+test("the tab's icon is plain vector, optimised, and carries no manifest", () => {
   const favicon = readFileSync(asset("favicon.svg"), "utf8");
   assert.doesNotMatch(favicon, /<script|href=|xlink:href|<image/i, "nothing to fetch and nothing to run");
   assert.doesNotMatch(favicon, /c2pa|<metadata/i, "the provenance stays in design-refs, with the drawing");
-  assert.deepEqual(colours(favicon), colours(reference("favicon-C").replace(/<metadata>[\s\S]*?<\/metadata>/g, "")));
-  // Optimised, not redrawn: smaller than the file it came from, and still the same box.
-  assert.ok(favicon.length < reference("favicon-C").length / 2, "the icon is optimised");
   assert.match(favicon, /viewBox="0 0 120 120"/);
+  // Small enough to be worth no thought, and written by the build rather than by hand.
+  assert.ok(favicon.length < 12_000, `the icon stays small: ${favicon.length} bytes`);
 });
 
 test("the raster icons are the sizes the browsers and the home screen ask for", () => {

@@ -373,3 +373,18 @@ export type BirdMarkKind = keyof typeof BIRD_MARK;
 
 /** The placeholder a caller replaces with the id it has chosen for its copy. */
 export const MARK_ID_SLOT = "__id__";
+
+/**
+ * What each drawing was when this was written. design-refs is not in the repository, so a checkout without it cannot
+ * compare the two; one with it can, and tests/brand-mark.test.mjs does.
+ */
+export const MARK_SOURCES: Readonly<Record<BirdMarkKind, { file: string; sha256: string }>> = {
+  "mark": {
+    "file": "design-refs/icon/icon-C.svg",
+    "sha256": "933c235e9405f6a44ed42abd824b4f20566dd0e9d994aaa00db17a05fe679497"
+  },
+  "small": {
+    "file": "design-refs/icon/favicon-C.svg",
+    "sha256": "44e9efde03c7fbdb43861eea9fbff7cba7d1c04ba078fbbcf648cae17750a710"
+  }
+};

@@ -20,6 +20,7 @@
 import { getStroke } from "perfect-freehand";
 import sharp from "sharp";
 import { optimize } from "svgo";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -293,6 +294,19 @@ export type BirdMarkKind = keyof typeof BIRD_MARK;
 
 /** The placeholder a caller replaces with the id it has chosen for its copy. */
 export const MARK_ID_SLOT = ${JSON.stringify(ID_SLOT)};
+
+/**
+ * What each drawing was when this was written. design-refs is not in the repository, so a checkout without it cannot
+ * compare the two; one with it can, and tests/brand-mark.test.mjs does.
+ */
+export const MARK_SOURCES: Readonly<Record<BirdMarkKind, { file: string; sha256: string }>> = ${JSON.stringify(
+  Object.fromEntries(Object.entries(MARK_SOURCES).map(([key, name]) => [key, {
+    file: `design-refs/icon/${name}.svg`,
+    sha256: createHash("sha256").update(readFileSync(resolve(ROOT, "design-refs/icon", `${name}.svg`))).digest("hex"),
+  }])),
+  null,
+  2,
+)};
 `);
 
 const markFile = (name) => `${markSvg(name)}\n`;
