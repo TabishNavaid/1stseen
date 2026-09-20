@@ -270,6 +270,13 @@ run leaves, the next continues. 200 is measured: over a copy of the rig corpus t
 slowest taking 1.4 s, where 500 converged in 19 calls but one took 3.7 s, too near eight seconds on a machine faster
 than a shared production instance.
 
+**Measuring never stops the trim.** Migration 048 reported the bytes each column held by summing the text. Those sums
+scan it -- 110 MB of it in `raw_job_observations` alone -- and they do not finish in eight seconds either: the 16:05 UTC
+run on 2026-09-20 died inside the measurement before shortening anything, the second run in a row to do nothing.
+Migration `202608140050` reads the sizes from the catalogue instead, where a table's long text is its TOAST table, and
+`firstseen trim-text` reports a failure to read them rather than raising. `pg_stats.avg_width` is not an alternative:
+for a TOASTed column it reports the pointer's width, 37 bytes for a column holding 73.7 MB.
+
 **An UPDATE does not free space.** Postgres writes a new version of every row it shortens and leaves the old one dead,
 so immediately after the trim the reported size is *larger* (246 MB became 271 MB in that transaction). Autovacuum then
 marks the dead space reusable, which stops the corpus growing into new space but does not return the old space to the

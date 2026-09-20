@@ -85,8 +85,8 @@ TRIM_REPORT_FIELDS = (
     "remaining_roles",
     "remaining_events",
 )
-# What out_of_scope_text_bytes reports.
-TEXT_BYTES_FIELDS = ("excerpt_bytes", "prototype_bytes", "quote_bytes", "database_bytes")
+# What corpus_text_sizes reports per table (migration 202608140050).
+TEXT_SIZE_FIELDS = ("table_name", "heap_bytes", "toast_bytes", "index_bytes", "total_bytes", "database_bytes")
 ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
@@ -340,13 +340,20 @@ class IntelligenceRepository:
             )
         return configs
 
-    def out_of_scope_text_bytes(self) -> dict[str, int]:
-        """What the text costs now (migration 202608140048): asked once before a trim and once after."""
-        # bounded: one row, four sums.
-        response = self.client.rpc("out_of_scope_text_bytes", {}).execute()
+    def corpus_text_sizes(self) -> list[dict[str, Any]]:
+        """What the corpus's text costs now, from the catalogue (migration 202608140050).
+
+        Summing the text itself does not finish in the eight seconds PostgREST allows, and failing to measure is not
+        worth failing the work it measures, so the sizes come from the catalogue: a table's long text lives in its
+        TOAST table, which is what shortening the text moves.
+        """
+        # bounded: one row per named table, five of them.
+        response = self.client.rpc("corpus_text_sizes", {}).execute()
         rows = cast(list[dict[str, Any]], response.data or [])
-        row = rows[0] if rows else {}
-        return {name: int(row.get(name) or 0) for name in TEXT_BYTES_FIELDS}
+        return [
+            {name: (row.get(name) if name == "table_name" else int(row.get(name) or 0)) for name in TEXT_SIZE_FIELDS}
+            for row in rows
+        ]
 
     def trim_out_of_scope_text(
         self, *, keep: int = OUT_OF_SCOPE_TEXT_KEPT, limit: int = OUT_OF_SCOPE_TRIM_CHUNK

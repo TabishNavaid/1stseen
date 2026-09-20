@@ -580,9 +580,19 @@ class SchemaContractTests(unittest.TestCase):
         for column in ("evidence_excerpt", "evidence_quote", "description_prototype"):
             self.assertNotIn(f"{column} = null", schema)
             self.assertNotIn(f"{column} = ''", schema)
-        # It reports what it changed and what it cost, because the run that calls it is the only record.
-        for field in ("excerpt_bytes", "prototype_bytes", "quote_bytes", "database_bytes"):
-            self.assertIn(field, schema)
+        # It reports what it changed, and the sizes come from the catalogue rather than from scanning the text:
+        # summing it does not finish in eight seconds, and the measurement killed the trim twice before shortening
+        # anything (migration 050).
+        catalogue = (
+            Path(__file__).resolve().parents[2]
+            / "supabase/migrations/202608140050_corpus_sizes_from_the_catalogue.sql"
+        ).read_text()
+        self.assertIn("drop function if exists public.out_of_scope_text_bytes();", catalogue)
+        self.assertIn("pg_total_relation_size(nullif(c.reltoastrelid, 0))", catalogue)
+        # The body, not the comment that explains why the sums are gone.
+        body = catalogue[catalogue.index("create or replace function public.corpus_text_sizes") :]
+        self.assertNotIn("sum(length(", body)
+        self.assertIn(") to service_role;", catalogue)
         # A call is bounded, because PostgREST connects under an eight-second statement timeout: one statement over the
         # whole corpus failed with 57014 on the first scheduled run that tried it.
         self.assertIn("p_limit must be between 1 and 5000", schema)

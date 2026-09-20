@@ -916,10 +916,22 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
     the first scheduled run to try it failed with 57014 and changed nothing. So this calls the function until it reports
     nothing left or the budget is spent, and the next run continues from where this one stopped. Every call is
     idempotent, so stopping early costs nothing but time.
+
+    Measuring never stops the trim. The second run to try it died inside the measurement, before shortening anything,
+    because summing the text scans it; the sizes now come from the catalogue, and a failure to read them is reported
+    rather than raised.
     """
     started = time.monotonic()
     repository = IntelligenceRepository.from_settings(get_settings())
-    before = repository.out_of_scope_text_bytes()
+
+    def sizes() -> list[dict[str, Any]]:
+        try:
+            return repository.corpus_text_sizes()
+        except Exception as exc:  # noqa: BLE001 - a size is a report, not the work
+            print(json.dumps({"sizes_unavailable": type(exc).__name__}), file=sys.stderr)
+            return []
+
+    before = sizes()
     totals = {"observations": 0, "roles": 0, "events": 0}
     calls = 0
     remaining = {"remaining_observations": -1, "remaining_roles": -1, "remaining_events": -1}
@@ -931,7 +943,7 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
         remaining = {name: report[name] for name in remaining}
         if not any(remaining.values()):
             break
-    after = repository.out_of_scope_text_bytes()
+    after = sizes()
     print(
         json.dumps(
             {
@@ -940,15 +952,11 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
                 "shortened": totals,
                 **remaining,
                 "finished": not any(remaining.values()),
-                "before_mb": {name: round(before[f"{name}_bytes"] / 1e6, 2) for name in _TEXT_KINDS},
-                "after_mb": {name: round(after[f"{name}_bytes"] / 1e6, 2) for name in _TEXT_KINDS},
-                "removed_mb": {
-                    name: round((before[f"{name}_bytes"] - after[f"{name}_bytes"]) / 1e6, 2)
-                    for name in ("excerpt", "prototype", "quote")
-                },
+                "before_mb": _table_megabytes(before),
+                "after_mb": _table_megabytes(after),
                 # An UPDATE leaves the old row version behind, so this does not fall until the tables are vacuumed
                 # (docs/operations.md, "Trimming out-of-scope text").
-                "database_mb_change": round((after["database_bytes"] - before["database_bytes"]) / 1e6, 2),
+                "database_mb_change": round(_database_bytes(after) - _database_bytes(before), 2),
                 # Kept apart from a collection run's own timing, which measures collection.
                 "trim_seconds": round(time.monotonic() - started, 1),
                 **_run_cost(repository, started),
@@ -959,7 +967,22 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
     return 0
 
 
-_TEXT_KINDS = ("excerpt", "prototype", "quote", "database")
+def _table_megabytes(sizes: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+    """Each table's heap, text and total in megabytes. A table's long text is its TOAST table."""
+    return {
+        str(row["table_name"]): {
+            "heap": round(row["heap_bytes"] / 1e6, 1),
+            "text": round(row["toast_bytes"] / 1e6, 1),
+            "total": round(row["total_bytes"] / 1e6, 1),
+        }
+        for row in sizes
+    }
+
+
+def _database_bytes(sizes: list[dict[str, Any]]) -> float:
+    return (sizes[0]["database_bytes"] / 1e6) if sizes else 0.0
+
+
 
 
 def show_inference_metrics(run_id: str | None) -> int:

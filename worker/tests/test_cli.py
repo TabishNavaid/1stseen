@@ -614,6 +614,8 @@ class RegenerationScopeTests(unittest.TestCase):
 class TextTrimLoopTests(unittest.TestCase):
     """The trim calls until nothing is left or its budget is spent, and says which happened.
 
+    Measuring never stops it: one run died inside the measurement before shortening anything.
+
     PostgREST connects under an eight-second statement timeout, so one call shortens a chunk: the first scheduled run
     to call the unchunked version failed with 57014 and changed nothing. A run that stops early is not a failure, since
     every call is idempotent and the next run continues.
@@ -631,13 +633,16 @@ class TextTrimLoopTests(unittest.TestCase):
         def from_settings(cls, settings):
             return cls(3)
 
-        def out_of_scope_text_bytes(self):
+        def corpus_text_sizes(self):
             self.byte_calls += 1
-            held = 9_000_000 if self.byte_calls == 1 else 2_000_000
-            return {
-                "excerpt_bytes": held, "prototype_bytes": held, "quote_bytes": held,
-                "database_bytes": 300_000_000 + self.byte_calls,
-            }
+            text = 9_000_000 if self.byte_calls == 1 else 2_000_000
+            return [
+                {
+                    "table_name": "raw_job_observations", "heap_bytes": 1_000_000, "toast_bytes": text,
+                    "index_bytes": 500_000, "total_bytes": 1_500_000 + text,
+                    "database_bytes": 300_000_000 + self.byte_calls,
+                }
+            ]
 
         def trim_out_of_scope_text(self, *, keep=300, limit=200):
             self.calls += 1
@@ -660,8 +665,24 @@ class TextTrimLoopTests(unittest.TestCase):
         self.assertEqual(repository.calls, 3)
         self.assertTrue(payload["finished"])
         self.assertEqual(payload["shortened"], {"observations": 407, "roles": 403, "events": 401})
-        self.assertEqual(payload["removed_mb"]["excerpt"], 7.0)
+        # A table's long text is its TOAST table, and that is what shortening the text moves.
+        self.assertEqual(payload["before_mb"]["raw_job_observations"]["text"], 9.0)
+        self.assertEqual(payload["after_mb"]["raw_job_observations"]["text"], 2.0)
         self.assertIn("trim_seconds", payload)
+
+    def test_a_measurement_that_fails_does_not_stop_the_trim(self):
+        """The 16:05 UTC run on 2026-09-20 died inside the measurement, before shortening anything, twice over."""
+
+        class NoSizes(self.TrimRepository):
+            def corpus_text_sizes(self):
+                raise RuntimeError("summing the text does not finish in eight seconds")
+
+        repository = NoSizes(3)
+        code, payload = self.run_trim(repository)
+        self.assertEqual(code, 0)
+        self.assertEqual(repository.calls, 3, "the trim still ran to completion")
+        self.assertTrue(payload["finished"])
+        self.assertEqual(payload["before_mb"], {}, "and says it could not measure rather than pretending")
 
     def test_a_spent_budget_stops_it_and_says_what_is_left(self):
         repository = self.TrimRepository(500)
@@ -670,7 +691,7 @@ class TextTrimLoopTests(unittest.TestCase):
         self.assertEqual(repository.calls, 0)
         self.assertFalse(payload["finished"])
 
-    def test_the_two_byte_readings_are_the_ends_not_every_call(self):
+    def test_the_two_size_readings_are_the_ends_not_every_call(self):
         repository = self.TrimRepository(3)
         self.run_trim(repository)
         self.assertEqual(repository.byte_calls, 2)
