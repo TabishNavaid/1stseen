@@ -30,7 +30,7 @@ export default async function WelcomePage({
       <FocusedShell>
         <h1 className="heading-display text-3xl">Get started</h1>
         <p className="mt-3 text-sm leading-6 text-ink-muted">
-          Live data is not configured on this deployment, so there are no programs to suggest yet. Set SUPABASE_URL and
+          Live data is not configured here, so there are no programs to suggest yet. Set SUPABASE_URL and
           SUPABASE_SERVICE_ROLE_KEY to read collected evidence.
         </p>
       </FocusedShell>

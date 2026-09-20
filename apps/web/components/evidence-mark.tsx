@@ -7,9 +7,9 @@ import type { DatePrecision } from "@/lib/role-view";
 
 /** What each evidence class means, in the History section's words. */
 export const PRECISION_MEANING: Record<DatePrecision, string> = {
-  exact: "The source supplied this publication date.",
-  bounded: "A complete earlier capture proved absence and a later one proved presence.",
-  observed_by: "The role was visible by this date. It may have opened earlier.",
+  exact: "The posting itself carried this date.",
+  bounded: "An earlier copy of the page did not list it and a later one did, so it opened between the two.",
+  observed_by: "It was already listed by this date. It may have opened earlier.",
 };
 
 /**

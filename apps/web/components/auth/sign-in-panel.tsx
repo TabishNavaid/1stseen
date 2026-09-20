@@ -17,7 +17,7 @@ const serverMessages: Record<string, Message> = {
   invalid_credentials: { tone: "error", text: "The email or password is incorrect. Check both and try again, or reset your password." },
   email_not_confirmed: { tone: "error", text: "Confirm your email address before signing in. Open the link we sent, or send a new one.", offerResend: true },
   rate_limited: { tone: "error", text: "Too many attempts from this network. Wait a minute, then try again." },
-  supabase_unavailable: { tone: "error", text: "Sign-in is not configured for this deployment." },
+  supabase_unavailable: { tone: "error", text: "Sign-in is not configured here." },
 };
 const unavailable: Message = { tone: "error", text: "Sign-in isn't available right now. Try again in a moment." };
 

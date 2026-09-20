@@ -32,7 +32,7 @@ const percent = (value: number) => `${Math.round(value * 1000) / 10}%`;
 
 function Accuracy({ data }: { data: MethodologyData | null }) {
   if (!data) {
-    return <p>This deployment is not connected to its database, so there is no backtest to report here.</p>;
+    return <p>1stSeen is not connected to its database here, so there is no backtest to report.</p>;
   }
   const { backtest, depth } = data;
   return (
@@ -231,7 +231,7 @@ export default async function MethodologyPage() {
           </li>
           <li>
             Every forecast is stored with the observations it used, the model version, and a fingerprint of its inputs. A forecast is
-            never edited: when the evidence changes, a new version is added beside the old one, and the role page lists both.
+            never edited: when the evidence changes, a new version is added beside the old one, and the program page lists both.
           </li>
         </ul>
       </DocumentSection>
@@ -260,7 +260,7 @@ export default async function MethodologyPage() {
         <p>
           Every forecast carries a confidence score from 0 to 100. It scores how much consistent evidence backs the window: how much of
           the program&apos;s own history there is, how consistent its timing has been, the quality and precision of its sources, how
-          recent they are, how narrow the interval is, and any current signals. The role page shows each factor.
+          recent they are, how narrow the interval is, and any current signals. The program page shows each factor.
         </p>
         <p>
           It is not the chance that the window is right, and it has not been calibrated against outcomes, which is why it is written as

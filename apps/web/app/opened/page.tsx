@@ -92,7 +92,7 @@ export default async function JustOpenedPage({ searchParams }: { searchParams: P
         <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{company ? `Just opened at ${company.name}` : "Just opened"}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
           {mode === "unconfigured"
-            ? companyId ? `Nothing to list for this company.` : "Live data is not configured on this deployment, so there is nothing to list."
+            ? companyId ? `Nothing to list for this company.` : "Live data is not configured here, so there is nothing to list."
             : total === 0
               ? companyId ? `No program at this company has opened in the last ${days} days.` : `No program has opened in the last ${days} days.`
               : company

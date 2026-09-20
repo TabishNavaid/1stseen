@@ -11,7 +11,7 @@ import { SkipFirstRunButton } from "@/components/onboarding/skip-first-run-butto
 import { CountUp } from "@/components/count-up";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/status";
-import { forecastChanges, forecastRoles as fixtureRoles, openedRoles } from "@/lib/demo-data";
+import { openedRoles } from "@/lib/demo-data";
 import {
   DASHBOARD_PAGE_SIZE,
   appliedFilterKeys,
@@ -135,28 +135,17 @@ export function ForecastDashboard({
   const isDemo = mode === "demo";
   // The tile counts every exact opening of the last 45 days, the count the loader read, never a list's length.
   const confirmedOpenings = isDemo ? openedRoles.length : openingsTotal ?? openings.length;
-  const changeRecords = isDemo
-    ? forecastChanges.map((change) => ({
-        id: change.roleId,
-        roleId: change.roleId,
-        role: fixtureRoles.find((role) => role.id === change.roleId)?.role ?? "Watched role",
-        previousWindow: change.previousWindow,
-        currentWindow: change.currentWindow,
-        confidenceDelta: change.confidenceDelta,
-        changedAt: change.changedAt,
-        reason: change.reason,
-      }))
-    : changes.map((change) => ({
-        id: change.id,
-        roleId: change.roleId,
-        role: `${change.company} · ${change.role}`,
-        previousWindow: change.previousWindow,
-        currentWindow: change.currentWindow,
-        confidenceDelta: change.confidenceDelta,
-        changedAt: formatShortDay(change.changedAt),
-        reason: change.reasons[0] ?? "Recorded forecast revision.",
-        basis: change.basis,
-      }));
+  // One line per watched program whose window moved this week; the loader has already dropped the rest.
+  const changeRecords = changes.map((change) => ({
+    id: change.id,
+    roleId: change.roleId,
+    company: change.company,
+    program: change.role,
+    previousWindow: change.previousWindow,
+    currentWindow: change.currentWindow,
+    changedAt: formatShortDay(change.changedAt),
+    notes: change.notes,
+  }));
   const { watchedOnly } = filters;
   const forecasts = items.filter((item): item is DashboardListItem & { forecast: NonNullable<DashboardListItem["forecast"]> } => item.forecast !== null);
   const [selectedId, setSelectedId] = useState(forecasts[0]?.id ?? "");
@@ -176,14 +165,14 @@ export function ForecastDashboard({
   // Each tile only when its number is not zero; a guest follows nothing, so never sees the watched tile (lib/dashboard-tiles).
   const tiles = dashboardTiles({ openingWithin30Days: summary.openingWithin30Days, followedRoles: summary.followedRoles, confirmedOpenings, signedIn: signedInAs !== null }).map((tile) =>
     tile.key === "soon" ? <StatTile key="soon" icon="calendar-clock" label="Likely in 30 days" value={tile.value} detail={<>of {plural(summary.matchingForecastable, "forecast")} in this view</>} tone="warm" />
-      : tile.key === "watched" ? <StatTile key="watched" icon="bell" label="Watched roles" value={tile.value} detail={`${summary.followedForecastable} with a forecast`} />
+      : tile.key === "watched" ? <StatTile key="watched" icon="bell" label="Programs you watch" value={tile.value} detail={`${summary.followedForecastable} with a forecast`} />
         : <StatTile key="opened" icon="door-open" label="Just opened" value={tile.value} detail={tile.value === 1 ? "program opened in the last 45 days" : "programs opened in the last 45 days"} href="/opened" />,
   );
-  // Forecast changes, only when there are any: an empty panel beside the list reads as broken.
+  // Only when a watched program's window actually moved this week: an empty panel beside the list reads as broken.
   const secondary = changeRecords.length > 0 ? (
     <section className="panel" aria-labelledby="changes-title">
-      <div className="border-b border-line px-5 py-4"><p className="label-caps text-warning-ink">Since last run</p><h2 id="changes-title" className="mt-1 text-sm font-semibold">Forecast changes</h2></div>
-      <div className="px-5">{changeRecords.map((change) => <ForecastChange key={change.id} change={change} roleName={change.role} />)}</div>
+      <div className="border-b border-line px-5 py-4"><h2 id="changes-title" className="text-sm font-semibold">What changed this week</h2></div>
+      <div className="px-5">{changeRecords.map((change) => <ForecastChange key={change.id} change={change} />)}</div>
     </section>
   ) : null;
   return (
@@ -191,7 +180,7 @@ export function ForecastDashboard({
       <main id="dashboard-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8 focus:outline-none md:px-6 md:py-10">
         {picks}
         <header className="flex flex-col gap-2">
-          <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{watchedOnly ? "Roles you watch" : "Explore roles"}</h1>
+          <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{watchedOnly ? "Programs you watch" : "Explore programs"}</h1>
           <p className="max-w-2xl text-sm leading-6 text-ink-muted">
             {watchedOnly
               ? "The programs you saved, with their windows and prep plans."
@@ -232,7 +221,7 @@ export function ForecastDashboard({
             <details className="group mt-3">
               <summary className="focus-ring inline-flex min-h-touch cursor-pointer list-none items-center gap-1.5 rounded-chip px-2 text-caption font-semibold text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
                 <Icon name="info" size={13} />
-                {applied.length === 0 ? `${summary.inScopeRoles} roles, ${summary.forecastableRoles} with a forecast` : `${summary.matchingRoles} of ${summary.inScopeRoles} roles match`}
+                {applied.length === 0 ? `${summary.inScopeRoles} roles, ${summary.forecastableRoles} with a forecast` : `${summary.matchingRoles} of ${summary.inScopeRoles} programs match`}
                 <Icon name="chevron-down" size={12} className="transition-transform group-open:rotate-180" />
               </summary>
               <div className="mt-2 rounded-card border border-line bg-surface-sunken px-4 py-3"><ViewStatement filters={filters} summary={summary} /></div>
@@ -263,8 +252,8 @@ export function ForecastDashboard({
                 title="Your watchlist is empty"
                 description={
                   signedInAs
-                    ? "Answer three quick questions and 1stSeen suggests programs to watch, or use Save to my watchlist on any role page. Watched roles collect here with their forecasts and prep plans."
-                    : "Sign in to keep a watchlist: the roles you are preparing for, with their forecasts and prep plans in one place."
+                    ? "Answer three quick questions and 1stSeen suggests programs to watch, or use Save to my watchlist on any program page. Programs you save collect here with their windows and prep plans."
+                    : "Sign in to keep a watchlist: the programs you are preparing for, with their windows and prep plans in one place."
                 }
                 action={
                   <div className="flex flex-wrap justify-center gap-4">
@@ -281,13 +270,13 @@ export function ForecastDashboard({
             <div className="card mt-4">
               <EmptyState
                 doodle="readingSide"
-                title={pastLastPage ? "This page is past the last listed role" : applied.length ? "No roles match these filters" : "No in-scope role has been collected yet"}
+                title={pastLastPage ? "This page is past the last listed program" : applied.length ? "No programs match these filters" : "No program has been collected yet"}
                 description={
                   pastLastPage
                     ? undefined
                     : applied.length
                       ? `Each filter on its own excludes: ${applied.map((key) => `${filterName(key)} ${summary.exclusions[key].excluded}`).join(", ")}.`
-                      : "Roles appear here once collection finds early-career technical postings."
+                      : "Programs appear here once collection finds early-career technical postings."
                 }
                 action={
                   pastLastPage ? (

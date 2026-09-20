@@ -34,7 +34,7 @@ export default async function SettingsPage() {
     return (
       <FocusedShell>
         <h1 className="text-2xl font-semibold tracking-title">Settings</h1>
-        <p className="mt-3 text-sm leading-6 text-ink-muted">Accounts are not configured on this deployment, so there is nothing to set.</p>
+        <p className="mt-3 text-sm leading-6 text-ink-muted">Accounts are not configured here, so there is nothing to set.</p>
       </FocusedShell>
     );
   }
@@ -54,11 +54,11 @@ export default async function SettingsPage() {
           <div>
             <h2 id="preparing-title" className="text-base font-semibold">What you are preparing for</h2>
             <p className="mt-1 text-caption text-ink-subtle">
-              {answered ? "Your first-run answers. Running the questions again suggests programs to add; nothing you watch is removed." : "You have not answered the first-run questions. They take about 30 seconds and suggest programs to watch."}
+              {answered ? "Your first-run answers. Running the questions again suggests programs to add; nothing you watch is removed." : "You have not answered the three questions yet. They take about 30 seconds and suggest programs to watch."}
             </p>
           </div>
           <Link href="/welcome" className="focus-ring inline-flex h-10 items-center gap-2 rounded-chip bg-accent px-5 text-sm font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">
-            <Icon name="arrow-right" size={15} />{answered ? "Run the questions again" : "Answer the questions"}
+            <Icon name="arrow-right" size={15} />{answered ? "Answer them again" : "Answer the questions"}
           </Link>
         </div>
         {answered && (
@@ -75,7 +75,7 @@ export default async function SettingsPage() {
       <section className="mt-10" aria-labelledby="watchlist-title">
         <h2 id="watchlist-title" className="text-base font-semibold">Watchlist</h2>
         <div className="panel mt-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <p className="text-sm">{state.followedRoles === 1 ? "You watch 1 role." : `You watch ${state.followedRoles} roles.`}</p>
+          <p className="text-sm">{state.followedRoles === 1 ? "You watch 1 program." : `You watch ${state.followedRoles} programs.`}</p>
           <Link href={state.followedRoles ? "/roles?watched=1" : "/roles"} className="link-accent focus-ring inline-flex min-h-touch items-center text-sm">{state.followedRoles ? "Open your watchlist" : "Browse programs to watch"}</Link>
         </div>
         <p className="mt-2 text-caption text-ink-subtle">

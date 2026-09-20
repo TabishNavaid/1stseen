@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Doodle } from "@/components/doodle";
 import { Icon } from "@/components/ui/icon";
+import { humanize } from "@/lib/presentation";
 import { Button } from "@/components/ui/button";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { GoogleCalendarSync } from "@/components/google-calendar-sync";
@@ -60,7 +61,7 @@ function CalendarChip({ event, onClick }: { event: CalendarEvent; onClick: () =>
 function EventDrawer({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
   const panelRef = useOffCanvas<HTMLElement>(true, onClose, "all");
   const kind = kindOf(event);
-  return <><div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden="true" /><aside ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="event-drawer-title" className="fixed inset-y-0 right-0 z-50 w-full max-w-[430px] overflow-y-auto border-l border-line-strong bg-surface p-5 shadow-dialog"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className={cn("inline-flex rounded-chip border px-2.5 py-1 text-micro font-semibold uppercase tracking-label", kind.utility)}>{kind.label}</span><p className="mt-5 text-xs font-semibold text-ink-muted">{event.company}</p><h2 id="event-drawer-title" className="mt-1 text-xl font-semibold tracking-title">{event.role}</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Close event details"><Icon name="x" size={17} /></Button></div><div className="mt-6 border-y border-line py-4"><p className="label-caps text-ink-subtle">{event.label}</p><p className="mt-2 text-2xl font-semibold tabular">{formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>{event.confidence !== undefined && <p className="mt-1 text-caption text-ink-muted">Forecast {confidencePhrase(event.confidence)}</p>}{event.basis && <p className="mt-2"><ForecastBasisChip basis={event.basis} /></p>}</div><p className="mt-5 text-sm leading-6 text-ink-muted">{event.detail}</p>{event.semantics === "predicted" && <p className="mt-5 flex gap-2 border-l-2 border-date-predicted-line bg-date-predicted-surface px-3 py-2.5 text-caption text-date-predicted-ink"><Icon name="circle-dashed" size={13} className="mt-0.5" />A boundary of the forecast&apos;s 80% prediction interval.</p>}{event.semantics === "confirmed" && <p className="mt-5 flex gap-2 border-l-2 border-date-confirmed-line bg-date-confirmed-surface px-3 py-2.5 text-caption text-date-confirmed-ink"><Icon name="circle-check" size={13} className="mt-0.5" />A publication date the source supplied, from an observed posting.</p>}<div className="mt-7 space-y-2"><Link href={event.href} className="focus-ring flex min-h-touch items-center justify-between rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover">Open role intelligence and evidence<Icon name="arrow-right" size={14} /></Link>{event.sourceUrl && <a href={event.sourceUrl} target="_blank" rel="noreferrer" className="focus-ring flex min-h-touch items-center justify-between rounded-control border border-line-strong px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">Open source record<Icon name="arrow-up-right" size={14} /></a>}</div></aside></>;
+  return <><div className="fixed inset-0 z-40 bg-scrim" onClick={onClose} aria-hidden="true" /><aside ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="event-drawer-title" className="fixed inset-y-0 right-0 z-50 w-full max-w-[430px] overflow-y-auto border-l border-line-strong bg-surface p-5 shadow-dialog"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><span className={cn("inline-flex rounded-chip border px-2.5 py-1 text-micro font-semibold uppercase tracking-label", kind.utility)}>{kind.label}</span><p className="mt-5 text-xs font-semibold text-ink-muted">{event.company}</p><h2 id="event-drawer-title" className="mt-1 text-xl font-semibold tracking-title">{event.role}</h2></div><Button variant="ghost" size="icon" onClick={onClose} aria-label="Close event details"><Icon name="x" size={17} /></Button></div><div className="mt-6 border-y border-line py-4"><p className="label-caps text-ink-subtle">{event.label}</p><p className="mt-2 text-2xl font-semibold tabular">{formatDate(event.date, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</p>{event.confidence !== undefined && <p className="mt-1 text-caption text-ink-muted">Forecast {confidencePhrase(event.confidence)}</p>}{event.basis && <p className="mt-2"><ForecastBasisChip basis={event.basis} /></p>}</div><p className="mt-5 text-sm leading-6 text-ink-muted">{event.detail}</p>{event.semantics === "predicted" && <p className="mt-5 flex gap-2 border-l-2 border-date-predicted-line bg-date-predicted-surface px-3 py-2.5 text-caption text-date-predicted-ink"><Icon name="circle-dashed" size={13} className="mt-0.5" />One end of the window this program is likely to open in.</p>}{event.semantics === "confirmed" && <p className="mt-5 flex gap-2 border-l-2 border-date-confirmed-line bg-date-confirmed-surface px-3 py-2.5 text-caption text-date-confirmed-ink"><Icon name="circle-check" size={13} className="mt-0.5" />The day the company posted it, taken from the posting.</p>}<div className="mt-7 space-y-2"><Link href={event.href} className="focus-ring flex min-h-touch items-center justify-between rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover">Open the program page<Icon name="arrow-right" size={14} /></Link>{event.sourceUrl && <a href={event.sourceUrl} target="_blank" rel="noreferrer" className="focus-ring flex min-h-touch items-center justify-between rounded-control border border-line-strong px-3 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink">Open the posting<Icon name="arrow-up-right" size={14} /></a>}</div></aside></>;
 }
 
 function EventRow({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
@@ -73,12 +74,15 @@ export function RecruitingCalendar({
   events,
   unforecastable = [],
   watchedRoleCount = 0,
+  googleCalendar = false,
   today,
 }: {
   mode: CalendarMode;
   events: CalendarEvent[];
   unforecastable?: UnforecastableRole[];
   watchedRoleCount?: number;
+  /** Whether this deployment holds Google credentials. Without them the offer is not made at all. */
+  googleCalendar?: boolean;
   today: string;
 }) {
   const [view, setView] = useState<"month" | "timeline">("month");
@@ -96,7 +100,10 @@ export function RecruitingCalendar({
   const [milestone, setMilestone] = useState("all");
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
   const companies = [...new Set(events.map((event) => event.company))].sort();
-  const families = [...new Set(events.map((event) => event.roleFamily))].sort();
+  // The stored family is a key for matching; the filter reads it out in words (lib/presentation.ts).
+  const families = [...new Set(events.map((event) => event.roleFamily))]
+    .sort()
+    .map((value) => ({ value, label: humanize(value) }));
   const selectedMilestone = milestoneGroups.find((group) => group.value === milestone) ?? milestoneGroups[0];
   const filtered = useMemo(() => events.filter((event) => (company === "all" || event.company === company) && (family === "all" || event.roleFamily === family) && (selectedMilestone.types.length === 0 || selectedMilestone.types.includes(event.type))), [events, company, family, selectedMilestone]);
   const monthEvents = filtered.filter((event) => event.date.startsWith(month));
@@ -121,12 +128,11 @@ export function RecruitingCalendar({
     <main id="calendar-content" className="mx-auto max-w-[1500px] px-4 py-6 md:px-6 md:py-8">
       <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(380px,.65fr)] lg:items-end" aria-labelledby="calendar-title">
         <div>
-          <p className="label-caps flex items-center gap-2 text-accent-ink"><Icon name="calendar-days" size={13} />Watched recruiting plan</p>
           <h1 id="calendar-title" className="heading-display mt-3 text-3xl md:text-4xl">Recruiting Calendar</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for preparation milestones, predicted opening windows, and confirmed openings.</p>
         </div>
         <div className="flex flex-col items-start gap-4 lg:items-end">
-          <GoogleCalendarSync events={events} />
+          {googleCalendar && <GoogleCalendarSync events={events} />}
           <ul className="flex flex-wrap gap-x-4 gap-y-2 text-micro text-ink-muted" aria-label="Legend">
             {Object.values(KIND).map((kind) => <li key={kind.label} className="flex items-center gap-1.5"><span className={cn("grid h-4 w-5 place-items-center rounded-sm border text-[8px] leading-none", kind.utility)} aria-hidden="true">{kind.marker}</span>{kind.label}</li>)}
           </ul>
@@ -137,8 +143,8 @@ export function RecruitingCalendar({
         <section className="panel mt-6 p-5" aria-labelledby="signed-out-title">
           <h2 id="signed-out-title" className="text-sm font-semibold">Sign in to see your recruiting calendar</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
-            Calendar entries are built from your own watchlist, your readiness milestones, and the forecasts of the roles you
-            follow.
+            Calendar entries are built from your own watchlist: the windows of the programs you save, and the steps of the prep
+            plan that works back from each one.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/signin?mode=sign_up&return_to=%2Fwelcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Create an account</Link>
@@ -161,9 +167,9 @@ export function RecruitingCalendar({
           <div>
           <h2 id="empty-title" className="text-sm font-semibold">Your watchlist is empty</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
-            This calendar fills itself from the roles you watch: their predicted opening windows, confirmed
+            This calendar fills itself from the programs you watch: their predicted opening windows, confirmed
             openings, and the preparation milestones worked back from each forecast. Answer four questions
-            for a starting watchlist, or use Save to my watchlist on any role page.
+            for a starting watchlist, or use Save to my watchlist on any program page.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/welcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Set up your watchlist</Link>
@@ -175,16 +181,16 @@ export function RecruitingCalendar({
 
       {unforecastable.length > 0 && (
         <section className="panel mt-6 p-5" aria-labelledby="unforecastable-title">
-          <h2 id="unforecastable-title" className="flex items-center gap-2 text-sm font-semibold"><Icon name="circle-dashed" size={14} className="text-ink-subtle" />Watched roles with no calendar date yet</h2>
+          <h2 id="unforecastable-title" className="flex items-center gap-2 text-sm font-semibold"><Icon name="circle-dashed" size={14} className="text-ink-subtle" />Programs you watch with no date yet</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
-            The model has too little history to forecast these yet, so there is no window to work preparation back from.
+            There is not enough history yet to say when these are likely to open, so there is nothing to work a plan back from.
           </p>
           <ul className="mt-3 space-y-2">
             {unforecastable.map((item) => (
               <li key={item.roleId} className="text-caption text-ink-muted">
                 <Link href={`/roles/${item.roleId}`} className="font-semibold text-ink hover:underline">{item.company} · {item.role}</Link>
                 <span> · {item.reason}</span>
-                {item.lastObservedOn && <span> Last opening evidence {formatDate(item.lastObservedOn, { month: "short", day: "numeric", year: "numeric" })}.</span>}
+                {item.lastObservedOn && <span> Last seen open {formatDate(item.lastObservedOn, { month: "short", day: "numeric", year: "numeric" })}.</span>}
               </li>
             ))}
           </ul>
@@ -212,9 +218,9 @@ export function RecruitingCalendar({
               <button type="button" onClick={() => setView("month")} aria-pressed={view === "month"} className={toggleClass(view === "month")}><Icon name="calendar-days" size={12} />Month</button>
               <button type="button" onClick={() => setView("timeline")} aria-pressed={view === "timeline"} className={toggleClass(view === "timeline")}><Icon name="list" size={12} />Timeline</button>
             </div>
-            <p className="label-caps flex items-center gap-2 text-ink-subtle lg:ml-auto"><Icon name="filter" size={13} />Filters</p>
+            <p className="flex items-center gap-2 text-caption font-semibold text-ink-subtle lg:ml-auto"><Icon name="filter" size={13} />Filters</p>
             <div className="grid gap-2 sm:flex">
-              {([[company, setCompany, "All companies", companies], [family, setFamily, "All role families", families], [milestone, setMilestone, "All milestones", milestoneGroups.map((item) => ({ value: item.value, label: item.label }))]] as const).map(([value, setter, allLabel, options]) => <label key={String(allLabel)} className="relative"><span className="sr-only">{String(allLabel)}</span><select value={String(value)} onChange={(event) => (setter as (value: string) => void)(event.target.value)} className={selectClass}><option value="all">{String(allLabel)}</option>{(options as ReadonlyArray<string | { value: string; label: string }>).filter((option) => typeof option === "string" || option.value !== "all").map((option) => typeof option === "string" ? <option key={option} value={option}>{option}</option> : <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevron-down" size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle" /></label>)}
+              {([[company, setCompany, "All companies", companies], [family, setFamily, "All fields", families], [milestone, setMilestone, "All milestones", milestoneGroups.map((item) => ({ value: item.value, label: item.label }))]] as const).map(([value, setter, allLabel, options]) => <label key={String(allLabel)} className="relative"><span className="sr-only">{String(allLabel)}</span><select value={String(value)} onChange={(event) => (setter as (value: string) => void)(event.target.value)} className={selectClass}><option value="all">{String(allLabel)}</option>{(options as ReadonlyArray<string | { value: string; label: string }>).filter((option) => typeof option === "string" || option.value !== "all").map((option) => typeof option === "string" ? <option key={option} value={option}>{option}</option> : <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevron-down" size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle" /></label>)}
             </div>
           </div>
 
@@ -239,7 +245,7 @@ export function RecruitingCalendar({
               <div className="divide-y divide-line">{orderedMonthEvents.length ? orderedMonthEvents.map((event) => <EventRow key={event.id} event={event} onClick={() => setSelected(event)} />) : noEvents}</div>
             </div>
           </div> : <div className="divide-y divide-line">{orderedMonthEvents.length ? orderedMonthEvents.map((event) => <EventRow key={event.id} event={event} onClick={() => setSelected(event)} />) : noEvents}</div>}
-          <div className="flex flex-col gap-2 border-t border-line bg-surface-sunken px-4 py-3 text-micro text-ink-subtle sm:flex-row sm:justify-between"><p>{monthEvents.length} events match this month and filter set.</p></div>
+          <div className="flex flex-col gap-2 border-t border-line bg-surface-sunken px-4 py-3 text-micro text-ink-subtle sm:flex-row sm:justify-between"><p>{monthEvents.length} dates match this month.</p></div>
         </section>
       </>}
       {isDemo && <footer className="mt-7 border-t border-line py-4 text-micro text-ink-subtle"><p>Development fixture · reserved .example sources</p></footer>}

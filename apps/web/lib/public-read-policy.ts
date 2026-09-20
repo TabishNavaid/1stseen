@@ -37,8 +37,8 @@ export const PUBLIC_TABLE_COLUMNS = {
     "weight", "rationale", "date_precision", "signal_kind", "evidence_id",
   ],
   forecast_changes: [
-    "id", "before_forecast_id", "after_forecast_id", "confidence_delta", "point_date_delta_days", "material", "reasons",
-    "created_at",
+    "id", "before_forecast_id", "after_forecast_id", "confidence_delta", "point_date_delta_days",
+    "interval_start_delta_days", "interval_end_delta_days", "material", "reasons", "created_at",
   ],
   signals: [
     "id", "canonical_role_id", "kind", "observed_at", "strength", "reliability", "evidence_quote", "source_url",

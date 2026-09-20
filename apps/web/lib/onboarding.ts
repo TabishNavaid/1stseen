@@ -212,7 +212,7 @@ export function parsePlanOutcome(value: string | string[] | undefined): PlanOutc
 export const PLAN_OUTCOME_MESSAGES: Record<PlanOutcome, string> = {
   ready: "Your watchlist is set. This is the soonest forecast among the roles you picked, and its preparation plan is below.",
   not_configured: "Your watchlist is set. Preparation plans are not configured on this deployment, so this role's forecast is shown without one.",
-  unreachable: "Your watchlist is set. The preparation planner did not answer, so use Generate preparation plan below to try again.",
+  unreachable: "Your watchlist is set. The preparation planner did not answer, so use Build my prep plan below to try again.",
   refused: "Your watchlist is set. A preparation plan could not be built for this role; its forecast and evidence are below.",
   none: "Your watchlist is set. None of the roles you picked has enough history for a forecast yet, so there is no preparation date to work back from; each one lists the evidence that exists.",
 };

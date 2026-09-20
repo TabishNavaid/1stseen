@@ -131,7 +131,7 @@ export function displayTitle(stored: string, recorded: readonly RecordedTitle[] 
   // A title published in capitals throughout ("DATA ANALYST INTERN") is tidied like a stored one.
   const shouted = published && !/\p{Ll}/u.test(published) && /\p{Lu}{4}/u.test(published);
   const shown = (shouted ? tidyTitle(published.toLowerCase()) : published) || withoutYear(tidyTitle(stored)) || tidyTitle(stored);
-  return withoutLeadingTags(shown);
+  return withoutTrailingPlace(withoutLeadingTags(shown));
 }
 
 const US_STATES = new Set([
@@ -142,6 +142,30 @@ const US_STATES = new Set([
   "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont", "virginia", "washington",
   "west virginia", "wisconsin", "wyoming", "ontario", "quebec", "british columbia", "alberta",
 ]);
+
+/**
+ * A title with the place the company glued onto the end taken off: "Data Science Intern (Winter) San Francisco,
+ * California" is a program, not a program in a city, and the place has its own line on the card.
+ *
+ * Only the "City, Region" form is taken, and only when the region is a state or province this file knows by name, so
+ * a title that merely ends in a comma ("Software Engineer, Platform") is never cut. A bare city with no region
+ * ("Graduate Researcher - Chicago") is left alone: there is no way to tell it from a team or a product name, and the
+ * place belongs in the role's own location field, which collection did not fill for these rows.
+ */
+export function withoutTrailingPlace(title: string): string {
+  const tail = /[\s,;]*[-–—]?\s*(\p{Lu}[\p{L}.'-]*(?:\s+\p{Lu}[\p{L}.'-]*){0,3}),\s*(\p{Lu}[\p{L}]*(?:\s+\p{Lu}[\p{L}]*){0,2})\s*$/u;
+  let rest = title.trim();
+  // Bounded: a title carries a handful of places at most, and each pass takes one off the end.
+  for (let pass = 0; pass < 4; pass += 1) {
+    const match = tail.exec(rest);
+    if (!match || !US_STATES.has(match[2].toLowerCase())) break;
+    const next = rest.slice(0, match.index).replace(/[\s,;–—-]+$/u, "").trim();
+    // A title that is only a place stays as it is: something is better to read than nothing.
+    if (!next) break;
+    rest = next;
+  }
+  return rest;
+}
 
 const COUNTRIES = new Set([
   "united states", "united kingdom", "canada", "france", "germany", "netherlands", "ireland", "switzerland", "singapore",

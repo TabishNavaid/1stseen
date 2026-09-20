@@ -20,7 +20,7 @@ test("an unreachable or failing agent service reads as questions being temporari
     assert.equal(agentErrorOffersSignUp({ error }), false, `${error}: an account would not help`);
   }
   assert.match(QUESTIONS_UNAVAILABLE_MESSAGE, /temporarily unavailable/);
-  assert.match(QUESTIONS_UNAVAILABLE_MESSAGE, /Forecasts, role pages, and their evidence still work/);
+  assert.match(QUESTIONS_UNAVAILABLE_MESSAGE, /Forecasts, program pages, and their evidence still work/);
   assert.doesNotMatch(QUESTIONS_UNAVAILABLE_MESSAGE, /error|failed|5\d\d|Cloud Run|spend|budget/i);
 });
 
@@ -49,7 +49,7 @@ test("only the agent service's own 4xx verdicts pass through; everything else re
 test("the member features say the same thing about a paused service as questions do", () => {
   for (const message of [REPLAY_UNAVAILABLE_MESSAGE, PLAN_UNAVAILABLE_MESSAGE]) {
     assert.match(message, /temporarily unavailable/);
-    assert.match(message, /Forecasts, role pages, and their evidence still work\. Please try again later\.$/);
+    assert.match(message, /Forecasts, program pages, and their evidence still work\. Please try again later\.$/);
     assert.doesNotMatch(message, /error|failed|5\d\d|Cloud Run|spend|budget/i);
   }
 });

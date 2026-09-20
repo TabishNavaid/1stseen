@@ -66,7 +66,7 @@ export function DesignSystemGallery() {
       <Section title="Checkbox and radio group">
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
-            <Checkbox id="gallery-watched" name="watched" label="Watched roles only" description="Roles you follow, including those without a forecast." />
+            <Checkbox id="gallery-watched" name="watched" label="Only programs I watch" description="Programs you follow, including those without a forecast." />
             <Checkbox id="gallery-insufficient" name="insufficient" label="Include roles with too little history" defaultChecked />
           </div>
           <RadioGroup name="track" legend="Track" defaultValue="all" options={[{ value: "all", label: "All tracks" }, { value: "internship", label: "Internship" }, { value: "new_grad", label: "New grad", description: "Full-time programs for recent graduates." }]} />
@@ -99,7 +99,7 @@ export function DesignSystemGallery() {
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           title="Stop watching this role?"
-          description="You will no longer see its forecast changes in digests or on your calendar."
+          description="You will no longer see its updates in digests or on your calendar."
           footer={<><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Keep watching</Button><Button type="button" onClick={() => setDialogOpen(false)}>Stop watching</Button></>}
         >
           <Checkbox id="gallery-dialog-confirm" label="Also remove its preparation milestones" />
@@ -130,7 +130,7 @@ export function DesignSystemGallery() {
           </LoadingRegion>
           <div className="panel">
             <EmptyState
-              title="No roles match these filters"
+              title="No programs match these filters"
               description="3 roles are hidden by the track filter. Clear it to see them."
               action={<Button type="button" variant="outline" size="sm">Clear track filter</Button>}
             />

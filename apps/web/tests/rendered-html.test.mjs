@@ -29,7 +29,7 @@ test("server-renders the 1stSeen forecast product at /roles", async () => {
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
   assert.match(html, /<title>Forecasts · 1stSeen<\/title>/i);
-  assert.match(html, /Explore roles/);
+  assert.match(html, /Explore programs/);
   assert.match(html, /Roles and forecasts/);
   assert.match(html, /Development fixture/);
   assert.match(html, /Why this confidence/i);
@@ -50,9 +50,9 @@ test("renders canonical role intelligence with explicit uncertainty semantics", 
   assert.match(html, /Exact/);
   assert.match(html, /Bounded/);
   assert.match(html, /Observed by/);
-  assert.match(html, /The source supplied this publication date/);
-  assert.match(html, /A complete earlier capture proved absence/);
-  assert.match(html, /The role was visible by this date\. It may have opened earlier/);
+  assert.match(html, /The posting itself carried this date/);
+  assert.match(html, /An earlier copy of the page did not list it and a later one did/);
+  assert.match(html, /It was already listed by this date\. It may have opened earlier/);
   // The agent check lists its steps in plain words, never by tool name.
   assert.match(html, /Check the latest evidence/);
   assert.match(html, /Check now/);
@@ -198,20 +198,21 @@ test("renders an explicit preview-only email intelligence digest", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Email intelligence digests · 1stSeen/);
-  assert.match(html, /Email preview/);
-  assert.match(html, /Predicted to open soon/);
-  assert.match(html, /Material forecast changes/);
-  assert.match(html, /Networking approaching/);
-  assert.match(html, /Gmail is always opt-in/);
-  assert.match(html, /Connecting Gmail does not schedule or send anything/);
-  assert.match(html, /Forecast dates are labeled as statistical predictions/);
+  assert.match(html, /Your current data|Fixture preview/);
+  assert.match(html, /Likely to open soon/);
+  assert.match(html, /Windows that moved/);
+  assert.match(html, /Time to reach out/);
+  assert.match(html, /Send it to yourself/);
+  assert.match(html, /Connecting Gmail schedules nothing/);
+  assert.match(html, /Predicted dates are marked as predictions/);
 });
 
 test("renders evidence and preparation language", async () => {
   const html = await (await render("/roles")).text();
   assert.match(html, /Forecast evidence/);
   assert.match(html, /Work-back plan/);
-  assert.match(html, /Forecast changes/);
+  // What changed this week is read from a watchlist, so a signed-out view of the roles never draws it.
+  assert.doesNotMatch(html, /What changed this week/);
   assert.match(html, /Archive dates show when content existed/);
   // The count of openings links to Just opened; the list itself lives there.
   assert.match(html, /href="\/opened"[^>]*>[\s\S]*?Just opened/);
@@ -283,7 +284,7 @@ test("the methodology page explains the evidence model and states the backtest p
   assert.match(html, /<title>Methodology and accuracy · 1stSeen<\/title>/);
   assert.match(html, /How forecasts are made, and how accurate they are/);
   // Without a database there is no backtest to report, and no fixture stands in for one.
-  assert.match(html, /not connected to its database, so there is no backtest to report/);
+  assert.match(html, /is not connected to its database here, so there is no backtest to report/);
   assert.doesNotMatch(html, /Northstar|Meridian|Atlas/);
   // The evidence classes, with what each means.
   assert.match(html, /The job board published the date itself/);
@@ -368,7 +369,7 @@ test("a first-time visitor lands on the landing page, not the app shell", async 
   }
   assert.equal((html.match(/<details/g) ?? []).length, 5, "five questions, each its own disclosure");
   // No dashboard: no workspace navigation, no watchlist count, no stat tile, no debug-looking status pill.
-  assert.doesNotMatch(html, /Recruiting workspace|Watchlist|Watched roles|Recruiting calendar/);
+  assert.doesNotMatch(html, /Recruiting workspace|Watchlist|Programs you watch|Recruiting calendar/);
   assert.doesNotMatch(html, /data-stat-tile/);
   assert.doesNotMatch(html, />Real data</);
   // The evidence model's vocabulary lives on the methodology page, not on the front door.
@@ -391,7 +392,7 @@ test("an old link to a filtered dashboard on / goes to the same view at /roles",
 test("a guest's roles view renders no zero tile and no watched tile", async () => {
   for (const [path, demo] of [["/roles", true], ["/roles", false]]) {
     const html = visible(await (await render(path, { demo })).text());
-    assert.doesNotMatch(html, /Watched roles/, "a guest follows nothing, so the watched tile is never drawn");
+    assert.doesNotMatch(html, /Programs you watch/, "a guest follows nothing, so the watched tile is never drawn");
     for (const [tile] of html.matchAll(/data-stat-tile[\s\S]*?<\/strong>/g)) {
       const value = Number(tile.match(/>([\d,]+)<\/span><\/strong>$/)?.[1]?.replace(/,/g, ""));
       assert.ok(value > 0, `a tile shows ${value}`);

@@ -306,7 +306,7 @@ export function activeFilters(filters: DashboardFilters, options: DashboardFilte
   if (filters.precision) chips.push({ key: "precision", label: labelFor(PRECISIONS, filters.precision), removeHref: without({ precision: null }) });
   for (const value of filters.locations) chips.push({ key: "location", label: `Location: ${optionLabel(options.location, value)}`, removeHref: without({ locations: filters.locations.filter((item) => item !== value) }) });
   if (filters.listedNow) chips.push({ key: "listed", label: "Posting listed now", removeHref: without({ listedNow: false }) });
-  if (filters.watchedOnly) chips.push({ key: "watched", label: "Watched roles only", removeHref: without({ watchedOnly: false }) });
+  if (filters.watchedOnly) chips.push({ key: "watched", label: "Only programs I watch", removeHref: without({ watchedOnly: false }) });
   return chips;
 }
 

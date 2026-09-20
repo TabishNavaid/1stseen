@@ -134,5 +134,5 @@ test("every primitive renders its accessible names, roles, and references", asyn
   assert.match(html, /type="checkbox"/);
   assert.match(html, /aria-label="Remove [^"]+"/);
   assert.match(html, /role="status" aria-busy="true"/);
-  assert.match(html, /<h3[^>]*>No roles match these filters<\/h3>/);
+  assert.match(html, /<h3[^>]*>No programs match these filters<\/h3>/);
 });

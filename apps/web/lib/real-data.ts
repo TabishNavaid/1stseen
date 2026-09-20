@@ -16,6 +16,7 @@ import type {
 } from "@/lib/role-view";
 import { formatDay, utcDate as isoDate } from "@/lib/dates";
 import { displayCompany, displayPlace, displayTitle, tidyTitle, type RecordedTitle } from "@/lib/display-names";
+import { changeNotes, isFelt } from "@/lib/forecast-change-notes";
 import {
   DASHBOARD_PAGE_SIZE,
   FILTER_KEYS,
@@ -76,6 +77,10 @@ export type RealOpening = {
   applyUrl: string | null;
 };
 
+/**
+ * A revision of a watched program's forecast, in the terms its watcher reads it in: the window before, the window now,
+ * and what changed (lib/forecast-change-notes). No score and no reason code reaches this type.
+ */
 export type RealForecastChange = {
   id: string;
   roleId: string;
@@ -83,11 +88,9 @@ export type RealForecastChange = {
   role: string;
   previousWindow: string;
   currentWindow: string;
-  confidenceDelta: number;
   changedAt: string;
-  reasons: string[];
-  /** The basis of the forecast it changed to (lib/forecast-basis). */
-  basis: ForecastBasis | null;
+  /** One or two short sentences. A revision with none of these is not shown at all. */
+  notes: string[];
 };
 
 export function hasServiceRoleConfig(): boolean {
@@ -360,7 +363,7 @@ export async function loadRealDashboard(
     fetchAll<FilterOptionRow>(() => reader.rpc("dashboard_filter_options"), "dashboard_filter_options", ["facet", "value"])
       .then((data) => ({ data, error: null })),
     loadRecentOpenings(reader),
-    loadRecentChanges(reader),
+    loadWatchedChanges(reader, userId, now),
   ]);
   if (page.error || summary.error || options.error) {
     throw new Error("dashboard_read_failed");
@@ -387,12 +390,6 @@ type EmbeddedRoleIdentity = {
   canonical_title: string;
   companies: { name: string } | { name: string }[] | null;
 };
-
-function roleIdentity(value: unknown): { role: string; company: string } | null {
-  const role = embeddedOne(value as EmbeddedRoleIdentity | EmbeddedRoleIdentity[] | null);
-  const company = role ? embeddedOne(role.companies) : null;
-  return role && company ? { role: tidyTitle(role.canonical_title), company: displayCompany(company.name) } : null;
-}
 
 function daysAgo(days: number): string {
   const date = new Date();
@@ -509,45 +506,112 @@ async function loadRecentOpenings(reader: PublicReader): Promise<{ openings: Rea
   return { openings: [], total: counted.count };
 }
 
-/** Material forecast revisions, read from the immutable before/after lineage. */
-async function loadRecentChanges(reader: PublicReader): Promise<RealForecastChange[]> {
-  // bounded: the 8 newest material revisions, listed as recent changes with no total stated.
-  const changes = await reader
-    .from("forecast_changes", "id,before_forecast_id,after_forecast_id,confidence_delta,reasons,created_at,material")
-    .eq("material", true)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: true })
-    .limit(8);
-  const rows = changes.data ?? [];
-  if (!rows.length) return [];
-  const ids = rows.flatMap((row) => [row.before_forecast_id as string, row.after_forecast_id as string]);
-  // bounded: at most 16 rows, the before and after forecasts of the 8 changes above, by primary key.
-  const forecasts = await reader
-    .from("forecasts", "id,canonical_role_id,window_start,window_end,canonical_roles!inner(canonical_title,scope_status,companies(name))")
-    .eq("canonical_roles.scope_status", "in_scope")
-    .eq("canonical_roles.active", true)
-    .in("id", ids);
-  const byId = new Map((forecasts.data ?? []).map((row) => [row.id as string, row]));
-  const bases = await loadForecastBasisById(reader, rows.map((row) => row.after_forecast_id as string));
-  return rows.flatMap((row) => {
-    const before = byId.get(row.before_forecast_id as string);
-    const after = byId.get(row.after_forecast_id as string);
+/** How many days back "what changed this week" reaches. */
+export const CHANGES_WINDOW_DAYS = 7;
+
+/** How many programs the panel lists, newest revision first, one row per program. */
+export const CHANGES_SHOWN = 6;
+
+/**
+ * The revisions a signed-in reader would feel, for the programs they watch and nothing else.
+ *
+ * It reads from the watchlist outwards rather than from the newest revisions inwards, so a watched program's change is
+ * never crowded out by revisions to programs the reader has never heard of. Every revision of every watched program is
+ * considered; what survives is the last week's, deduplicated to the newest per program, and only where the window
+ * moved or the confidence word changed.
+ */
+async function loadWatchedChanges(reader: PublicReader, userId: string | null, now: Date): Promise<RealForecastChange[]> {
+  if (!userId) return [];
+  const member = createAdminClient();
+  const watched = await fetchAll<Record<string, unknown>>(
+    () => member.from("watchlist_items").select("id,canonical_role_id").eq("user_id", userId).eq("target_type", "canonical_role"),
+    "watchlist_items",
+    "id",
+  );
+  const roleIds = [...new Set(watched.map((row) => String(row.canonical_role_id)).filter((id) => id !== "null"))];
+  if (roleIds.length === 0) return [];
+
+  const forecasts = await fetchAllIn<Record<string, unknown>>(
+    (ids) => reader.from("forecasts", "id,canonical_role_id,window_start,window_end,confidence").in("canonical_role_id", ids),
+    roleIds,
+    "watched_forecasts",
+    "id",
+  );
+  const byForecast = new Map(forecasts.map((row) => [String(row.id), row]));
+  if (byForecast.size === 0) return [];
+
+  const changes = await fetchAllIn<Record<string, unknown>>(
+    (ids) => reader
+      .from("forecast_changes", "id,before_forecast_id,after_forecast_id,interval_start_delta_days,interval_end_delta_days,created_at,material")
+      .in("after_forecast_id", ids)
+      .eq("material", true),
+    [...byForecast.keys()],
+    "watched_forecast_changes",
+    "id",
+  );
+
+  const since = new Date(now.getTime() - CHANGES_WINDOW_DAYS * 86_400_000).toISOString();
+  const felt = changes.flatMap((row) => {
+    if (String(row.created_at) < since) return [];
+    const before = byForecast.get(String(row.before_forecast_id));
+    const after = byForecast.get(String(row.after_forecast_id));
     if (!before || !after) return [];
-    const identity = roleIdentity(after.canonical_roles);
+    const facts = {
+      startDeltaDays: Number(row.interval_start_delta_days),
+      endDeltaDays: Number(row.interval_end_delta_days),
+      confidenceBefore: Number(before.confidence),
+      confidenceAfter: Number(after.confidence),
+    };
+    if (!isFelt(facts)) return [];
+    return [{ row, before, after, facts, roleId: String(after.canonical_role_id) }];
+  });
+  if (felt.length === 0) return [];
+
+  // One row per program: a program revised three times this week is one line about where it stands now.
+  const newest = new Map<string, (typeof felt)[number]>();
+  for (const item of felt) {
+    const held = newest.get(item.roleId);
+    if (!held || String(item.row.created_at) > String(held.row.created_at)) newest.set(item.roleId, item);
+  }
+  const latest = [...newest.values()]
+    .sort((a, b) => String(b.row.created_at).localeCompare(String(a.row.created_at)))
+    .slice(0, CHANGES_SHOWN);
+
+  const identities = await loadChangeIdentities(reader, latest.map((item) => item.roleId));
+  return latest.flatMap((item) => {
+    const identity = identities.get(item.roleId);
     if (!identity) return [];
     return [{
-      id: row.id as string,
-      roleId: after.canonical_role_id as string,
+      id: String(item.row.id),
+      roleId: item.roleId,
       company: identity.company,
       role: identity.role,
-      previousWindow: `${formatDay(before.window_start as string)} – ${formatDay(before.window_end as string)}`,
-      currentWindow: `${formatDay(after.window_start as string)} – ${formatDay(after.window_end as string)}`,
-      confidenceDelta: Number(row.confidence_delta),
-      changedAt: row.created_at as string,
-      reasons: (row.reasons as string[]) ?? [],
-      basis: bases.get(row.after_forecast_id as string) ?? null,
+      previousWindow: `${formatDay(String(item.before.window_start))} – ${formatDay(String(item.before.window_end))}`,
+      currentWindow: `${formatDay(String(item.after.window_start))} – ${formatDay(String(item.after.window_end))}`,
+      changedAt: String(item.row.created_at),
+      notes: changeNotes(item.facts),
     }];
   });
+}
+
+/** Each program's company and title as the rest of the product writes them, from its own recorded titles. */
+async function loadChangeIdentities(reader: PublicReader, roleIds: string[]): Promise<Map<string, { company: string; role: string }>> {
+  if (roleIds.length === 0) return new Map();
+  const [roles, recorded] = await Promise.all([
+    fetchAllIn<Record<string, unknown>>(
+      (ids) => reader.from("canonical_roles", "id,canonical_title,companies(name)").in("id", ids).eq("scope_status", "in_scope").eq("active", true),
+      roleIds,
+      "changed_roles",
+      "id",
+    ),
+    loadRecordedTitles(reader, roleIds),
+  ]);
+  return new Map(roles.flatMap((row) => {
+    const company = embeddedOne(row.companies as { name: string } | { name: string }[] | null);
+    if (!company) return [];
+    const id = String(row.id);
+    return [[id, { company: displayCompany(company.name), role: displayTitle(String(row.canonical_title), recorded.get(id)) }] as const];
+  }));
 }
 
 const precisionOrder: DatePrecision[] = ["exact", "bounded", "observed_by"];
@@ -709,7 +773,7 @@ export async function loadRealRoleView(
     forecasts.length
       ? fetchAllIn(
           (ids) => reader
-            .from("forecast_changes", "id,after_forecast_id,confidence_delta,point_date_delta_days,material,reasons,created_at")
+            .from("forecast_changes", "id,before_forecast_id,after_forecast_id,interval_start_delta_days,interval_end_delta_days,material,created_at")
             .in("after_forecast_id", ids),
           forecasts.map((item) => item.id as string),
           "role_forecast_changes",
@@ -771,6 +835,28 @@ export async function loadRealRoleView(
     (changesResult.data ?? []).map((row) => [row.after_forecast_id as string, row]),
   );
 
+/**
+ * What a revision of this program's forecast says to a reader, or null when it says nothing they would feel: the score
+ * behind it and the reason code it crossed are the machine's account of itself (lib/forecast-change-notes.ts).
+ */
+function changeNoteFor(
+  change: Record<string, unknown> | undefined,
+  forecasts: Record<string, unknown>[],
+): RoleForecastVersion["change"] {
+  if (!change) return null;
+  const before = forecasts.find((row) => row.id === change.before_forecast_id);
+  const after = forecasts.find((row) => row.id === change.after_forecast_id);
+  if (!before || !after) return null;
+  const facts = {
+    startDeltaDays: Number(change.interval_start_delta_days),
+    endDeltaDays: Number(change.interval_end_delta_days),
+    confidenceBefore: Number(before.confidence),
+    confidenceAfter: Number(after.confidence),
+  };
+  if (!isFelt(facts)) return null;
+  return { notes: changeNotes(facts), changedAt: String(change.created_at) };
+}
+
   const forecastVersions: RoleForecastVersion[] = forecasts.slice(0, 8).map((row) => {
     const change = changeByForecast.get(row.id as string);
     return {
@@ -782,15 +868,7 @@ export async function loadRealRoleView(
       confidence: Number(row.confidence),
       modelVersion: row.model_version as string,
       basis: versionBasis.get(row.id as string) ?? null,
-      change: change
-        ? {
-            confidenceDelta: Number(change.confidence_delta),
-            pointDateDeltaDays: Number(change.point_date_delta_days),
-            material: Boolean(change.material),
-            reasons: (change.reasons as string[]) ?? [],
-            changedAt: change.created_at as string,
-          }
-        : null,
+      change: changeNoteFor(change, forecasts),
     };
   });
 

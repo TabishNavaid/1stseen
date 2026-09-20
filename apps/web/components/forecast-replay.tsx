@@ -161,7 +161,7 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
             </section>
 
             <section className="panel p-4" aria-labelledby="backtest-reasons-title">
-              <p className="label-caps text-warning-ink">Latest persisted backtest</p>
+              <p className="label-caps text-warning-ink">Latest backtest</p>
               <h2 id="backtest-reasons-title" className="mt-1 text-sm font-semibold">Why targets could not be scored</h2>
               {backtest === null ? (
                 <p className="mt-3 text-caption leading-5 text-ink-muted">No backtest has been persisted yet. Run <code className="font-mono">firstseen backtest</code> to record which targets the leak-safe evaluator can score and why the rest are skipped.</p>
@@ -239,7 +239,7 @@ export function ForecastReplay({ data }: { data: ReplayCandidateData }) {
                 <label className="block"><span className={labelClass}>Forecast cutoff</span><input type="date" value={cutoff} max={selected.openedOn} onChange={(event) => { setCutoff(event.target.value); setState({ status: "idle" }); }} className={fieldClass} /></label>
                 <Button onClick={() => void run()} disabled={state.status === "running" || !apiConfigured} className={primaryButton}>{state.status === "running" ? <Icon name="loader-circle" size={14} className="animate-spin" /> : <Icon name="play" size={14} />}Run leak-free replay</Button>
               </div>
-              {!apiConfigured && <p className="border-t border-line bg-warning-surface px-4 py-3 text-micro leading-4 text-warning-ink">The replay worker is not reachable from this deployment. Set FIRSTSEEN_AGENT_API_URL and AGENT_API_BEARER_TOKEN to run a replay.</p>}
+              {!apiConfigured && <p className="border-t border-line bg-warning-surface px-4 py-3 text-micro leading-4 text-warning-ink">Replay is not configured here. Set FIRSTSEEN_AGENT_API_URL and AGENT_API_BEARER_TOKEN to enable it.</p>}
             </section>
           )}
         </>}

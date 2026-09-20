@@ -32,7 +32,8 @@ export type DigestSourceData = {
   asOf: string;
   periodStart: string;
   forecasts: Array<{ id: string; roleId: string; company: string; role: string; windowStart: string; windowEnd: string; confidence: number; basis?: ForecastBasis | null; href: string }>;
-  changes: Array<{ id: string; forecastId: string; roleId: string; company: string; role: string; changedOn: string; confidenceDelta: number; reasons: string[]; href: string }>;
+  /** Revisions a reader would feel, already filtered and described by lib/forecast-change-notes.ts. */
+  changes: Array<{ id: string; forecastId: string; roleId: string; company: string; role: string; changedOn: string; notes: string[]; href: string }>;
   openings: Array<{ id: string; roleId: string; company: string; role: string; openedOn: string; href: string }>;
   milestones: Array<{ id: string; forecastId: string; roleId: string; company: string; role: string; kind: "networking" | "referral_contacts" | "resume_ready" | string; dueOn: string; href: string }>;
 };
@@ -53,9 +54,6 @@ function addDays(value: string, days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function signed(value: number) {
-  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
-}
 
 async function sha256(value: string) {
   const result = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -91,8 +89,8 @@ export async function buildEmailDigest(source: DigestSourceData): Promise<EmailD
       company: change.company,
       role: change.role,
       eventOn: change.changedOn,
-      headline: `${change.company} forecast materially changed`,
-      detail: `Confidence changed ${signed(change.confidenceDelta)} points. ${change.reasons.join(" ")}`,
+      headline: `${change.company} · ${change.role}`,
+      detail: change.notes.join(" · "),
       href: change.href,
     });
   }
@@ -106,7 +104,7 @@ export async function buildEmailDigest(source: DigestSourceData): Promise<EmailD
       role: opening.role,
       eventOn: opening.openedOn,
       headline: `${opening.company} ${opening.role} opened`,
-      detail: `A watched role has confirmed opening evidence dated ${opening.openedOn}.`,
+      detail: `A program you watch was posted on ${opening.openedOn}.`,
       href: opening.href,
     });
   }

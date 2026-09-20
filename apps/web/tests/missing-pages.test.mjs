@@ -50,7 +50,7 @@ test("an address that is not a page answers 404 with its headline, one sentence,
     assert.match(column(html), /<a[^>]*href="\/"[^>]*>Take me home<\/a>/);
     assert.match(column(html), /<a[^>]*href="\/roles"[^>]*>or browse all roles<\/a>/);
     // One way on, not a menu: no search box and no row of links.
-    assert.doesNotMatch(column(html), /<form|<input|Just opened|Explore roles/);
+    assert.doesNotMatch(column(html), /<form|<input|Just opened|Explore programs/);
     assert.equal((column(html).match(/<a /g) ?? []).length, 2, path);
     assert.match(html, /<title>Page not found · 1stSeen<\/title>/);
   }

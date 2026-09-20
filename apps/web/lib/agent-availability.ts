@@ -7,13 +7,13 @@
  * working, so the panel says exactly that, in place of an error. The agent route sends the same sentence with its 503.
  */
 export const QUESTIONS_UNAVAILABLE_MESSAGE =
-  "Asking questions is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
+  "Asking questions is temporarily unavailable. Forecasts, program pages, and their evidence still work. Please try again later.";
 
 /** The same sentence for the two member features that also need the agent service. */
 export const REPLAY_UNAVAILABLE_MESSAGE =
-  "Running a replay is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
+  "Running a replay is temporarily unavailable. Forecasts, program pages, and their evidence still work. Please try again later.";
 export const PLAN_UNAVAILABLE_MESSAGE =
-  "Generating a preparation plan is temporarily unavailable. Forecasts, role pages, and their evidence still work. Please try again later.";
+  "Building a prep plan is temporarily unavailable. Forecasts, program pages, and their evidence still work. Please try again later.";
 
 /**
  * Whether a failed answer from the agent service is its own verdict on the request, to pass on as it is, rather than

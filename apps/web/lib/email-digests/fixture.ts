@@ -9,7 +9,7 @@ export const digestFixtureSource: DigestSourceData = {
     { id: "fixture-forecast-atlas", roleId: "atlas-data-science", company: "Atlas", role: "Data Science Intern", windowStart: "2026-08-28", windowEnd: "2026-09-10", confidence: 76, basis: forecastBasis(0.42, 0.58), href: "http://localhost:3000/" },
   ],
   changes: [
-    { id: "fixture-change-atlas", forecastId: "fixture-forecast-atlas", roleId: "atlas-data-science", company: "Atlas", role: "Data Science Intern", changedOn: "2026-08-12", confidenceDelta: 5, reasons: ["A new role family appeared in the official ATS taxonomy."], href: "http://localhost:3000/" },
+    { id: "fixture-change-atlas", forecastId: "fixture-forecast-atlas", roleId: "atlas-data-science", company: "Atlas", role: "Data Science Intern", changedOn: "2026-08-12", notes: ["Window moved a week earlier"], href: "http://localhost:3000/" },
   ],
   openings: [
     { id: "fixture-opening-pioneer", roleId: "pioneer-product-intern", company: "Pioneer", role: "Product Management Intern", openedOn: "2026-08-13", href: "http://localhost:3000/" },

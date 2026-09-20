@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { fixtureCalendarEvents } from "@/lib/calendar-data";
 import { fixtureBasis } from "@/lib/demo-data";
+import { hasGoogleCalendarConfig } from "@/lib/google-calendar/config";
 import { hasServiceRoleConfig, loadRealCalendar } from "@/lib/real-data";
 import { currentSession } from "@/lib/session";
 
@@ -27,6 +28,7 @@ export default async function CalendarPage() {
         events={data.events}
         unforecastable={data.unforecastable}
         watchedRoleCount={data.watchedRoleCount}
+        googleCalendar={hasGoogleCalendarConfig()}
         today={new Date().toISOString().slice(0, 10)}
       />
       </>

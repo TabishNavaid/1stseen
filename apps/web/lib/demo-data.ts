@@ -105,34 +105,6 @@ export const forecastRoles = forecastRolesSchema.parse([
   },
 ]);
 
-export type ForecastChangeRecord = {
-  roleId: string;
-  previousWindow: string;
-  currentWindow: string;
-  confidenceDelta: number;
-  changedAt: string;
-  reason: string;
-};
-
-export const forecastChanges: ForecastChangeRecord[] = [
-  {
-    roleId: "atlas-data-science",
-    previousWindow: "Sep 3 – Sep 16",
-    currentWindow: "Aug 28 – Sep 10",
-    confidenceDelta: 5,
-    changedAt: "2 days ago",
-    reason: "A new data-science role family appeared in the company ATS taxonomy.",
-  },
-  {
-    roleId: "northstar-swe-intern",
-    previousWindow: "Sep 7 – Sep 25",
-    currentWindow: "Sep 4 – Sep 22",
-    confidenceDelta: 2,
-    changedAt: "3 days ago",
-    reason: "The official campus page changed and remains consistent with four prior cycles.",
-  },
-];
-
 export type OpenedRole = {
   id: string;
   company: string;
@@ -223,7 +195,7 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     insufficientEvidence: null,
     forecastRefusal: null,
     forecastVersions: [
-      { forecastId: "fixture-forecast-northstar", asOf: "2026-08-14", expectedOpening: "2026-09-12", windowStart: "2026-09-04", windowEnd: "2026-09-22", confidence: 71, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.74, 0.26), change: { confidenceDelta: 2, pointDateDeltaDays: -2, material: true, reasons: ["The official campus page changed and remains consistent with four prior cycles."], changedAt: "2026-08-14T09:18:00Z" } },
+      { forecastId: "fixture-forecast-northstar", asOf: "2026-08-14", expectedOpening: "2026-09-12", windowStart: "2026-09-04", windowEnd: "2026-09-22", confidence: 71, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.74, 0.26), change: { notes: ["Window moved 2 days earlier"], changedAt: "2026-08-14T09:18:00Z" } },
       { forecastId: "fixture-forecast-northstar-prev", asOf: "2026-08-11", expectedOpening: "2026-09-14", windowStart: "2026-09-07", windowEnd: "2026-09-25", confidence: 69, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.61, 0.39), change: null },
     ],
     cycles: [

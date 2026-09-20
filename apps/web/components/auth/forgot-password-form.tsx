@@ -38,7 +38,7 @@ export function ForgotPasswordForm() {
     try {
       const response = await fetch("/api/auth/forgot", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: address }) });
       if (response.status === 202) setSentTo(address);
-      else setFailure(response.status === 503 ? "Password reset is not configured for this deployment." : "The reset email could not be requested. Try again in a moment.");
+      else setFailure(response.status === 503 ? "Password reset is not configured here." : "The reset email could not be requested. Try again in a moment.");
     } catch {
       setFailure("The reset email could not be requested. Try again in a moment.");
     } finally {

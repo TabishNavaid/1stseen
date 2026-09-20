@@ -22,7 +22,6 @@ export default async function AccountDeletedPage({
   const { googleNotRevoked, eventsKept, eventsNotRemoved } = deletedPageNotes(await searchParams);
   return (
     <FocusedShell width="narrow">
-      <p className="label-caps text-accent-ink">Account</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-title">Your account has been deleted</h1>
       <p className="mt-3 text-sm leading-6 text-ink-muted">
         Your 1stSeen account and everything it held are gone: your answers, watchlist, readiness plans, calendar and digest

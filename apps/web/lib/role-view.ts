@@ -99,11 +99,9 @@ export type RoleForecastVersion = {
   modelVersion: string;
   /** This version's own basis; an earlier version can rest on different evidence than the current one. */
   basis: ForecastBasis | null;
+  /** What this revision changed, in a reader's words, or null when it changed nothing they would feel. */
   change: {
-    confidenceDelta: number;
-    pointDateDeltaDays: number;
-    material: boolean;
-    reasons: string[];
+    notes: string[];
     changedAt: string;
   } | null;
 };

@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { displayCompany, displayPlace, displayTitle, foldTitle, tidyTitle, withoutLeadingTags } from "../lib/display-names.ts";
+import { displayCompany, displayPlace, displayTitle, foldTitle, tidyTitle, withoutLeadingTags, withoutTrailingPlace } from "../lib/display-names.ts";
 
 test("a company name is shown as stored, with no correction list in front of it", () => {
   // The ten stored names that read as page titles were corrected in the data on 2026-09-20, and discovery no longer
@@ -121,4 +121,22 @@ test("internal codes in front of a title are not shown", () => {
   assert.equal(withoutLeadingTags("[Intern]"), "[Intern]");
   const seen = (title) => [{ title, lastSeenAt: "2026-09-01T00:00:00Z" }];
   assert.equal(displayTitle("Ma Intern Regional Product Manager In Aftermarket Asia Pacific South", seen("【MA】Internship Regional Product Manager in Aftermarket Asia Pacific South")), "Internship Regional Product Manager in Aftermarket Asia Pacific South");
+});
+
+test("a place the company glued onto the end of a title is not part of the program's name", () => {
+  assert.equal(withoutTrailingPlace("Data Science Intern (Winter) San Francisco, California"), "Data Science Intern (Winter)");
+  assert.equal(withoutTrailingPlace("Software Engineer Intern, New York, New York"), "Software Engineer Intern");
+  // Several places, as one posting listed them.
+  assert.equal(withoutTrailingPlace("Software Engineer Intern (Winter 2027) San Francisco, California; New York, New York"), "Software Engineer Intern (Winter 2027)");
+  // A bare city could be a team or a product, so it stays; so does anything after a comma that is not a place.
+  assert.equal(withoutTrailingPlace("Graduate Machine Learning Researcher - Chicago"), "Graduate Machine Learning Researcher - Chicago");
+  assert.equal(withoutTrailingPlace("Software Engineer, Platform"), "Software Engineer, Platform");
+  assert.equal(withoutTrailingPlace("Quantitative Trader, BS"), "Quantitative Trader, BS");
+  // A title that is only a place is left as it is: something to read beats nothing.
+  assert.equal(withoutTrailingPlace("New York, New York"), "New York, New York");
+  const seen = (title) => [{ title, lastSeenAt: "2026-09-01T00:00:00Z" }];
+  assert.equal(
+    displayTitle("Data Science Intern Winter San Francisco California", seen("Data Science Intern (Winter) San Francisco, California")),
+    "Data Science Intern (Winter)",
+  );
 });

@@ -173,7 +173,7 @@ export function DashboardFiltersForm({ filters, options, showWatched = true }: {
                 />
               </div>
             </details>
-            {showWatched && <Checkbox id="dashboard-watched" name="watched" value="1" defaultChecked={filters.watchedOnly} label="Watched roles only" className="mt-3 border-t border-line pt-2" />}
+            {showWatched && <Checkbox id="dashboard-watched" name="watched" value="1" defaultChecked={filters.watchedOnly} label="Only programs I watch" className="mt-3 border-t border-line pt-2" />}
             <div className="mt-4 flex justify-end border-t border-line pt-4">
               <Button type="submit" className="rounded-chip px-6">Show roles</Button>
             </div>

@@ -45,9 +45,29 @@ const MARKETING = [/\bseamless(?:ly)?\b/i, /\bunlock\b/i, /\bsupercharge\b/i, /\
  */
 const INSIDE_OUT = [
   /\brecruiting workspace\b/i,
-  /\bpublic to this deployment\b/i,
+  /\bthis deployment\b/i,
   /\bsession cookie\b/i,
-  /\bBrowse (?:every )?roles?\b/,
+  /\bsince last run\b/i,
+  /\bforecast changes\b/i,
+  /\bexplicit opt-in\b/i,
+  /\bthreshold crossed\b/i,
+];
+
+/**
+ * The site follows programs. "Role" is the word the database uses for the same thing, and it reached the pages a
+ * person reads in a dozen places while the rest of the product said program. These are the phrases that leaked; the
+ * word on its own is not banned, because a company's own job title may carry it and the methodology page explains
+ * what an early-career technical role is.
+ */
+const WRONG_NOUN = [
+  /\bwatched roles?\b/i,
+  /\broles you watch\b/i,
+  /\brole page\b/i,
+  /\bBrowse (?:every )?roles?\b/i,
+  /\brole families\b/i,
+  /\b\d+ of \d+ roles match\b/i,
+  /\byou watch \d+ roles?\b/i,
+  /\bthe roles you follow\b/i,
 ];
 
 /**
@@ -66,6 +86,7 @@ export function voiceLeaksInSource(source) {
   for (const pattern of SELF_CONSCIOUS) find("self-conscious", pattern);
   for (const pattern of MARKETING) find("marketing", pattern);
   for (const pattern of INSIDE_OUT) find("inside out", pattern);
+  for (const pattern of WRONG_NOUN) find("wrong noun", pattern);
   // An em dash is a writer's tic here: the product's sentences are short enough not to need one.
   find("em dash", /\u2014/);
   return leaks;
@@ -97,7 +118,10 @@ export function pageLanguageLeaks(html, { allow = [] } = {}) {
   find("hash", /\b[0-9a-f]{16,}\b/i);
   find("timing", /\b\d+(?:\.\d+)?\s?ms\b/);
   for (const tool of TOOL_NAMES) find("tool", new RegExp(`\\b${tool}\\b`));
-  find("identifier", /\b[a-z]+(?:_[a-z0-9]+)+\b/);
+  // Any snake_case string at all: an enum, a column, or a reason code that reached the page instead of a sentence.
+  find("snake case", /\b[a-z]+(?:_[a-z0-9]+)+\b/);
   for (const word of DEV_WORDS) find("dev word", word);
+  for (const pattern of INSIDE_OUT) find("inside out", pattern);
+  for (const pattern of WRONG_NOUN) find("wrong noun", pattern);
   return leaks;
 }

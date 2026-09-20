@@ -1,14 +1,15 @@
 import "server-only";
+import { changeNotes, isFelt } from "@/lib/forecast-change-notes";
 
 import { addDays } from "@/lib/dates";
 import { forecastIsCurrent } from "@/lib/forecast-gap";
 import { createPublicReader } from "@/lib/public-read";
-import { loadForecastBasisById } from "@/lib/real-data";
+import { loadForecastBasisById, loadRecordedTitles } from "@/lib/real-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAll, fetchAllIn } from "@/lib/supabase/paging";
 import { getEmailDigestPublicUrl } from "./config";
 import type { DigestSourceData } from "./digest";
-import { displayCompany, tidyTitle } from "@/lib/display-names";
+import { displayCompany, displayTitle } from "@/lib/display-names";
 
 type RoleRow = { id: string; company_id: string; canonical_title: string; forecast_refused_at: string | null; companies: { name: string } | Array<{ name: string }> | null };
 type ForecastRow = { id: string; canonical_role_id: string; as_of: string; window_start: string; window_end: string; confidence: number; forecasted_at: string };
@@ -66,8 +67,8 @@ export async function loadDigestSourceData(userId: string, asOf = new Date().toI
       "digest_evidence",
       "id",
     ),
-    fetchAll<{ id: string; after_forecast_id: string; confidence_delta: number; reasons: string[]; created_at: string; material: boolean }>(
-      () => admin.from("forecast_changes").select("id,after_forecast_id,confidence_delta,reasons,created_at,material").eq("material", true).gte("created_at", `${periodStart}T00:00:00Z`).lte("created_at", `${asOf}T23:59:59Z`).order("created_at"),
+    fetchAll<{ id: string; before_forecast_id: string; after_forecast_id: string; interval_start_delta_days: number; interval_end_delta_days: number; created_at: string; material: boolean }>(
+      () => admin.from("forecast_changes").select("id,before_forecast_id,after_forecast_id,interval_start_delta_days,interval_end_delta_days,created_at,material").eq("material", true).gte("created_at", `${periodStart}T00:00:00Z`).lte("created_at", `${asOf}T23:59:59Z`).order("created_at"),
       "digest_evidence",
       "id",
     ),
@@ -82,30 +83,43 @@ export async function loadDigestSourceData(userId: string, asOf = new Date().toI
     seenRoles.add(row.canonical_role_id);
     if (forecastIsCurrent(row.forecasted_at, roleById.get(row.canonical_role_id)?.forecast_refused_at)) latestForecasts.set(row.canonical_role_id, row);
   }
-  const changeForecastIds = changeRows.map((change) => change.after_forecast_id);
-  const changedForecastRows = await fetchAllIn<{ id: string; canonical_role_id: string }>(
-    (ids) => admin.from("forecasts").select("id,canonical_role_id").in("id", ids),
+  const changeForecastIds = [...new Set(changeRows.flatMap((change) => [change.before_forecast_id, change.after_forecast_id]))];
+  const changedForecastRows = await fetchAllIn<{ id: string; canonical_role_id: string; confidence: number }>(
+    (ids) => admin.from("forecasts").select("id,canonical_role_id,confidence").in("id", ids),
     changeForecastIds,
     "digest_change_lineage",
     "id",
   );
-  const changedForecasts = new Map(changedForecastRows.map((forecast) => [forecast.id, forecast.canonical_role_id]));
+  const changedForecasts = new Map(changedForecastRows.map((forecast) => [forecast.id, forecast]));
   // Each forecast's basis, from its own date weights (lib/forecast-basis).
   const bases = await loadForecastBasisById(createPublicReader(), [...latestForecasts.values()].map((forecast) => forecast.id));
   const basisOf = (forecast: ForecastRow) => bases.get(forecast.id) ?? null;
   const origin = getEmailDigestPublicUrl();
+  // Titles read the way they read everywhere else: as the company published them, without the place glued on.
+  const recorded = await loadRecordedTitles(createPublicReader(), [...roleById.keys()]);
   const identity = (roleId: string) => {
     const role = roleById.get(roleId)!;
-    return { roleId, company: displayCompany(companyName(role)), role: tidyTitle(role.canonical_title), href: `${origin}/roles/${roleId}` };
+    return { roleId, company: displayCompany(companyName(role)), role: displayTitle(role.canonical_title, recorded.get(roleId)), href: `${origin}/roles/${roleId}` };
   };
   return {
     asOf,
     periodStart,
     forecasts: [...latestForecasts.values()].map((forecast) => ({ id: forecast.id, ...identity(forecast.canonical_role_id), windowStart: forecast.window_start, windowEnd: forecast.window_end, confidence: Number(forecast.confidence), basis: basisOf(forecast) })),
     changes: changeRows.flatMap((change) => {
-      const roleId = changedForecasts.get(change.after_forecast_id);
-      if (!roleId || !roleById.has(roleId)) return [];
-      return [{ id: change.id, forecastId: change.after_forecast_id, ...identity(roleId), changedOn: change.created_at.slice(0, 10), confidenceDelta: Number(change.confidence_delta), reasons: change.reasons as string[] }];
+      const after = changedForecasts.get(change.after_forecast_id);
+      const before = changedForecasts.get(change.before_forecast_id);
+      const roleId = after?.canonical_role_id;
+      if (!roleId || !before || !roleById.has(roleId)) return [];
+      // A digest is worth opening only for what the reader would feel; a score that moved behind an unchanged window
+      // is not that (lib/forecast-change-notes.ts).
+      const facts = {
+        startDeltaDays: Number(change.interval_start_delta_days),
+        endDeltaDays: Number(change.interval_end_delta_days),
+        confidenceBefore: Number(before.confidence),
+        confidenceAfter: Number(after.confidence),
+      };
+      if (!isFelt(facts)) return [];
+      return [{ id: change.id, forecastId: change.after_forecast_id, ...identity(roleId), changedOn: change.created_at.slice(0, 10), notes: changeNotes(facts) }];
     }),
     openings: openingRows.map((opening) => ({ id: opening.id, ...identity(opening.canonical_role_id), openedOn: opening.opened_on })),
     milestones: milestoneRows.map((milestone) => ({ id: milestone.id, forecastId: milestone.forecast_id, ...identity(milestone.canonical_role_id), kind: milestone.kind, dueOn: milestone.due_on })),

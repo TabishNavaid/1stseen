@@ -23,9 +23,9 @@ function openingsPhrase(openings: number): string {
 
 /** One sentence for a list row or a calendar entry. */
 export function noForecastReason(openings: number): string {
-  if (openings <= 0) return "No opening recorded yet, and no comparable program to learn its timing from.";
-  const cycles = openings >= 3 ? ", in fewer than three distinct cycles" : "";
-  return `${openingsPhrase(openings)}${cycles}: too little history on its own, and no comparable program to learn its timing from.`;
+  if (openings <= 0) return "No opening on record yet, and no similar program to take the timing from.";
+  const years = openings >= 3 ? ", but in fewer than three different years" : "";
+  return `${openingsPhrase(openings)}${years}: too little to see a pattern, and no similar program to take the timing from.`;
 }
 
 /** The same fact for a card, in the fewest words: no cycles, no comparable programs, just what there is. */

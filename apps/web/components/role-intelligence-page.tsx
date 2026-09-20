@@ -49,14 +49,13 @@ function stamp(value: string | null): string {
   return value ? formatStamp(value) : "None";
 }
 
-function Section({ id, eyebrow, title, note, children }: {
-  id?: string; eyebrow: string; title: string; note?: string; children: React.ReactNode;
+function Section({ id, title, note, children }: {
+  id?: string; title: string; note?: string; children: React.ReactNode;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   return (
     <section id={id} className="panel scroll-mt-32" aria-labelledby={headingId} aria-label={headingId ? undefined : title}>
       <div className="border-b border-line px-4 py-3 md:px-5">
-        <p className="label-caps text-ink-subtle">{eyebrow}</p>
         <h2 id={headingId} className="mt-1 text-base font-semibold">{title}</h2>
         {note && <p className="mt-1 text-caption text-ink-subtle">{note}</p>}
       </div>
@@ -131,7 +130,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
   // them on the rig — so it is stated once, on the class. A class whose rows disagree says so per row.
   const ownRationale = new Set(view.provenanceGroups.filter((group) => !group.uniformRationale).map((group) => group.contribution));
   const statusLabel = livePosting
-    ? "Posting currently observed"
+    ? "Open now"
     : view.cycles.length
       ? "Not currently observed open"
       : "No opening observed yet";
@@ -143,7 +142,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
     <div className="flex-1 bg-canvas text-ink">
       <main id="role-content" className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
         <nav className="mb-5 flex min-w-0 items-center gap-1 text-caption text-ink-subtle" aria-label="Breadcrumb">
-          <Link href="/roles" className="focus-ring inline-flex min-h-touch shrink-0 items-center whitespace-nowrap rounded-sm hover:text-accent-ink sm:min-h-0">All roles</Link><Icon name="chevron-right" size={11} className="shrink-0" />
+          <Link href="/roles" className="focus-ring inline-flex min-h-touch shrink-0 items-center whitespace-nowrap rounded-sm hover:text-accent-ink sm:min-h-0">All programs</Link><Icon name="chevron-right" size={11} className="shrink-0" />
           <span className="truncate">{view.company}</span><Icon name="chevron-right" size={11} className="shrink-0" /><span className="truncate text-ink-muted" aria-current="page">{view.role}</span>
         </nav>
 
@@ -192,7 +191,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
 
         <div className="mt-6 space-y-5">
           {view.cycles.length > 0 && (
-            <Section id="history" eyebrow="History" title="When it opened before">
+            <Section id="history" title="When it opened before">
               <ol className="divide-y divide-line">
                 {view.cycles.slice(0, 24).map((cycle) => (
                   <li key={cycle.id} className="flex items-start gap-3 px-4 py-4 md:px-5">
@@ -216,7 +215,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
             </Section>
           )}
 
-          <Section id="readiness" eyebrow="Prep plan" title="Get ready before it opens">
+          <Section id="readiness" title="Get ready before it opens">
             {view.milestones.length > 0 ? (
               <ol className="divide-y divide-line">
                 {view.milestones.map((milestone) => (
@@ -470,9 +469,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                       </div>
                       {version.change && (
                         <p className="mt-2 border-l-2 border-warning-line bg-warning-surface px-2 py-1.5 text-micro text-warning-ink">
-                          {version.change.confidenceDelta >= 0 ? "+" : ""}{version.change.confidenceDelta.toFixed(1)} points ·
-                          {" "}{version.change.pointDateDeltaDays >= 0 ? "+" : ""}{version.change.pointDateDeltaDays} days ·
-                          {" "}{version.change.reasons[0] ?? "recorded change"}
+                          {version.change.notes.join(" · ")}
                         </p>
                       )}
                     </li>

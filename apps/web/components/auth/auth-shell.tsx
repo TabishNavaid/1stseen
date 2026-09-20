@@ -26,7 +26,7 @@ export function AuthUnavailable() {
   return (
     <div className="panel mt-6 p-5">
       <p className="text-sm leading-6 text-warning-ink">
-        Supabase authentication is not configured for this deployment. Set
+        Supabase authentication is not configured here. Set
         <code className="mx-1 font-mono">NEXT_PUBLIC_SUPABASE_URL</code> and
         <code className="mx-1 font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable sign-in.
       </p>

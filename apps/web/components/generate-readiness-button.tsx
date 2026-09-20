@@ -31,7 +31,7 @@ export function GenerateReadinessButton({ roleId }: { roleId: string }) {
         throw new Error(
           body.reason
             ?? (body.error === "readiness_api_unavailable"
-              ? "The readiness worker is not configured for this deployment."
+              ? "Prep plans cannot be built right now."
               : body.error === "readiness_api_unreachable" || body.error === "readiness_api_failed"
                 ? body.message ?? PLAN_UNAVAILABLE_MESSAGE
               : body.error === "role_not_followed"
@@ -51,7 +51,7 @@ export function GenerateReadinessButton({ roleId }: { roleId: string }) {
     <div className="border-t border-line p-4">
       <Button variant="outline" size="sm" disabled={busy} onClick={() => void generate()} className="w-full gap-1.5">
         {busy ? <Icon name="loader-circle" size={13} className="animate-spin" /> : <Icon name="calendar-plus" size={13} />}
-        Generate preparation plan
+        Build my prep plan
       </Button>
       {message && <p role="status" className="mt-2 text-micro text-warning-ink">{message}</p>}
     </div>

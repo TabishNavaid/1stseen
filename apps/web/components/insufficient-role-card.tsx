@@ -27,7 +27,7 @@ export function InsufficientRoleCard({ item }: { item: DashboardListItem }) {
         </div>
       </div>
       <div>
-        <p className="label-caps flex items-center gap-1.5 text-ink-subtle"><Icon name="circle-dashed" size={12} />No forecast yet</p>
+        <p className="flex items-center gap-1.5 text-caption font-semibold text-ink-muted"><Icon name="circle-dashed" size={12} />No date yet</p>
         <p className="mt-1.5 text-caption leading-5 text-ink-muted">{plainNoForecastReason(item.exactEvents + item.boundedEvents + item.observedEvents)}</p>
       </div>
     </article>
