@@ -250,3 +250,82 @@ class StructuredSchemaContractTests(unittest.TestCase):
         for model in (GoalIntentProposal, _IdentityProposal):
             schema = _structured_response_format(model)["json_schema"]["schema"]
             self.assertEqual(schema["required"], list(schema["properties"]), model.__name__)
+
+
+class APIConnectionError(RuntimeError):
+    """Named as litellm names it, because the classifier reads the exception's name."""
+
+
+class ConnectionRefusedIsNotRetriedTests(unittest.TestCase):
+    """A route that refuses the connection is tried once a run, not once a decision.
+
+    GitHub Actions configures no model provider, so the checked-in default points at a local Ollama that is not there.
+    Every extraction and classification tried it, and each failure wrote a `model_usage` row: 14,723 of them on hosted
+    by 2026-09-20, all recording the same refusal. A refused connection is not a transient fault -- nothing is
+    listening, and nothing will be a second later -- so the route is dropped for the rest of the run, and the decisions
+    after the first make no request and record nothing.
+    """
+
+    def router(self, failure: Exception, *, tracker: MemoryTracker) -> tuple[ModelRouter, FakeProvider]:
+        route = ModelRoute(provider="ollama", model="ollama/qwen2.5:7b", api_base="http://localhost:11434")
+        backend = FakeProvider({("ollama", "ollama/qwen2.5:7b"): [failure, failure, failure]})
+        return ModelRouter({"classify": [route]}, backend=backend, tracker=tracker), backend
+
+    def ask(self, router: ModelRouter) -> None:
+        with self.assertRaises(ModelRoutingError):
+            router.complete("classify", messages=[{"role": "user", "content": "x"}], agent_run_id=RUN_ID)
+
+    def test_a_refused_connection_is_recorded_once_and_then_skipped(self) -> None:
+        tracker = MemoryTracker()
+        # What litellm raises when nothing is listening, and what the raw socket error looks like.
+        router, backend = self.router(APIConnectionError("Connection error."), tracker=tracker)
+        for _ in range(5):
+            self.ask(router)
+        self.assertEqual(len(backend.calls), 1, "one request, not one per decision")
+        self.assertEqual(len(tracker.attempts), 1, "one row, not one per decision")
+        self.assertFalse(tracker.attempts[0].success)
+
+    def test_a_raw_socket_refusal_counts_as_unreachable_too(self) -> None:
+        tracker = MemoryTracker()
+        router, backend = self.router(ConnectionRefusedError("[Errno 61] Connection refused"), tracker=tracker)
+        self.ask(router)
+        self.ask(router)
+        self.assertEqual(len(backend.calls), 1)
+        self.assertEqual(len(tracker.attempts), 1)
+
+    def test_a_timeout_is_tried_again_because_the_provider_may_answer(self) -> None:
+        tracker = MemoryTracker()
+        router, backend = self.router(TimeoutError("timed out"), tracker=tracker)
+        self.ask(router)
+        self.ask(router)
+        self.assertEqual(len(backend.calls), 2)
+        self.assertEqual(len(tracker.attempts), 2)
+
+    def test_a_server_error_is_tried_again_too(self) -> None:
+        tracker = MemoryTracker()
+        router, backend = self.router(ProviderFailure("temporary_provider", "503 from the provider", status_code=503), tracker=tracker)
+        self.ask(router)
+        self.ask(router)
+        self.assertEqual(len(backend.calls), 2)
+
+    def test_the_run_says_it_was_deterministic_and_which_route_was_unreachable(self) -> None:
+        tracker = MemoryTracker()
+        router, _ = self.router(APIConnectionError("Connection error."), tracker=tracker)
+        self.ask(router)
+        summary = router.model_summary()
+        self.assertTrue(summary["deterministic_only"])
+        self.assertEqual(summary["attempts"], 1)
+        self.assertEqual(summary["succeeded"], 0)
+        self.assertEqual(summary["unreachable"], ["ollama at http://localhost:11434"])
+        self.assertIn("deterministic", summary["note"])
+
+    def test_a_run_that_used_a_model_does_not_claim_it_was_deterministic(self) -> None:
+        tracker = MemoryTracker()
+        route = ModelRoute(provider="gemini", model="gemini/flash")
+        backend = FakeProvider({("gemini", "gemini/flash"): [result("gemini", "gemini/flash")]})
+        router = ModelRouter({"classify": [route]}, backend=backend, tracker=tracker)
+        router.complete("classify", messages=[{"role": "user", "content": "x"}], agent_run_id=RUN_ID)
+        summary = router.model_summary()
+        self.assertFalse(summary["deterministic_only"])
+        self.assertNotIn("note", summary)
+        self.assertNotIn("unreachable", summary)

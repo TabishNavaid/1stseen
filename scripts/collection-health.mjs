@@ -234,12 +234,18 @@ async function failingSources() {
   const sources = new Map(
     (
       await inBatches([...new Set(failing.map((entry) => entry.sourceId))], async (ids) =>
-        (await rest(`sources?select=id,url,adapter,companies(name)&id=in.(${ids})`)).json(),
+        (await rest(`sources?select=id,url,adapter,enabled,companies(name)&id=in.(${ids})`)).json(),
       )
     ).map((row) => [row.id, row]),
   );
+  // A streak is read from history, and history does not change when a source is turned off. A source nobody collects
+  // any more cannot fail again, so reporting it would ask the owner to act on work that will never run: four sources
+  // disabled on 2026-09-20 (three closed postings that answer 404 for ever, one page that answers 403) would have
+  // warned for the rest of the lookback window. A source that has been deleted outright is dropped for the same
+  // reason; only a source still enabled can still be failing.
   return failing
     .map((entry) => ({ ...entry, source: sources.get(entry.sourceId) ?? null }))
+    .filter((entry) => entry.source?.enabled)
     .sort((a, b) => b.failed - a.failed);
 }
 

@@ -23,8 +23,25 @@
 -- The work happens in the database. Reading this text out to shorten it and writing it back would download every byte
 -- of the 103 MB it removes, which is what the change exists to avoid.
 
+-- The function reports what it changed and what it cost, because the run that calls it is the only record: the rows it
+-- shortened, the bytes each column held before and after, and the database's own size on both sides. The size will not
+-- fall here -- an UPDATE leaves the old row version behind until the table is vacuumed -- and seeing that in the log is
+-- the point (docs/operations.md, "Trimming out-of-scope text").
+
 create or replace function public.trim_out_of_scope_text(p_keep integer default 300)
-returns table (observations integer, roles integer, events integer)
+returns table (
+  observations integer,
+  roles integer,
+  events integer,
+  excerpt_bytes_before bigint,
+  excerpt_bytes_after bigint,
+  prototype_bytes_before bigint,
+  prototype_bytes_after bigint,
+  quote_bytes_before bigint,
+  quote_bytes_after bigint,
+  database_bytes_before bigint,
+  database_bytes_after bigint
+)
 language plpgsql
 volatile
 set search_path = ''
@@ -33,10 +50,19 @@ declare
   v_observations integer;
   v_roles integer;
   v_events integer;
+  v_excerpt_before bigint;
+  v_prototype_before bigint;
+  v_quote_before bigint;
+  v_database_before bigint;
 begin
   if p_keep is null or p_keep < 1 or p_keep > 8192 then
     raise exception 'p_keep must be between 1 and 8192, not %', p_keep;
   end if;
+
+  select coalesce(sum(length(evidence_excerpt)), 0) into v_excerpt_before from public.raw_job_observations;
+  select coalesce(sum(length(description_prototype)), 0) into v_prototype_before from public.canonical_roles;
+  select coalesce(sum(length(evidence_quote)), 0) into v_quote_before from public.historical_opening_events;
+  v_database_before := pg_database_size(current_database());
 
   update public.canonical_roles
      set description_prototype = left(description_prototype, p_keep)
@@ -66,7 +92,19 @@ begin
      );
   get diagnostics v_observations = row_count;
 
-  return query select v_observations, v_roles, v_events;
+  return query
+    select
+      v_observations,
+      v_roles,
+      v_events,
+      v_excerpt_before,
+      (select coalesce(sum(length(evidence_excerpt)), 0) from public.raw_job_observations),
+      v_prototype_before,
+      (select coalesce(sum(length(description_prototype)), 0) from public.canonical_roles),
+      v_quote_before,
+      (select coalesce(sum(length(evidence_quote)), 0) from public.historical_opening_events),
+      v_database_before,
+      pg_database_size(current_database());
 end;
 $$;
 

@@ -206,6 +206,9 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
                 "degraded_sources": degraded,
                 "diagnostics": diagnostic_counts,
                 "enrichment": enrichment,
+                # Whether any model answered. A deployment with none is the normal one, and a run should say so
+                # rather than leave it to be inferred (providers.py, ModelRouter.model_summary).
+                "models": router.model_summary(),
                 **_run_cost(repository, started),
                 "status": status,
                 "run_id": str(run_id),
@@ -341,7 +344,18 @@ def run_enrichment(company: str | None, *, force: bool = False) -> int:
         else "succeeded"
     )
     repository.finish_agent_run(run_id, status=status)
-    print(json.dumps({**totals, **_run_cost(repository, started), "status": status, "run_id": str(run_id)}, indent=2))
+    print(
+        json.dumps(
+            {
+                **totals,
+                "models": router.model_summary(),
+                **_run_cost(repository, started),
+                "status": status,
+                "run_id": str(run_id),
+            },
+            indent=2,
+        )
+    )
     return 1 if status == "failed" and company_ids else 0
 
 
@@ -898,8 +912,34 @@ def run_text_trim(keep: int) -> int:
     """
     started = time.monotonic()
     repository = IntelligenceRepository.from_settings(get_settings())
-    counts = repository.trim_out_of_scope_text(keep=keep)
-    print(json.dumps({"kept_characters": keep, **counts, **_run_cost(repository, started)}, indent=2))
+    report = repository.trim_out_of_scope_text(keep=keep)
+    megabytes = {
+        f"{name}_mb": round(report[f"{name}_bytes_before"] / 1e6, 2)
+        for name in ("excerpt", "prototype", "quote", "database")
+    }
+    freed = {
+        f"{name}_mb_removed": round((report[f"{name}_bytes_before"] - report[f"{name}_bytes_after"]) / 1e6, 2)
+        for name in ("excerpt", "prototype", "quote")
+    }
+    print(
+        json.dumps(
+            {
+                "kept_characters": keep,
+                **report,
+                "before_mb": megabytes,
+                "removed_mb": freed,
+                "database_mb_after": round(report["database_bytes_after"] / 1e6, 2),
+                # An UPDATE leaves the old row version behind, so this does not fall until the tables are vacuumed.
+                "database_mb_change": round(
+                    (report["database_bytes_after"] - report["database_bytes_before"]) / 1e6, 2
+                ),
+                # Kept apart from a collection run's own timing, which measures collection.
+                "trim_seconds": round(time.monotonic() - started, 1),
+                **_run_cost(repository, started),
+            },
+            indent=2,
+        )
+    )
     return 0
 
 
