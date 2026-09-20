@@ -11,14 +11,24 @@ record and carry their own C2PA provenance manifests; what a page renders is the
 and without the manifest, the way the Open Doodles files below carry no Sketch metadata. Nothing is fetched to draw
 it: every pose is inline in the page that uses it.
 
+The bird is the product's mark, not its cast. At full size a moment belongs to one of the Open Doodles people below;
+the bird turns up small beside them, one to a screen, the way a signature does.
+
 | Pose | Where it appears |
 | --- | --- |
-| `lookout` | The landing page's hero, watching over the chart |
-| `happy` | The confirmation after a program is saved |
-| `confused` | The not-found pages and the error page |
-| `sleeping` | A watchlist or a calendar with nothing on it yet |
-| `waving` | The sign-in page, and the end of the first run |
-| `letter` | The email digest |
+| `lookout` | Perched on the corner of the landing page's chart card |
+| `happy` | Beside the stamp, when a program has just been saved |
+| `confused` | Beside a search or a filter that matched nothing |
+| `letter` | At the head of the digest, where a stamp would be |
+
+Two poses stay in `design-refs/bird/` and are not written out: `sleeping` and `waving`. A pose nobody draws is ten
+kilobytes of a page for nothing, so `BIRDS` in `scripts/build-brand-art.mjs` is the list of the ones in use.
+
+The mark itself — the bird's head, beside the wordmark in the header and the footer, and on the tile a browser tab,
+a bookmark and a home screen show — is drawn by the same script rather than cut out of a pose, because a pose's legs,
+tail and wing are a smudge below about forty pixels. It comes in two arrangements: on paper it keeps its ink outline,
+and on the accent tile the outline is dropped so the paper shape is the whole silhouette. `apps/web/public/favicon.svg`,
+`icon-32.png`, `apple-touch-icon.png` and the corner of `og-image.png` are all written from that one drawing.
 
 The hand marks beside it (arrows, the stamp ring, the sticker edge, section rules) are drawn by the same script with
 [perfect-freehand](https://github.com/steveruizok/perfect-freehand) (MIT) and written out as static geometry, so the

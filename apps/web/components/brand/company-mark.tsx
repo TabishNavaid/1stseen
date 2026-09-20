@@ -9,7 +9,9 @@ import { cn } from "@/lib/utils";
  * Content-Security-Policy stays `img-src 'self'`. A company with no usable favicon keeps its letter tile, which is
  * what every card had before and is a perfectly good mark.
  *
- * Either way it is decoration: the company's name is written beside it.
+ * Either way it is decoration: the company's name is written beside it. A mark is fetched lazily and decoded off the
+ * main thread, so a list of forty of them costs a phone nothing until they are scrolled to; `priority` is for the one
+ * mark that is already on the first screen, which should not be queued behind anything.
  */
 
 /** The key a logo is filed under: the company's name, folded the way scripts/fetch-company-logos.mjs folds it. */
@@ -27,7 +29,7 @@ const SIZE = {
   md: { box: "size-11 rounded-control", text: "text-sm", pixels: 44 },
 } as const;
 
-export function CompanyMark({ company, size = "md", className }: { company: string; size?: keyof typeof SIZE; className?: string }) {
+export function CompanyMark({ company, size = "md", priority = false, className }: { company: string; size?: keyof typeof SIZE; priority?: boolean; className?: string }) {
   const logo = COMPANY_LOGOS[companyKey(company)];
   const style = SIZE[size];
   return (
@@ -43,7 +45,7 @@ export function CompanyMark({ company, size = "md", className }: { company: stri
     >
       {logo
         // eslint-disable-next-line @next/next/no-img-element -- a small self-hosted icon, which the image optimizer skips
-        ? <img src={`/logos/${logo}`} alt="" width={style.pixels} height={style.pixels} className="size-full object-contain p-1.5" loading="lazy" decoding="async" />
+        ? <img src={`/logos/${logo}`} alt="" width={style.pixels} height={style.pixels} className="size-full object-contain p-1.5" loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "low"} decoding="async" />
         : companyInitials(company)}
     </span>
   );

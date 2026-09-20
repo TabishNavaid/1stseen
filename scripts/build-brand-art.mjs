@@ -4,24 +4,30 @@
  *
  * Two kinds come out of here, and neither is ever fetched by a browser:
  *
- *  - The bird, six poses, from `design-refs/bird/*.svg`. Those files are the record and are not written to; what is
+ *  - The bird, from `design-refs/bird/*.svg`, in the poses the product draws. Those files are the record and are not written to; what is
  *    written is their geometry with the palette's own names in place of the hex values, so a pose can never drift from
  *    the tokens. Their C2PA manifests stay in `design-refs`, which is where the provenance of the drawing belongs; the
  *    copy that goes inside a page carries only the drawing, the way docs/credits.md records for the Open Doodles.
  *  - The hand marks: arrows, a stamp ring, a sticker edge, section dividers. Drawn here with perfect-freehand, the
  *    same outline-of-a-stroke the bird is drawn with, so a mark beside the bird looks like the same hand made it.
+ *  - The mark itself: the bird's head, drawn here rather than cropped out of a pose, because a pose has legs, a tail
+ *    and a wing that turn to mud at 16 pixels. It goes beside the wordmark, and on the tile a tab and a home screen
+ *    show, where the outline is dropped and the paper shape is the whole silhouette.
  *
- * Run it with `npm run build:brand-art` after changing a pose or a mark. Output is committed.
+ * Run it with `npm run build:brand-art` after changing a pose or a mark. Output is committed, icons included.
  */
 
 import { getStroke } from "perfect-freehand";
+import sharp from "sharp";
 import { optimize } from "svgo";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const BIRDS = ["lookout", "happy", "confused", "sleeping", "waving", "letter"];
+// The poses the product actually draws. design-refs/bird holds all six; a pose nobody shows is 10 KB of a page for
+// nothing, so it is not written out until something asks for it.
+const BIRDS = ["lookout", "happy", "confused", "letter"];
 
 /** The drawing's own colours, and the token each becomes. The bird keeps its palette; the page keeps one source of it. */
 const PALETTE = [
@@ -155,6 +161,86 @@ const MARKS = {
   underline: { viewBox: "0 0 140 14", d: line([6, 8], [134, 6], { size: 4, taperStart: 40, taperEnd: 55 }) },
 };
 
+/** A leaf: two arcs from the same root to the same tip, bowed apart. The crest is made of these. */
+function leaf(base, tip, bulge = 0.3) {
+  const dx = tip[0] - base[0];
+  const dy = tip[1] - base[1];
+  const at = (side) => [base[0] + dx * 0.45 - dy * bulge * side, base[1] + dy * 0.45 + dx * bulge * side].map((value) => Math.round(value * 10) / 10);
+  return `M ${base[0]} ${base[1]} Q ${at(1).join(" ")} ${tip[0]} ${tip[1]} Q ${at(-1).join(" ")} ${base[0]} ${base[1]} Z`;
+}
+
+/** A closed shape from its corners, for the few pieces of the mark a pen would not wobble: the beak. */
+function polygon(points) {
+  return `M ${points.map(([x, y]) => `${x} ${y}`).join(" L ")} Z`;
+}
+
+/**
+ * The mark: the bird's head alone, at the weight it needs to survive a browser tab.
+ *
+ * It is drawn here rather than cut out of a pose. A pose is 19 shapes at 200 pixels and keeps its charm by having
+ * legs, a tail, feather ticks and a wing; at 16 pixels every one of those is a smudge. What actually carries the
+ * character that small is the round head, the coral beak, one eye and the sage crest, so that is what this draws,
+ * with the same pen and the same palette.
+ *
+ * Two assemblies come out of it. On paper the ink outline is the drawing and the fill is the paper behind it. On the
+ * tile the outline is dropped: the tile is the accent green, the paper shape is the whole silhouette, and the eye and
+ * the beak are the only marks on it. Dropping the outline is what makes the tile legible at 16 pixels, where a 1.5
+ * pixel ink line against a dark green ground is nothing at all.
+ */
+function birdMark() {
+  const head = { tag: "ellipse", fill: "var(--color-drawn-paper)", cx: 19.3, cy: 23.2, rx: 13.4, ry: 12.3 };
+  const outline = { tag: "path", fill: "var(--color-drawn-ink)", d: ring({ cx: 19.3, cy: 23.2, rx: 13.4, ry: 12.3, size: 3, from: 0.12, turns: 1.06 }) };
+  // The crest the happy and waving poses wear: three leaves swept back off the crown, away from the beak, so
+  // the tuft reads as a tuft and not as a pair of ears.
+  const crest = {
+    tag: "path",
+    fill: "var(--color-drawn-sage)",
+    d: [leaf([19.6, 16.4], [9.8, 6.2], 0.3), leaf([20.6, 15.6], [15.4, 3.4], 0.26), leaf([21.8, 16.6], [22.6, 4.8], 0.24)].join(" "),
+  };
+  const beak = { tag: "path", fill: "var(--color-drawn-beak)", d: polygon([[29.8, 21], [37.4, 24.6], [29.6, 26.8]]) };
+  const eye = { tag: "circle", fill: "var(--color-drawn-ink)", cx: 23.8, cy: 20.8, r: 2.2 };
+  // The cheek is the one mark that turns to a second beak when it is small, so only the drawn size wears it.
+  const cheek = { tag: "ellipse", fill: "var(--color-drawn-beak)", cx: 22.6, cy: 27.4, rx: 3, ry: 1.8 };
+  return {
+    viewBox: "6 2 33 34",
+    label: "1stSeen",
+    onPaper: [head, outline, crest, cheek, eye, beak],
+    onTile: [head, crest, eye, beak],
+  };
+}
+
+const MARK = birdMark();
+
+/** The mark's colours where a stylesheet cannot reach: a favicon, a home-screen icon, a picture in someone's feed. */
+const ICON_COLORS = {
+  "var(--color-drawn-ink)": "#23332c",
+  "var(--color-drawn-paper)": "#fffdf8",
+  "var(--color-drawn-beak)": "#e8826a",
+  "var(--color-drawn-sage)": "#b9d4be",
+};
+
+function shapeSvg(shape) {
+  const fill = ICON_COLORS[shape.fill] ?? shape.fill;
+  if (shape.tag === "path") return `<path fill="${fill}" d="${shape.d}"/>`;
+  if (shape.tag === "circle") return `<circle fill="${fill}" cx="${shape.cx}" cy="${shape.cy}" r="${shape.r}"/>`;
+  return `<ellipse fill="${fill}" cx="${shape.cx}" cy="${shape.cy}" rx="${shape.rx}" ry="${shape.ry}"/>`;
+}
+
+/**
+ * The tile, at whatever size is asked for: the accent green, rounded the way the wordmark's tile is rounded, with the
+ * mark set in it at nine tenths of the width so the beak never touches an edge.
+ */
+function tileSvg(size, radius = size * 0.25) {
+  const [minX, minY, width, height] = MARK.viewBox.split(" ").map(Number);
+  const scale = (size * 0.62) / Math.max(width, height);
+  const x = (size - width * scale) / 2 - minX * scale;
+  const y = (size - height * scale) / 2 - minY * scale;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">`
+    + `<rect width="${size}" height="${size}" rx="${radius}" fill="#183f35"/>`
+    + `<g transform="translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${scale.toFixed(4)})">${MARK.onTile.map(shapeSvg).join("")}</g>`
+    + `</svg>`;
+}
+
 const birds = Object.fromEntries(BIRDS.map((name) => [name, birdArt(name)]));
 const banner = "// Written by scripts/build-brand-art.mjs. Run `npm run build:brand-art` after changing a pose or a mark.";
 
@@ -184,6 +270,62 @@ export const HAND_MARKS = ${JSON.stringify(MARKS, null, 2)} as const satisfies R
 export type HandMarkName = keyof typeof HAND_MARKS;
 `);
 
+writeFileSync(resolve(ROOT, "apps/web/lib/brand/bird-mark.ts"), `${banner}
+
+import type { BirdShape } from "./bird-art.ts";
+
+/** One arrangement of the mark: the box it is drawn in and the shapes it is made of. */
+export type BirdMarkArt = { viewBox: string; shapes: readonly BirdShape[] };
+
+/**
+ * The bird's head at mark weight, in the two arrangements it is ever drawn in.
+ *
+ * On paper the ink outline is the drawing. On the accent tile the outline is dropped, because a dark line on a dark
+ * ground is nothing: there the paper shape is the whole silhouette, and the crest, the eye and the beak are the only
+ * marks on it. The same two arrangements make apps/web/public/favicon.svg and apple-touch-icon.png.
+ */
+export const BIRD_MARK = {
+  paper: ${JSON.stringify({ viewBox: MARK.viewBox, shapes: MARK.onPaper }, null, 2).replace(/\n/g, "\n  ")},
+  tile: ${JSON.stringify({ viewBox: MARK.viewBox, shapes: MARK.onTile }, null, 2).replace(/\n/g, "\n  ")},
+} as const satisfies Record<string, BirdMarkArt>;
+
+export type BirdMarkGround = keyof typeof BIRD_MARK;
+`);
+
+// The tab's icon, scalable, and a 32 pixel copy for the browsers that still want a raster one.
+writeFileSync(resolve(ROOT, "apps/web/public/favicon.svg"), `${svgo(tileSvg(64, 16), 2)}\n`);
+await sharp(Buffer.from(tileSvg(32, 8))).png({ compressionLevel: 9 }).toFile(resolve(ROOT, "apps/web/public/icon-32.png"));
+// A home screen draws its own rounded corners over this one, so the tile fills the square.
+await sharp(Buffer.from(tileSvg(180, 0))).png({ compressionLevel: 9 }).toFile(resolve(ROOT, "apps/web/public/apple-touch-icon.png"));
+
+/**
+ * The link preview: the landing page as it was on the day it was photographed, with the mark set into its corner so
+ * the picture carries the product's name even where the title is cropped away. Retake the photograph into
+ * scripts/assets/og-source.png from the live site and run this again; the source is never written to.
+ */
+const OG_MARK = 92;
+await sharp(resolve(ROOT, "scripts/assets/og-source.png"))
+  .composite([{ input: await sharp(Buffer.from(tileSvg(OG_MARK, 32))).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }])
+  .png({ compressionLevel: 9 })
+  .toFile(resolve(ROOT, "apps/web/public/og-image.png"));
+
+/** Proof that the mark still reads small: the tile at the three sizes that matter, on the page's own canvas. */
+const proof = [16, 32, 180];
+{
+  let x = 28;
+  const pieces = proof.map((pixels) => {
+    const piece = `<g transform="translate(${x} ${28 + (180 - pixels) / 2})">${tileSvg(pixels, pixels * 0.25).replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}`
+      + `<text x="${pixels / 2}" y="${pixels + 22}" font-family="monospace" font-size="13" fill="#18221f" text-anchor="middle">${pixels}px</text></g>`;
+    x += pixels + 56;
+    return piece;
+  });
+  writeFileSync(
+    resolve(ROOT, "design-refs/mark/tile-proof.svg"),
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${x}" height="260"><rect width="100%" height="100%" fill="#f3f1eb"/>${pieces.join("")}</svg>`,
+  );
+}
+
 const size = (value) => `${(value / 1024).toFixed(1)} KB`;
 for (const [name, art] of Object.entries(birds)) process.stdout.write(`bird ${name.padEnd(9)} ${art.shapes.length} shapes, ${size(JSON.stringify(art.shapes).length)}\n`);
 for (const [name, mark] of Object.entries(MARKS)) process.stdout.write(`mark ${name.padEnd(13)} ${size(mark.d.length)}\n`);
+process.stdout.write(`mark ${"bird".padEnd(13)} ${MARK.onPaper.length} shapes, ${size(JSON.stringify(MARK.onPaper).length)}\n`);

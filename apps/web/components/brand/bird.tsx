@@ -5,25 +5,25 @@ import { cn } from "@/lib/utils";
  * The bird, drawn inline (lib/brand/bird-art.ts, written by scripts/build-brand-art.mjs). It never costs a request
  * and never arrives after the words it belongs to.
  *
- * There is one of it, and it appears only where a person would feel something: looking out over the chart on the
- * landing page, pleased when a program is saved, asleep beside a watchlist with nothing on it, confused on a page
- * that is not there, waving when a way in is finished, and carrying a letter in a digest. Everywhere else the page
- * says what it means in words and leaves the bird out.
+ * It is the product's mark, not its cast. The people drawn by Open Doodles are what carry a moment at full size
+ * (components/doodle.tsx); the bird turns up small beside them, the way a signature does: perched on the corner of
+ * the chart card, next to the stamp on a save, beside a search that found nothing, at the head of a digest. One to a
+ * screen, and never large enough to take a moment away from the person in it.
  *
  * `label` makes it an image worth announcing; without one it is decoration and is hidden, because the sentence beside
  * it already says what happened.
  */
 
-/** 176 to 208px where the bird is the moment, 96 to 112 beside a confirmation, 56 to 72 tucked against something. */
+/** 56 to 72px perched on the edge of something, 48 to 64 beside a moment, 40 to 44 beside a line of words. */
 const SIZE = {
-  moment: "h-44 w-44 sm:h-52 sm:w-52",
-  confirm: "h-24 w-24 sm:h-28 sm:w-28",
-  tucked: "h-14 w-14 sm:h-[4.5rem] sm:w-[4.5rem]",
+  perch: "h-14 w-14 sm:h-[4.5rem] sm:w-[4.5rem]",
+  cameo: "h-12 w-12 sm:h-16 sm:w-16",
+  tiny: "h-10 w-10 sm:h-11 sm:w-11",
 } as const;
 
 export function Bird({
   pose,
-  size = "moment",
+  size = "cameo",
   label,
   className,
 }: {

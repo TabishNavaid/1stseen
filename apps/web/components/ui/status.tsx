@@ -85,7 +85,7 @@ export function EmptyState({
   className,
 }: {
   icon?: IconName;
-  /** The bird, for a state a person would feel something about. It wins over a doodle, and both win over the icon. */
+  /** The bird, small, beside whatever else is drawn: a cameo, never the illustration itself. */
   bird?: BirdPose;
   /** A hand-drawn character for the moment, in place of the icon: one mark above the words, never both. */
   doodle?: DoodleName;
@@ -98,9 +98,10 @@ export function EmptyState({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   return (
     <div className={cn("flex flex-col items-center px-6 py-10 text-center", className)}>
-      {bird ? <Bird pose={bird} className="bob-once mb-1" />
-        : doodle ? <Doodle name={doodle} size="empty" className="mb-2" />
-          : <Icon name={icon} size={20} className="text-ink-subtle" />}
+      <span className="mb-2 flex items-end justify-center gap-2">
+        {doodle ? <Doodle name={doodle} size="empty" /> : <Icon name={icon} size={20} className="text-ink-subtle" />}
+        {bird && <Bird pose={bird} size="tiny" className="bob-once mb-1" />}
+      </span>
       <Heading className="mt-3 text-sm font-semibold text-ink">{title}</Heading>
       {description && <p className="mt-1 max-w-sm text-xs leading-5 text-ink-subtle">{description}</p>}
       {action && <div className="mt-4">{action}</div>}

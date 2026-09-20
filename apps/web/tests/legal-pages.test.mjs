@@ -143,7 +143,8 @@ test("every link in the footer resolves to a page, with and without a contact ad
     const at = visible(html).indexOf("Opening dates on 1stSeen");
     const footer = visible(html).slice(visible(html).lastIndexOf("<footer", at), visible(html).indexOf("</footer>", at));
     const hrefs = [...footer.matchAll(/href="(\/[^"#]*)"/g)].map((match) => match[1]);
-    assert.deepEqual([...new Set(hrefs)].sort(), publishedSitePages(Boolean(email)).map((item) => item.href).sort());
+    // The wordmark goes home; everything after it is the published pages and nothing else.
+    assert.deepEqual([...new Set(hrefs)].sort(), ["/", ...publishedSitePages(Boolean(email)).map((item) => item.href)].sort());
     for (const href of hrefs) assert.equal((await render(href, env)).status, 200, `${href} resolves`);
   }
   assert.equal(SITE_PAGES.length, publishedSitePages(false).length + 1, "only the data-sources page waits for the address");

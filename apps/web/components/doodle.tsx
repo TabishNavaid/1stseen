@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
  * Every one of them is decoration: the words beside it say what happened, so each is `aria-hidden` with an empty alt
  * and nothing is lost when it is not drawn. One character marks one moment, and no screenful holds two.
  *
+ * Each is fetched lazily and decoded off the main thread: it is decoration, so it is never what a page waits on. One
+ * already in view still arrives with the first paint, because lazy only defers what is below the fold.
+ *
  * `size` is the weight of the moment, not a measurement: `hero` for a section of its own, `empty` for a state with
  * nothing in it, `small` for a confirmation or a step. Each character bobs once as it arrives (`bob-once`), and stays
  * still under prefers-reduced-motion. `hideOnPhone` leaves out the ones that would push the words below the fold.
@@ -80,6 +83,8 @@ export function Doodle({
       aria-hidden="true"
       width={art.width}
       height={art.height}
+      loading="lazy"
+      decoding="async"
       className={cn("bob-once w-auto max-w-full select-none", SIZE[size], hideOnPhone && "max-sm:hidden", className)}
     />
   );

@@ -18,13 +18,13 @@ export function RolePreviewCard({ preview }: { preview: LandingPreview }) {
   return (
     <article aria-labelledby="preview-role" className="card relative p-5 sm:p-6">
       {/*
-        The bird looking out over the card, which is the whole product in one gesture: something is watching this
-        program so the reader does not have to. It is decoration and is left out on a phone, where the card has to
-        reach the fold on its own.
+        The bird perched on the corner of the card, which is the whole product in one gesture: something is watching
+        this program so the reader does not have to. It is decoration and is left out on a phone, where the card has
+        to reach the fold on its own.
       */}
-      <Bird pose="lookout" size="tucked" className="absolute -top-10 right-5 hidden sm:block bob-once" />
+      <Bird pose="lookout" size="perch" className="bob-once absolute -top-10 right-5 hidden sm:block" />
       <div className="flex items-start gap-3">
-        <CompanyMark company={preview.company} />
+        <CompanyMark company={preview.company} priority />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink-muted">{preview.company} <span className="font-normal text-ink-subtle">· {preview.programType}</span></p>
           <h2 id="preview-role" className="mt-0.5 text-lg font-semibold leading-snug tracking-title text-ink">

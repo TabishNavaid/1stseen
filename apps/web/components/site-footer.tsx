@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/brand-mark";
 import { getContactEmail } from "@/lib/config";
 import { publishedSitePages, sitePage } from "@/lib/site-links";
 
@@ -12,11 +13,14 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-line bg-surface-sunken">
       <div className="mx-auto grid max-w-[1500px] gap-4 px-4 py-6 md:grid-cols-[minmax(0,1fr)_auto] md:gap-10 md:px-6">
-        <p className="max-w-3xl text-caption leading-5 text-ink-muted">
-          Opening dates on 1stSeen are predictions from each program&apos;s public posting history, and their accuracy is not
-          yet validated. 1stSeen is independent, and not affiliated with or endorsed by any company it lists.{" "}
-          <Link href={methodology.href} className="link-accent focus-ring">How forecasts are made, and how accurate they are</Link>
-        </p>
+        <div className="max-w-3xl">
+          <BrandMark className="-ml-1" />
+          <p className="mt-2 text-caption leading-5 text-ink-muted">
+            Opening dates on 1stSeen are predictions from each program&apos;s public posting history, and their accuracy is
+            not yet validated. 1stSeen is independent, and not affiliated with or endorsed by any company it lists.{" "}
+            <Link href={methodology.href} className="link-accent focus-ring">How forecasts are made, and how accurate they are</Link>
+          </p>
+        </div>
         <nav aria-label="About 1stSeen">
           <ul className="flex flex-wrap gap-x-4 gap-y-1 md:max-w-[340px] md:justify-end">
             {publishedSitePages(getContactEmail() !== null).map((page) => (

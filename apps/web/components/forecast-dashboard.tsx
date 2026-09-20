@@ -248,7 +248,7 @@ export function ForecastDashboard({
           {items.length === 0 && mode !== "unconfigured" && emptyWatchlist && (
             <div className="card mt-4">
               <EmptyState
-                bird="sleeping"
+                doodle="plant"
                 title="Your watchlist is empty"
                 description={
                   signedInAs
@@ -270,6 +270,7 @@ export function ForecastDashboard({
             <div className="card mt-4">
               <EmptyState
                 doodle="readingSide"
+                bird="confused"
                 title={pastLastPage ? "This page is past the last listed program" : applied.length ? "No programs match these filters" : "No program has been collected yet"}
                 description={
                   pastLastPage

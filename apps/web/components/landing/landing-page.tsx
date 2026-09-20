@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { CountUp } from "@/components/count-up";
 import { HandMark } from "@/components/brand/hand-mark";
+import { Doodle } from "@/components/doodle";
 import { NewSticker, openedJustNow } from "@/components/brand/marks";
 import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
@@ -161,6 +162,8 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
                 <p className="mt-4 max-w-sm text-base leading-7 text-ink-muted">
                   Three steps between a program going up on a company&rsquo;s site and you knowing it is about to.
                 </p>
+                {/* Reading the pages, one year at a time: the work the three steps beside this describe. */}
+                <Doodle name="sittingReading" size="hero" hideOnPhone className="mt-8" />
               </div>
               <ol className="m-0 grid list-none gap-4 p-0">
                 {HOW.map((step, index) => (
@@ -221,6 +224,8 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           <span className="glow glow-accent left-1/2 top-0 size-[34rem] -translate-x-1/2" aria-hidden="true" />
           <span className="glow glow-warm right-10 bottom-0 size-[22rem]" aria-hidden="true" />
           <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
+            {/* Off at a run: the page ends where watching starts. */}
+            <Doodle name="sprinting" size="hero" className="mb-6 max-sm:h-40" />
             <h2 id="start-title" className="heading-display text-3xl leading-tight sm:text-4xl">Start watching the programs you care about</h2>
             <p className="mt-3 max-w-lg text-base leading-7 text-ink-muted">Pick a few, and their likely dates and prep plan are waiting the next time you open 1stSeen.</p>
             <Link href="/welcome" className="press focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">

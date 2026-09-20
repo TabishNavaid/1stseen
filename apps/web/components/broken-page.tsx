@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
-import { IllustratedMessage, primaryActionClass, quietLinkClass } from "@/components/illustrated-message";
+import { ILLUSTRATIONS, IllustratedMessage, primaryActionClass, quietLinkClass } from "@/components/illustrated-message";
 
 /**
  * What a visitor sees when a page fails on the server. It says so plainly and offers a retry and a way home; what
@@ -17,6 +17,7 @@ export function BrokenPage({ reset }: { reset: () => void }) {
       </header>
       <main id="error-content" className="flex flex-1 items-center justify-center px-4 py-12 md:py-16">
         <IllustratedMessage
+          art={ILLUSTRATIONS.clumsy}
           titleId="error-title"
           title="Well, that tripped us up."
           text="Something broke on our side. Give it a minute and try again."
