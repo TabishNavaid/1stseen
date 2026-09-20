@@ -85,15 +85,12 @@ test("role intelligence distinguishes signals, reliability, and model ownership"
 
 test("a shared link previews as the production landing page, at the size link previews expect", async () => {
   const html = await (await render("/")).text();
-  assert.match(html, /<meta property="og:image" content="[^"]*\/og-image\.png"/);
+  assert.match(html, /<meta property="og:image" content="[^"]*\/og-image\.jpg"/);
   assert.match(html, /<meta property="og:image:width" content="1200"/);
   assert.match(html, /<meta property="og:image:height" content="630"/);
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/);
-  assert.match(html, /<meta name="twitter:image" content="[^"]*\/og-image\.png"/);
-  // The file itself is a PNG of exactly that size: its header's width and height fields.
-  const png = readFileSync(new URL("../public/og-image.png", import.meta.url));
-  assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
-  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [1200, 630]);
+  assert.match(html, /<meta name="twitter:image" content="[^"]*\/og-image\.jpg"/);
+  // The picture itself, and the rest of the card's names, are checked in tests/brand-mark.test.mjs.
 });
 
 test("a role page reads top to bottom: the date and Save, History, Prep plan, Ask, then one collapsed expander", async () => {

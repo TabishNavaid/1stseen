@@ -111,7 +111,8 @@ Versions worth knowing (19 September 2026):
 | `2bed8d50-1e99-48c9-8278-79d4cfb7faa6` | | The last version before the redesign (deployed 16:39 UTC): the dashboard at `/` |
 
 To tell them apart on the live site: before the redesign, `/` has no "Know when internships open"; from `88e2eff0` on,
-the pages name `og-image.png`; and from `73c7424a` on, a missing page draws a character:
+the pages name `og-image.png`; from `73c7424a` on, a missing page draws a character; and from the bird on, the
+link preview is `og-image.jpg` and the page draws its wordmark inline:
 
 ```bash
 curl -s -H "Accept: text/html" https://1stseen.win/this-page-does-not-exist | grep -o "illustrations/[a-z-]*\.svg"

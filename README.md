@@ -5,7 +5,7 @@
 <h3 align="center"><a href="https://1stseen.win">Open 1stseen.win &rarr;</a></h3>
 
 <p align="center">
-  <a href="https://1stseen.win"><img src="docs/screenshots/landing.png" alt="The 1stSeen landing page: Know when internships open, before everyone else, beside a real program and the date it is likely to open next." /></a>
+  <a href="https://1stseen.win"><img src="docs/screenshots/landing.jpg" alt="The 1stSeen landing page: Know when internships open, before everyone else, beside a real program, the years it opened in, and the window it is likely to open in next." /></a>
 </p>
 
 ## What it does
@@ -16,13 +16,13 @@
 
 ## Screenshots
 
-| Explore every program | A program's page |
+| A program's page | Programs you watch |
 | :---: | :---: |
-| ![Explore: every program with its likely opening date and confidence](docs/screenshots/explore.png) | ![A program's page: its likely date, window, and when it opened before](docs/screenshots/role.png) |
-| **Just opened** | **Getting started** |
-| ![Just opened: programs that opened in the last 45 days, each linked to its posting](docs/screenshots/just-opened.png) | ![Getting started: one question per screen, starting with what you are looking for](docs/screenshots/onboarding.png) |
-| **Opening soon, on the home page** | **On a phone** |
-| ![Opening soon: six programs with their likely dates](docs/screenshots/opening-soon.png) | ![A program's page on a phone](docs/screenshots/phone.png) |
+| ![A program's page: its likely date, the window around it, how many days until that window opens, and every time it opened before](docs/screenshots/program.jpg) | ![The watchlist: the programs you saved, each with the date it is likely to open next and a confidence](docs/screenshots/watchlist.jpg) |
+
+<p align="center">
+  <img src="docs/screenshots/not-found.jpg" alt="A page that is not there: This page hasn't opened yet, with one way home" width="640" />
+</p>
 
 ## How it works
 

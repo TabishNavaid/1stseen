@@ -21,7 +21,7 @@ import { getStroke } from "perfect-freehand";
 import sharp from "sharp";
 import { optimize } from "svgo";
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -331,30 +331,34 @@ await sharp(markBuffer(MARK_SOURCES.mark))
   .toFile(resolve(ROOT, "apps/web/public/apple-touch-icon.png"));
 
 /**
- * The link preview: the landing page as it was on the day it was photographed. Retake it from the live site into
- * scripts/assets/og-source.png at 1200 by 630, which is the size a preview is cropped to, and run this again; the
- * source is never written to, so a later change to this step does not need another photograph.
+ * The link preview: a photograph of the live landing page.
  *
- * The mark is no longer set into a corner. It was put there when the photograph was of a site whose header carried
- * no mark at all; now the header in the photograph is the mark, drawn larger and in its right place, and a second
- * copy in the corner only covered the card it sat on. Turn CORNER_MARK back on to have both.
+ * Take it at 1160 by 609 with a device pixel ratio of 2, which is 2320 by 1218 of real pixels, and save it to
+ * scripts/assets/og-source.png; this downscales it to the 1200 by 630 a preview is cropped to. Photographing at
+ * twice the size and scaling down with Lanczos is what makes the text crisp rather than soft, and 1160 is the widest
+ * frame that still holds both buttons and the whole card. Take it from the live site, never from a development
+ * server, and never from a build with fixture data in it.
  *
- * A screenshot of this page is a few flat colours, a gradient and the page's grain, so a palette of 128 holds it at
- * a mean error of 1.3 of 255 and about a tenth of the bytes. What that costs is a little dither in the warm wash on
- * the right, which at preview size reads as the grain that is already there.
+ * The photograph is not kept. It is a megabyte of a page that has already moved on, and retaking it is half a minute,
+ * so .gitignore has it and only the preview below is committed. Without it this step says so and leaves the preview
+ * alone.
+ *
+ * JPEG rather than PNG. A screenshot of this page is a gradient, the page's grain and a lot of small text, and a
+ * palette small enough to hold the file under 200 KB banded the gradient; quality 92 with no chroma subsampling
+ * keeps every edge of the type and comes in around 105 KB. The mark is not set into a corner: the header in the
+ * photograph is the mark, and a second copy only covered the card it sat on.
  */
-const CORNER_MARK = false;
-const OG_MARK = 96;
-const preview = sharp(resolve(ROOT, "scripts/assets/og-source.png"));
-if (CORNER_MARK) {
-  preview.composite([{ input: await sharp(markBuffer(MARK_SOURCES.mark)).resize(OG_MARK, OG_MARK).png().toBuffer(), top: 630 - OG_MARK - 28, left: 1200 - OG_MARK - 28 }]);
+const OG_SOURCE = resolve(ROOT, "scripts/assets/og-source.png");
+if (existsSync(OG_SOURCE)) {
+  await sharp(OG_SOURCE)
+    .resize(1200, 630, { kernel: "lanczos3" })
+    .flatten({ background: "#f3f1eb" })
+    .removeAlpha()
+    .jpeg({ quality: 92, chromaSubsampling: "4:4:4", mozjpeg: true })
+    .toFile(resolve(ROOT, "apps/web/public/og-image.jpg"));
+} else {
+  process.stdout.write(`link preview  left alone: no photograph at ${OG_SOURCE.slice(ROOT.length + 1)}\n`);
 }
-await preview
-  // A photograph has nothing to see through, and an alpha channel it never uses is a tenth of the file.
-  .flatten({ background: "#f3f1eb" })
-  .removeAlpha()
-  .png({ compressionLevel: 9, palette: true, colours: 128, dither: 1 })
-  .toFile(resolve(ROOT, "apps/web/public/og-image.png"));
 
 const size = (value) => `${(value / 1024).toFixed(1)} KB`;
 for (const [name, art] of Object.entries(birds)) process.stdout.write(`bird ${name.padEnd(9)} ${art.shapes.length} shapes, ${size(JSON.stringify(art.shapes).length)}\n`);

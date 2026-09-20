@@ -43,6 +43,9 @@ yarn-error.log*
 /work/
 # scripts/bootstrap-companies.sh discovery output
 /.bootstrap-logs/
+# The photograph the link preview is made from: a megabyte of a site that has already moved on.
+# Retake it rather than keep it (apps/web/app/layout.tsx).
+/scripts/assets/og-source.png
 
 # python
 .venv/

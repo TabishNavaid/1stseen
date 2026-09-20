@@ -45,6 +45,20 @@ function png(name) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20), colourType: bytes[25] };
 }
 
+/** A JPEG says its size in a start-of-frame marker, which has to be walked to: the segments before it vary. */
+function jpeg(name) {
+  const bytes = readFileSync(asset(name));
+  assert.equal(bytes.readUInt16BE(0), 0xffd8, `${name} is a JPEG`);
+  for (let at = 2; at < bytes.length - 9; at += 2 + bytes.readUInt16BE(at + 2)) {
+    const marker = bytes.readUInt16BE(at);
+    // C0, C1 and C2 are baseline, extended and progressive; C4, C8 and CC are tables, not frames.
+    if (marker >= 0xffc0 && marker <= 0xffcf && ![0xffc4, 0xffc8, 0xffcc].includes(marker)) {
+      return { width: bytes.readUInt16BE(at + 7), height: bytes.readUInt16BE(at + 5), bytes: bytes.length };
+    }
+  }
+  throw new Error(`${name} has no start-of-frame marker`);
+}
+
 test("the shipped mark is one drawing at two weights, in the palette it arrived in", () => {
   const shipped = Object.entries(BIRD_MARK);
   for (const [kind, art] of shipped) {
@@ -86,15 +100,15 @@ test("the raster icons are the sizes the browsers and the home screen ask for", 
   assert.deepEqual(png("apple-touch-icon.png"), { width: 180, height: 180, colourType: 2 });
 });
 
-test("the link preview is the size a preview is cropped to, opaque, and small enough to arrive", () => {
-  const preview = png("og-image.png");
+test("the link preview is the size a preview is cropped to, and small enough to arrive", () => {
+  const preview = jpeg("og-image.jpg");
   assert.equal(preview.width, 1200);
   assert.equal(preview.height, 630);
-  // 4 and 6 are the colour types that carry an alpha channel, and a photograph has nothing to see through.
-  assert.ok(![4, 6].includes(preview.colourType), `og-image.png carries an alpha channel it never uses`);
-  // A photograph of this page is a few flat colours, a gradient and the grain, so a palette holds it in a tenth
-  // of the bytes; a full-colour screenshot of it is over half a megabyte in front of a link.
-  assert.ok(readFileSync(asset("og-image.png")).length < 150_000, "the link preview stays small");
+  // Photographed at twice this and scaled down, so the type is crisp; a palette small enough to fit the budget
+  // banded the gradient, and a full-colour copy is most of a megabyte in front of a link.
+  assert.ok(preview.bytes < 200_000, `the link preview stays small: ${preview.bytes} bytes`);
+  // The photograph it is made from is not kept, because retaking it is quicker than storing it.
+  assert.equal(existsSync(new URL("../../../apps/web/public/og-image.png", import.meta.url)), false, "the old PNG is gone");
 });
 
 test("a page names all three icons, draws the mark inline at both ends, and repeats no id", async () => {
@@ -113,4 +127,30 @@ test("a page names all three icons, draws the mark inline at both ends, and repe
   // Two clips, two names: a document cannot hold the same id twice.
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual([...new Set(ids)].length, ids.length, ids.join(", "));
+});
+
+test("the social card names its kind, its words and its picture, under both sets of names", async () => {
+  const html = await render("/", { FIRSTSEEN_DEMO_MODE: "true" });
+  const meta = (key) => new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`).exec(html)?.[1];
+
+  // A large picture with the words beside it, rather than a thumbnail.
+  assert.equal(meta("twitter:card"), "summary_large_image");
+  for (const key of ["og:title", "og:description", "twitter:title", "twitter:description"]) {
+    assert.ok((meta(key) ?? "").length > 10, `${key} is missing or too short`);
+  }
+  assert.equal(meta("og:type"), "website");
+  assert.equal(meta("og:site_name"), "1stSeen");
+
+  // A preview will not fetch a relative picture, so both names carry the whole address, and it is the file we ship.
+  for (const key of ["og:image", "twitter:image"]) {
+    const url = meta(key);
+    assert.match(url ?? "", /^https?:\/\/[^/]+\/og-image\.jpg$/, key);
+  }
+  assert.equal(meta("og:image"), meta("twitter:image"), "one picture, named twice");
+  assert.match(meta("og:url") ?? "", /^https?:\/\/[^/]+$/);
+  assert.equal(meta("og:image:width"), "1200");
+  assert.equal(meta("og:image:height"), "630");
+  assert.equal(meta("og:image:type"), "image/jpeg");
+  // The alt is what someone who cannot see the picture is told the link looks like.
+  assert.ok((meta("og:image:alt") ?? "").length > 20);
 });

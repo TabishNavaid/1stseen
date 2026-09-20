@@ -18,13 +18,14 @@ const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axe
 // The one handwritten voice: notes on the chart, and the words inside a sticker or a stamp. Nowhere else.
 const caveat = Caveat({ variable: "--font-caveat", subsets: ["latin"], weight: ["600", "700"], preload: false });
 
-// A photograph of the production landing page at 1200 by 630, the size link previews expect. It shows real data as it
-// was on the day it was taken: retake it from the live site into scripts/assets/og-source.png and run
-// `npm run build:brand-art`, which is what shrinks it, never from a development server.
+// A photograph of the production landing page at 1200 by 630, the size link previews are cropped to. It shows real
+// data as it was on the day it was taken: retake it from the live site into scripts/assets/og-source.png and run
+// `npm run build:brand-art`, which says there how to frame it, never from a development server.
 const SOCIAL_IMAGE = {
-  url: "/og-image.png",
+  url: "/og-image.jpg",
   width: 1200,
   height: 630,
+  type: "image/jpeg",
   alt: "The 1stSeen landing page: Know when internships open, before everyone else, beside one program's likely opening date.",
 };
 
@@ -50,9 +51,18 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "1stSeen: know when internships open",
       description: "Likely opening dates, the postings behind them, and a prep plan for the programs you save.",
       type: "website",
+      siteName: "1stSeen",
+      url: origin,
       images: [SOCIAL_IMAGE],
     },
-    twitter: { card: "summary_large_image", images: [SOCIAL_IMAGE] },
+    // The card, its words and its picture, said again under the names the timeline reads. The picture is resolved
+    // against metadataBase above, so it goes out as an absolute URL, which is the only kind a preview will fetch.
+    twitter: {
+      card: "summary_large_image",
+      title: "1stSeen: know when internships open",
+      description: "Likely opening dates, the postings behind them, and a prep plan for the programs you save.",
+      images: [SOCIAL_IMAGE],
+    },
   };
 }
 
