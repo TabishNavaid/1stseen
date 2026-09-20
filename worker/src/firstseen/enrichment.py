@@ -26,6 +26,7 @@ from .role_resolution import (
     RoleResolver,
 )
 from .scope import RoleScopeService
+from .security import redact_sensitive_text
 
 # An archived career page is attributed to a role by the reconstruction rule that
 # requires at least 75% canonical-title or alias token overlap. It is weaker than a
@@ -306,7 +307,13 @@ class EvidenceEnrichmentService:
         counters.diagnostics.append(
             CollectionDiagnostic(
                 code="historical_reconstruction_failed",
-                message=f"Historical reconstruction failed for one role: {type(exc).__name__}.",
+                # With the reason, redacted. The type alone is not diagnosable: one SpaceX role failed this way on
+                # 2026-09-20 with "APIError." and nothing else, so what the database refused could not be told from
+                # the run at all. Postgres says which constraint it was; that is what has to survive.
+                message=(
+                    f"Historical reconstruction failed for one role: {type(exc).__name__}: "
+                    f"{redact_sensitive_text(exc)[:500]}"
+                ),
                 severity="error",
                 details={"canonical_role_id": str(role_id)},
             )

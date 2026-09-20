@@ -45,6 +45,24 @@ from quantitative metrics with an explicit skip reason. Treating its capture dat
 errors and coverage outcomes. Every completed case stores the representative date, actual interval bounds, and
 target precision. Backtest output schema version 2 reflects this semantic change.
 
+## What production can score today
+
+The first production backtest ran on 2026-09-20 over the hosted corpus (79 companies, 516 in-scope roles) and
+scored **0 of 632 targets** in 69 seconds. Both skip reasons are the design working, not a failure:
+
+| Skipped | Why |
+| --- | --- |
+| 468 | No temporal evidence existed by the forecast cutoff. Scoring a 2016 opening leakage-safely needs evidence from before 2016, and the archive coverage behind those cycles does not reach back that far. |
+| 164 | The held-out opening is observed-by only, so there is no actual interval to score against. |
+
+14,453 out-of-scope targets were excluded before any of this, as they should be.
+
+So **the forecast model's accuracy is currently unmeasured on production data**, and no calibration claim can be
+made from it. Two things change that, both slow by nature: the weekly historical run deepening archive evidence
+before each cycle, and more openings arriving with an exact `published_at` rather than an observed-by boundary.
+Until a run reports a non-zero `case_count`, treat the published confidence intervals as the model's own stated
+uncertainty, not as validated calibration.
+
 ## Metrics and confidence diagnostics
 
 Metrics use completed cases only; empty aggregates are JSON `null`.
