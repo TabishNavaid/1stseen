@@ -141,6 +141,9 @@ class SignalAdapterResult:
     evidence_text: str
     document_hash: str
     byte_count: int
+    # Children of a sitemap index that could not be read: skipped rather than failing the source, and reported so a
+    # site that stops serving one is visible instead of silent.
+    unreadable_children: tuple[str, ...] = ()
 
 
 class RecruitingSignalAdapter(ABC):
@@ -375,6 +378,7 @@ class RecruitingSitemapSignalAdapter(RecruitingSignalAdapter):
         previous_state: SignalSourceState | None,
     ) -> SignalAdapterResult:
         documents: list[bytes] = []
+        unreadable: list[str] = []
         urls = self._urls(
             str(source.url),
             transport,
@@ -382,6 +386,7 @@ class RecruitingSitemapSignalAdapter(RecruitingSignalAdapter):
             0,
             min(25, max(1, _safe_int(source.options.get("max_sitemaps"), 5))),
             set(),
+            unreadable,
         )
         relevant_urls = sorted({url for url in urls if _relevant(urlparse(url).path.replace("-", " "))})
         prior_urls = set(previous_state.urls if previous_state else ())
@@ -410,6 +415,7 @@ class RecruitingSitemapSignalAdapter(RecruitingSignalAdapter):
             state.normalized_text or "No recruiting sitemap URLs",
             combined_hash,
             sum(len(item) for item in documents),
+            unreadable_children=tuple(unreadable),
         )
 
     def _urls(
@@ -420,13 +426,25 @@ class RecruitingSitemapSignalAdapter(RecruitingSignalAdapter):
         depth: int,
         max_sitemaps: int,
         visited: set[str],
+        unreadable: list[str] | None = None,
     ) -> list[str]:
         if url in visited or len(visited) >= max_sitemaps:
             return []
         visited.add(url)
-        document = transport.get(url, accept="application/xml,text/xml")
+        try:
+            document = transport.get(url, accept="application/xml,text/xml")
+            root = parse_untrusted_xml(document.body)
+        except Exception:
+            # One child of an index is not the source. Dropbox's index lists ten children and one of them,
+            # /business/sitemap.xml, answers with an HTML page: refusing it (rightly -- it carries a doctype) used to
+            # raise and fail the whole source, discarding nine siblings including two with 370 KB of URLs between them.
+            # Collection has isolated a child like this from the start (adapters/feeds.py); signals now does too. The
+            # source's own document still raises, because a source that cannot be read at all has nothing to diff.
+            if depth == 0 or unreadable is None:
+                raise
+            unreadable.append(url)
+            return []
         documents.append(document.body)
-        root = parse_untrusted_xml(document.body)
         locations = [
             child.text.strip() for child in root.iter() if _local_name(child.tag) == "loc" and child.text
         ]
@@ -435,7 +453,7 @@ class RecruitingSitemapSignalAdapter(RecruitingSignalAdapter):
         nested: list[str] = []
         for location in sitemap_children(locations):
             nested.extend(
-                self._urls(location, transport, documents, depth + 1, max_sitemaps, visited)
+                self._urls(location, transport, documents, depth + 1, max_sitemaps, visited, unreadable)
             )
         return nested
 
@@ -515,6 +533,8 @@ class SignalIngestionSummary:
     signal_ids: tuple[UUID, ...]
     # Set when the source was not read at all, to the typed reason (`robots_disallowed`, `robots_unreachable`).
     skipped: str | None = None
+    # Children of a sitemap index that could not be read; the source itself was read.
+    unreadable_children: tuple[str, ...] = ()
 
 
 class RecruitingSignalIngestionService:
@@ -561,6 +581,7 @@ class RecruitingSignalIngestionService:
             unchanged,
             tuple(sorted(role_ids, key=str)),
             tuple(signal_ids),
+            unreadable_children=result.unreadable_children,
         )
 
     def _record_signals(

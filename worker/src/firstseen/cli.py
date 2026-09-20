@@ -1254,6 +1254,8 @@ def run_signal_ingestion(company: str | None) -> int:
                     "affected_roles": len(summary.affected_role_ids),
                     "forecast_changes": changes,
                     "skipped": summary.skipped,
+                    # Children of a sitemap index that could not be read, so a site that stops serving one is visible.
+                    "unreadable_children": list(summary.unreadable_children[:20]),
                 },
                 started_at=started_at,
             )
