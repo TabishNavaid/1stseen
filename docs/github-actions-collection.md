@@ -12,7 +12,7 @@ GitHub schedules use UTC, run only from the default branch, and can start late w
 | Workflow | Schedule (UTC) | Timeout | Purpose |
 | --- | --- | --- | --- |
 | `current-jobs.yml` | 00:17, 12:17 | 45 min | Current ATS, career-page, feed, and sitemap job observations, then enrichment |
-| `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
+| `career-page-signals.yml` | 01:37, 13:37 | 45 min | Material page, feed, sitemap, and optional Reddit signals |
 | `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | 25 min | Only roles affected by changed persisted evidence, then readiness plans and the health report |
 | `historical-enrichment.yml` | Sunday 04:07 | 90 min | Wayback captures and archived recruiting observations, then enrichment |
 | `backtest.yml` | 3rd of the month 05:23, and by hand | 45 min | Leak-free rolling-origin evaluation (60-day cutoff when scheduled), then the scored-case history |

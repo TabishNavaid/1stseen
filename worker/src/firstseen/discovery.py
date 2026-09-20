@@ -476,6 +476,29 @@ def board_names_company(board_name: str, company_name: str, domain: str) -> bool
 _TITLE_SEPARATOR = re.compile(r"\s+[|–—·:-]\s+|\s*\|\s*")
 
 
+# Words a page adds after a company's name, which are not part of it. A name is cut at the first of them.
+_NOT_PART_OF_A_NAME = re.compile(
+    r"\s+(?:homepage|home|official\s+(?:site|website)|website|careers?|jobs?|store|shop|blog|login|sign\s?in)\b.*$",
+    re.IGNORECASE,
+)
+# Legal forms, which a company writes on a contract and not on its own front page.
+_LEGAL_FORM = re.compile(
+    r"[,\s]+(?:inc|inc\.|incorporated|llc|l\.l\.c\.|ltd|ltd\.|limited|corp|corp\.|corporation|plc|gmbh|ag|sa|s\.a\.|bv|b\.v\.|nv|pty|pte)\.?$",
+    re.IGNORECASE,
+)
+
+
+def _tidy_identity_name(name: str) -> str:
+    """One page-supplied name with what a page adds to it removed: "Reddit, Inc. Homepage" is "Reddit"."""
+    tidied = _NOT_PART_OF_A_NAME.sub("", name).strip().strip("-–—|·:,")
+    for _ in range(2):  # "Example Holdings Ltd, Inc." — two at most, and never past the whole name
+        shorter = _LEGAL_FORM.sub("", tidied).strip()
+        if shorter == tidied or not shorter:
+            break
+        tidied = shorter
+    return tidied or name.strip()
+
+
 def _identity_name(page: _Page, domain: str) -> str | None:
     """The page's own name for the company, when one of its names spells the domain.
 
@@ -483,19 +506,36 @@ def _identity_name(page: _Page, domain: str) -> str | None:
     segment of its title says "AbbVie". A name that spells the domain ("AbbVie" at abbvie.com, "Shield AI"
     at shield.ai) is chosen first, then one that begins with it ("Scale AI" at scale.com). None means no
     name spells it, and the structured name is used as before.
+
+    A page says the same name in several ways, and the stored one is read by people, so among the names that spell the
+    domain the most written-out form wins: "Jane Street" over "Janestreet", "Figure AI" over "FigureAI". Whichever is
+    chosen, what the page adds around it goes: "Pinterest Careers" is Pinterest, "Reddit, Inc. Homepage" is Reddit,
+    "Epic Games Store" is Epic Games, "VIRTU Financial Inc." is VIRTU Financial. Each of those was stored as a
+    company's name on 2026-09-20, before this.
+
+    Where a name ends is not guessed. "Snowflake AI Data Cloud" is a tagline and "Scale AI" is a name, and nothing on
+    either page distinguishes them, so a trailing phrase that is neither page furniture nor a legal form is kept: the
+    first is corrected in the data once, and `save_company_discovery` then leaves a stored name alone.
     """
     labels = domain.split(".")
     stem = identity_key(labels[-2] if len(labels) > 1 else domain)
+    accepted = {stem, identity_key(domain)}
     names = [
         html_unescape(value).strip()
         for value in (page.organization_name, page.site_name, *_TITLE_SEPARATOR.split(page.title or ""))
         if value and value.strip()
     ]
-    spelled = [name for name in names if identity_key(name) in {stem, identity_key(domain)}]
+    spelled = [name for name in names if identity_key(name) in accepted]
     if spelled:
-        return next((name for name in spelled if name != name.casefold()), spelled[0])
+        # Written out beats squashed together, and mixed case beats one case, before the page's own order decides.
+        chosen = min(
+            spelled,
+            key=lambda name: (-name.count(" "), name == name.casefold() or name == name.upper(), names.index(name)),
+        )
+        return _tidy_identity_name(chosen)
     if len(stem) >= 4:
-        return next((name for name in names if identity_key(name).startswith(stem)), None)
+        begins = next((name for name in names if identity_key(name).startswith(stem)), None)
+        return _tidy_identity_name(begins) if begins else None
     return None
 
 

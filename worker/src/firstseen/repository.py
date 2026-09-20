@@ -459,14 +459,18 @@ class IntelligenceRepository:
         identity = discovery.identity
         # bounded: an existence check on the unique company domain, one row at most.
         company_query = (
-            self.client.table("companies").select("id").eq("domain", identity.domain).limit(1).execute()
+            self.client.table("companies").select("id,name").eq("domain", identity.domain).limit(1).execute()
         )
         company_rows = cast(list[dict[str, Any]], company_query.data or [])
         if company_rows:
             # A company that asked to be left alone is not re-identified or re-sourced (docs/takedown.md).
             self._refuse_if_held(UUID(str(company_rows[0]["id"])), identity.domain)
         company_payload: dict[str, Any] = {
-            "name": identity.name,
+            # A company keeps the name it is already stored under. A page's name for itself is a starting point, not a
+            # correction: ten of the 80 stored names read as page titles on 2026-09-20 ("Reddit Inc Homepage",
+            # "Snowflake AI Data Cloud") and were corrected by hand, and re-running discovery would otherwise put every
+            # one of them back.
+            "name": str(company_rows[0]["name"]) if company_rows and company_rows[0].get("name") else identity.name,
             "domain": identity.domain,
             "careers_url": str(identity.careers_url) if identity.careers_url else None,
             "recruiting_url": str(identity.recruiting_url) if identity.recruiting_url else None,

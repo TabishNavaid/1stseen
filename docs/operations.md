@@ -9,7 +9,7 @@ allows. Every number here was measured on the local rig on 18 September 2026 unl
 | Workflow | Schedule (UTC) | What it does | On failure |
 | --- | --- | --- | --- |
 | `current-jobs.yml` | 00:17, 12:17 | Current postings from every enabled source | ops-alert issue |
-| `career-page-signals.yml` | 01:37, 07:37, 13:37, 19:37 | Career-page changes and recruiting signals | ops-alert issue |
+| `career-page-signals.yml` | 01:37, 13:37 | Career-page changes and recruiting signals | ops-alert issue |
 | `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | Re-forecasts changed roles, writes plans, then `collection-health --alert` | ops-alert issue, and a separate "Collection health" issue for any warning |
 | `historical-enrichment.yml` | Sunday 04:07 | Wayback history | ops-alert issue |
 | `backup-corpus.yml` | Monday 05:41 | Dumps the corpus, proves it restores, keeps it 14 days | ops-alert issue |
@@ -214,19 +214,40 @@ September 2026; check the providers' pages before relying on them.
 
 | Limit | Free tier | 1stSeen |
 | --- | --- | --- |
-| Database size | 500 MB, then read-only | 243 MB on the rebuilt rig (229 MB in `public`). `raw_job_observations` is the largest table at 89 MB; with everything derived from them the corpus costs about 14 KB per observation (240 MB / 17,103). |
-| Egress | 5 GB uncached a month | Collection is most of it. Each current-jobs run reads every company's evidence once, about 45 MB projected from hosted Figma, so twice a day is about 2.7 GB a month; forecast regeneration adds about 0.5 GB and the weekly historical run about 0.2 GB (docs/github-actions-collection.md). A signed-in dashboard render reads 45 KiB in 13 requests and guest pages are served from the edge cache until the data changes, so the remaining 1.5 GB is about 35,000 signed-in renders a month. Check **Organization → Usage → Egress** after the first week. |
+| Database size | 500 MB, then read-only | **331 MB on hosted** (2026-09-20: 79 companies, 24,447 observations, 542 in-scope roles). `raw_job_observations` is the largest table; with everything derived from a posting the corpus costs about **12.6 KB per posting**, of which roughly half is the text of postings nobody can apply to. |
+| Egress | 5 GB uncached a month | About **1.7-1.9 GB a month** from the schedules, measured per run against hosted on 2026-09-20 (see the table below). A signed-in dashboard render reads 45 KiB in 13 requests and guest pages are served from the edge cache until the data changes, so the rest is roughly 40,000 signed-in renders. Check **Organization → Usage → Egress** after the first week. |
 | Monthly active users | 50,000 | Not a constraint. |
 | Pausing | After a week without activity | Collection writes several times a day, so the project never idles. |
 | Backups | None | The weekly workflow above. |
 
-**When the database fills.** 500 MB less 243 MB leaves about 257 MB, which is about 18,000 more observations at today's
-mix. No steady-state rate has been measured: the rig was bootstrapped between 14 and 17 September and collected again
-on 18 September, when one current pass added 558 observations (7.8 MB with what derives from them) after a gap of one
-to four days. If that were one day's growth the database would fill in about 33 days; if it were four days', in about
-four months. **This is the free tier's nearest limit.** Once production has run for two weeks, the rows
-`collection-health` reports added in 24 hours times 14 KB gives the daily growth, and 257 MB divided by it gives the
-days left. Supabase Pro (8 GB) is the step after.
+### What each schedule downloads
+
+Measured from each workflow's own summary (`database_mb_downloaded` is response bytes on the wire, which is what
+Supabase counts as egress), with the corpus at 79 companies:
+
+| Workflow | Per run | Runs a month | A month |
+| --- | --- | --- | --- |
+| `career-page-signals.yml` | 6.71 MB over 254 sources, about 8.7 MB over 397 | 60 | ~520 MB |
+| `current-jobs.yml` | 2.50 MB read floor (24,057 stored postings x 104 B) plus each changed company's evidence | 60 | ~360-600 MB |
+| `forecast-regeneration.yml` | 3.76 MB | 120 | ~450 MB |
+| `backup-corpus.yml` | 63.8 MB (the whole corpus, dumped) | 4 | ~256 MB |
+| `historical-enrichment.yml` | 2.55 MB per company in the slice | 4 | ~60 MB |
+| `ops-health.yml` | one PostgREST read | 60 | ~6 MB |
+| `backtest.yml` | 632 targets read once | 1 | ~1 MB |
+
+Signals were the largest item at four runs a day (about 1 GB a month), so they run twice; a page's material change
+is still caught within twelve hours. A company's first collection costs far more than its steady state: batch 1's
+24 companies cost 72 MB in one run, against a 2.50 MB floor afterwards, so a new batch's first pass is dispatched
+per company outside the scheduled window rather than inside it.
+
+**When the database fills.** 500 MB less 331 MB leaves about 169 MB, which is about 13,000 more postings at
+12.6 KB each. Steady-state growth is not yet known: every posting in the corpus was written by the bootstrap and by
+batch 1's first pass, so the first honest daily figure comes from a day of scheduled runs on an unchanged company
+list. **This is the free tier's nearest limit after egress.** `collection-health` reports the rows added in 24 hours;
+times 12.6 KB that is the daily growth, and 169 MB divided by it is the days left. Two changes buy room before Pro
+(8 GB) is needed: keeping only the first 300 characters of the text on out-of-scope postings, roles, and events, which
+frees about 93 MB and halves the cost of every future posting, and not storing what a giant board's non-early-career
+postings say at all.
 
 **Auth rate limits, and why they are raised.** Supabase Auth counts its limits per IP address: by default 30 sign-ups
 and sign-ins, and 30 verifications of an emailed link, every five minutes. The app's `/api/auth/*` routes call Supabase

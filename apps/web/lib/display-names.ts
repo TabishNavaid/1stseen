@@ -12,7 +12,7 @@
  *   exactly the stored title under the same normalization, which brings back accents and punctuation from the source
  *   itself. Its year is left out, as the stored title leaves it out: a program recurs every year. Otherwise the stored
  *   title is tidied: known acronyms, "Co-op", and joining words in lower case.
- * - A company name is the stored name with a few corrections the stored names need ("Imc" is IMC).
+ * - A company name is the stored name, as stored: the data is corrected where it reads wrongly, not the page.
  * - A place is shown as a posting wrote it whenever that posting's location folds to the stored place, which brings
  *   back its accents ("b hl bw de" was "Bühl, BW, de"); its two-letter codes are put in capitals. Otherwise it is
  *   title-cased with its codes in capitals and commas before the region: "chicago il" is "Chicago, IL".
@@ -20,17 +20,14 @@
  * Pure, so the tests read it directly.
  */
 
-/** Stored company names that do not read as the company writes its own name. */
-const COMPANY_NAMES: Record<string, string> = {
-  imc: "IMC",
-  jumptrading: "Jump Trading",
-  "vercel inc.": "Vercel",
-  "vercel inc": "Vercel",
-};
-
+/**
+ * A company's name as stored. There is no correction list here any more: the ten stored names that read as page
+ * titles ("Imc", "Reddit Inc Homepage", "VIRTU Financial Inc.") were corrected in the data on 2026-09-20, discovery
+ * no longer takes a page's furniture or legal form as part of a name, and `save_company_discovery` leaves a stored
+ * name alone. A name that reads wrongly is a row to fix, not a display rule to add.
+ */
 export function displayCompany(name: string): string {
-  const trimmed = name.trim();
-  return COMPANY_NAMES[trimmed.toLowerCase()] ?? trimmed.replace(/,?\s+Inc\.?$/i, "");
+  return name.trim();
 }
 
 /** Words that are written in capitals, or in their own mixed case, inside a title. Keys are lower case. */

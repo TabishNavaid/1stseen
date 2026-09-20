@@ -2,9 +2,12 @@ name: Career page change detection
 
 on:
   schedule:
-    # 01:37, 07:37, 13:37, 19:37 UTC: 80 minutes after current jobs, so a full-length
-    # current-jobs run has finished before this one queues.
-    - cron: "37 1,7,13,19 * * *"
+    # 01:37 and 13:37 UTC: 80 minutes after current jobs, so a full-length current-jobs run has
+    # finished before this one queues. Twice a day, not four times: at 6.71 MB a run over 254
+    # sources this was the largest single item in the project's egress, about 1 GB a month once
+    # the corpus reached 79 companies, and a page's material change is still caught within
+    # twelve hours (docs/github-actions-collection.md, "Round trips to the hosted database").
+    - cron: "37 1,13 * * *"
   workflow_dispatch:
     inputs:
       company:

@@ -26,7 +26,7 @@ from pydantic import HttpUrl
 from firstseen import cli
 from firstseen.agent import SupabaseRecruitingKnowledge
 from firstseen.backtesting import BacktestRunner
-from firstseen.discovery import DiscoveredSource, DiscoveryEvidence
+from firstseen.discovery import CompanyDiscoveryResult, CompanyIdentity, DiscoveredSource, DiscoveryEvidence
 from firstseen.repository import IntelligenceRepository
 from firstseen.takedown import CollectionHeldError, TakedownRefused, TakedownService
 
@@ -551,3 +551,40 @@ class HeldDiscoveryCommandTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StoredCompanyNameTests(unittest.TestCase):
+    """A company keeps the name it is stored under; a page's name for itself does not overwrite it.
+
+    Ten of the 80 stored names read as page titles on 2026-09-20 and were corrected by hand. Discovery re-reads those
+    same pages, so without this every correction would be undone the next time a company was discovered.
+    """
+
+    def result(self, name: str) -> CompanyDiscoveryResult:
+        url = HttpUrl("https://takedown-fixture.example/")
+        evidence = [DiscoveryEvidence(method="input_domain", evidence_url=url, quote="Fixture")]
+        return CompanyDiscoveryResult(
+            query="takedown-fixture.example",
+            identity=CompanyIdentity(
+                id=UUID(COMPANY), name=name, domain="takedown-fixture.example", official_url=url, evidence=evidence
+            ),
+            sources=[],
+        )
+
+    def test_a_stored_name_is_kept_and_a_new_company_takes_the_discovered_one(self):
+        stored = repository(
+            {
+                "collection_takedowns": [],
+                "companies": [{"id": COMPANY, "domain": "takedown-fixture.example", "name": "Fixture Robotics"}],
+                "sources": [],
+                "source_discovery_evidence": [],
+            }
+        )
+        stored.save_company_discovery(self.result("Fixture Robotics Homepage | Careers"))
+        written = [payload for table, _, payload in stored.client.writes if table == "companies"]  # type: ignore[attr-defined]
+        self.assertEqual([payload["name"] for payload in written], ["Fixture Robotics"])
+
+        fresh = repository({"collection_takedowns": [], "companies": [], "sources": [], "source_discovery_evidence": []})
+        fresh.save_company_discovery(self.result("Fixture Robotics"))
+        created = [payload for table, _, payload in fresh.client.writes if table == "companies"]  # type: ignore[attr-defined]
+        self.assertEqual([payload["name"] for payload in created], ["Fixture Robotics"])
