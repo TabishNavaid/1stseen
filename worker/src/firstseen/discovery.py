@@ -310,7 +310,17 @@ def _path_depth(url: str) -> int:
 
 
 def _canonical_url(value: str, base: str | None = None) -> str:
-    parsed = urlparse(urljoin(base or value, value))
+    """One URL in canonical form, or "" for a string that is not a URL at all.
+
+    Pages supply these: hrefs, robots.txt Sitemap lines, and URL-shaped matches inside inline scripts. One of them
+    only has to hold an unbalanced "[" for the standard library to refuse the whole string ("Invalid IPv6 URL"), and
+    on 2026-09-19 one such string in twilio.com's homepage scripts ended that company's discovery with nothing saved.
+    Callers already skip anything that is not a web URL, so a string that cannot be parsed is not one either.
+    """
+    try:
+        parsed = urlparse(urljoin(base or value, value))
+    except ValueError:
+        return ""
     scheme = parsed.scheme.casefold() or "https"
     hostname = (parsed.hostname or "").casefold()
     netloc = hostname

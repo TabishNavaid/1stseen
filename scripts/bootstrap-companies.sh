@@ -83,15 +83,17 @@ DEFAULT_COMPANIES=(
   abbvie.com
   celonis.com
   veeva.com
-  # Third company expansion (batch 1), approved 2026-09-19 after a survey of 176 candidates. Every board below was
+  # Third company expansion (batch 1), approved 2026-09-19 after a survey of 176 candidates. Rocket Lab and Zipline
+  # are listed under the domains their own sites resolve to (rocketlabcorp.com after the rebrand, zipline.com), which
+  # is what discovery verifies and stores. Every board below was
   # confirmed against the board's own metadata name, or, on Ashby, against several of its postings naming the company.
   # Not here, and why: qube-rt.com answers the crawler with HTTP 403 at every path, so its identity cannot be verified
   # over HTTP, exactly as rubrik.com could not. Reddit and Pinterest are discovered through the domains that allow a
   # crawler at all: reddit.com and pinterest.com both refuse us in robots.txt, while redditinc.com and
   # pinterestcareers.com allow everything.
-  rocketlabusa.com
+  rocketlabcorp.com
   spacex.com
-  flyzipline.com
+  zipline.com
   astranis.com
   varda.com
   figure.ai
@@ -259,9 +261,9 @@ VERIFIED_GREENHOUSE_BOARDS=(
   id.me:idmeuniversityrecruiting
   celonis.com:celonis
   # Third company expansion (batch 1), each confirmed on 2026-09-19 by the board's own metadata naming the company.
-  rocketlabusa.com:rocketlab
+  rocketlabcorp.com:rocketlab
   spacex.com:spacex
-  flyzipline.com:flyzipline
+  zipline.com:flyzipline
   astranis.com:astranis
   varda.com:vardaspace
   figure.ai:figureai

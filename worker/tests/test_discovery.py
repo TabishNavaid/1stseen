@@ -725,3 +725,25 @@ class RefusedSourceTests(unittest.TestCase):
             sorted(str(source.url) for source in result.sources if source.category == "related_career_page"),
             ["https://careers.desk-jobs.example/early-careers", "https://www.desk-trading.example/students"],
         )
+
+
+class MalformedUrlTests(unittest.TestCase):
+    """A URL-shaped string a page happens to contain cannot end the company's discovery.
+
+    twilio.com's homepage scripts held one with an unbalanced "[", which the standard library refuses outright
+    ("Invalid IPv6 URL"). Discovery crashed there on 2026-09-19 and saved nothing for the company.
+    """
+
+    def test_a_string_that_cannot_be_parsed_is_not_a_url(self):
+        from firstseen.discovery import _canonical_url, _is_web_url
+
+        for value in ("https://[example", "http://[::1", "https://ho[st/careers", "//[bad]]/x"):
+            self.assertEqual(_canonical_url(value), "", value)
+            self.assertEqual(_canonical_url(value, "https://example.test/"), "", value)
+            self.assertFalse(_is_web_url(_canonical_url(value)), value)
+
+    def test_ordinary_urls_are_unaffected(self):
+        from firstseen.discovery import _canonical_url
+
+        self.assertEqual(_canonical_url("/careers", "https://example.test/x"), "https://example.test/careers")
+        self.assertEqual(_canonical_url("https://boards.greenhouse.io/acme/"), "https://boards.greenhouse.io/acme")
