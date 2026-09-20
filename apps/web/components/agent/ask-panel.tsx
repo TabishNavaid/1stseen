@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { AgentAnswer } from "@/components/agent/agent-answer";
 import { useAgentQuestion } from "@/components/agent/use-agent-question";
+import { Doodle } from "@/components/doodle";
 import { Icon } from "@/components/ui/icon";
 
 // Questions the agent's own question types cover (upcoming openings, the earliest companies, what to prepare now).
@@ -61,6 +62,8 @@ export function AskPanel({ signedIn, guestLimit }: { signedIn: boolean; guestLim
 
       {run.status === "idle" && (
         <div>
+          {/* Before the first question: one character, then the questions worth starting with. */}
+          <Doodle name="swinging" size="empty" className="mx-auto mb-6 max-sm:h-32" />
           <p className="label-caps text-ink-subtle">Try one</p>
           <ul className="mt-2 flex flex-wrap gap-2">
             {SUGGESTIONS.map((suggestion) => (

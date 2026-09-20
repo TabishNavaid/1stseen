@@ -5,7 +5,12 @@ import { Tooltip } from "@/components/ui/overlay";
 import { confidenceExplanation, confidenceTone, confidenceWord } from "@/lib/confidence";
 import { cn } from "@/lib/utils";
 
-const DOT = { strong: "bg-confidence-strong", moderate: "bg-confidence-moderate", limited: "bg-confidence-limited" } as const;
+/**
+ * A mark only where the evidence is there to mark. Low is the common case on a young corpus, and a red dot on every
+ * card read as a warning about the product rather than a statement about one window, so Low is the plain chip and says
+ * so in words; the tone is kept for the two bands that earned one.
+ */
+const DOT = { strong: "bg-confidence-strong", moderate: "bg-confidence-moderate", limited: null } as const;
 
 /**
  * forecasting.py's confidence score as one word (Low, Medium, High) with a tooltip that says what it means and gives the
@@ -14,17 +19,19 @@ const DOT = { strong: "bg-confidence-strong", moderate: "bg-confidence-moderate"
  */
 export function ConfidenceWord({ value, align = "center", className }: { value: number; align?: "center" | "start" | "end"; className?: string }) {
   const word = confidenceWord(value);
+  const dot = DOT[confidenceTone(value)];
   return (
     <Tooltip content={confidenceExplanation(value)} align={align}>
       <button
         type="button"
         className={cn(
           "focus-ring relative inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:border-line-strong",
-          "before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-[''] sm:before:hidden",
+          "before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']  sm:before:hidden",
+          !dot && "border-line-strong text-ink-muted",
           className,
         )}
       >
-        <span className={cn("size-2 rounded-full", DOT[confidenceTone(value)])} aria-hidden="true" />
+        {dot && <span className={cn("size-2 rounded-full", dot)} aria-hidden="true" />}
         {word} confidence
         <Icon name="info" size={12} className="text-ink-subtle" />
       </button>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Doodle } from "@/components/doodle";
 import { Icon } from "@/components/ui/icon";
 import { parseAuthFragment, supabaseHandledLink } from "@/lib/auth/policy";
 import { focusRing, textLinkClass } from "@/components/auth/fields";
@@ -75,10 +76,13 @@ export function ConfirmEmail() {
     );
   }
   const copy = failures[shown];
+  const confirmed = shown === "confirmed_by_supabase";
   return (
     <section aria-labelledby="confirm-title" className="mt-2">
+      {/* The address is confirmed: the one moment on this page worth marking. */}
+      {confirmed && <Doodle name="groovy" size="small" className="mb-4" />}
       <h1 id="confirm-title" ref={headingRef} tabIndex={-1} className={`flex items-start gap-2 rounded-sm text-3xl font-semibold tracking-title ${focusRing}`}>
-        {shown === "confirmed_by_supabase"
+        {confirmed
           ? <Icon name="mail-check" size={26} className="mt-1 shrink-0 text-success-ink" />
           : <Icon name="circle-alert" size={26} className="mt-1 shrink-0 text-danger-ink" />}
         {copy.title}

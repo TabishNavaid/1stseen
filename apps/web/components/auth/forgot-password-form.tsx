@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { Doodle } from "@/components/doodle";
 import { Icon } from "@/components/ui/icon";
 import { normalizeEmail } from "@/lib/auth/policy";
 import { FormMessage, TextField, focusRing, primaryButtonClass, textLinkClass } from "@/components/auth/fields";
@@ -48,6 +49,8 @@ export function ForgotPasswordForm() {
   if (sentTo) {
     return (
       <section aria-labelledby="reset-sent-title" className="mt-2">
+        {/* The link is on its way: a moment of waiting, not of doing. */}
+        <Doodle name="float" size="small" className="mb-4" />
         <h1 id="reset-sent-title" ref={sentRef} tabIndex={-1} className={`flex items-center gap-2 rounded-sm text-3xl font-semibold tracking-title ${focusRing}`}>
           <Icon name="mail-check" size={26} />Check your email
         </h1>

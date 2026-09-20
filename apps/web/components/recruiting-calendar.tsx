@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Doodle } from "@/components/doodle";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { ForecastBasisChip } from "@/components/forecast-basis-chip";
@@ -154,7 +155,10 @@ export function RecruitingCalendar({
       )}
 
       {mode === "real" && watchedRoleCount === 0 && (
-        <section className="panel mt-6 p-5" aria-labelledby="empty-title">
+        <section className="panel mt-6 flex flex-col items-start gap-5 p-5 sm:flex-row sm:items-center" aria-labelledby="empty-title">
+          {/* Nothing is booked yet: the character says so before the sentence does. */}
+          <Doodle name="laying" size="empty" className="shrink-0 max-sm:h-32" />
+          <div>
           <h2 id="empty-title" className="text-sm font-semibold">Your watchlist is empty</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
             This calendar fills itself from the roles you watch: their predicted opening windows, confirmed
@@ -164,6 +168,7 @@ export function RecruitingCalendar({
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <Link href="/welcome" className="focus-ring inline-flex h-9 items-center rounded-control bg-accent px-3 text-xs font-semibold text-ink-inverse hover:bg-accent-hover max-sm:h-touch">Set up your watchlist</Link>
             <Link href="/roles" className="focus-ring inline-flex h-9 items-center rounded-chip border border-line-strong px-4 text-xs font-semibold text-ink-muted hover:bg-surface-hover hover:text-ink max-sm:h-touch">Browse roles</Link>
+          </div>
           </div>
         </section>
       )}

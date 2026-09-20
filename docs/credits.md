@@ -11,17 +11,32 @@ required, credited here anyway).
 
 | File | Source file | Where it appears |
 | --- | --- | --- |
-| `apps/web/public/illustrations/sprinting.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/sprinting.svg` | Landing page hero |
-| `apps/web/public/illustrations/jumping.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/jumping.svg` | First-run payoff (the celebration) |
-| `apps/web/public/illustrations/reading-side.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading-side.svg` | Teaching empty states |
-| `apps/web/public/illustrations/unboxing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/unboxing.svg` | Not-found pages (one of three, picked at random for each visit) |
-| `apps/web/public/illustrations/reading.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading.svg` | Not-found pages (one of three, picked at random for each visit) |
-| `apps/web/public/illustrations/zombieing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/zombieing.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/chilling.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/chilling.svg` | Just opened, when nothing has opened in the last 45 days |
 | `apps/web/public/illustrations/clumsy.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/clumsy.svg` | The error page |
+| `apps/web/public/illustrations/coffee.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/coffee.svg` | First run, question two (which fields) |
+| `apps/web/public/illustrations/dancing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/dancing.svg` | First run, the confirmation after a save to the watchlist |
+| `apps/web/public/illustrations/float.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/float.svg` | Password reset, while the link is on its way |
+| `apps/web/public/illustrations/groovy.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/groovy.svg` | A confirmed email address |
+| `apps/web/public/illustrations/jumping.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/jumping.svg` | First-run payoff (the celebration) |
+| `apps/web/public/illustrations/laying.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/laying.svg` | A recruiting calendar with no dates on it yet |
+| `apps/web/public/illustrations/meditating.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/meditating.svg` | First run, question one (what you are looking for) |
+| `apps/web/public/illustrations/plant.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/plant.svg` | A watchlist with nothing on it yet |
+| `apps/web/public/illustrations/reading.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/reading-side.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/reading-side.svg` | Explore, when a search or a filter matches none; the first-run payoff with no matches |
+| `apps/web/public/illustrations/sitting.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/sitting.svg` | The sign-in page, beside the form |
+| `apps/web/public/illustrations/sitting-reading.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/sitting-reading.svg` | Landing page, "How it works" |
+| `apps/web/public/illustrations/sprinting.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/sprinting.svg` | Landing page, the closing call to action |
+| `apps/web/public/illustrations/strolling.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/strolling.svg` | First run, question three (companies you watch) |
+| `apps/web/public/illustrations/swinging.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/swinging.svg` | Ask, before the first question |
+| `apps/web/public/illustrations/unboxing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/unboxing.svg` | Not-found pages (one of three, picked at random for each visit) |
+| `apps/web/public/illustrations/zombieing.svg` | `https://opendoodles.s3-us-west-1.amazonaws.com/zombieing.svg` | Not-found pages (one of three, picked at random for each visit) |
 
 Changes from the originals, all mechanical: black recolored to the brand's deep green (`#1b3a31`), the pink recolored
-to the warm accent (`#f28b6b`), the view box cropped to the figure, Sketch metadata and ids removed, and path
-coordinates rounded to one decimal place.
+to the warm accent (`#f28b6b`), the view box cropped to the figure's own bounds, Sketch metadata, titles, and ids
+removed, path coordinates rounded, and the result run through svgo. The five prepared first (`clumsy`, `reading`,
+`reading-side`, `unboxing`, `zombieing`) round to one decimal place; the rest round to whole units, which is under a
+tenth of a percent of the view box and invisible at the sizes they are drawn. No page draws more than two, and the
+heaviest page's pair comes to well under 60 KB.
 
 ## Typefaces
 

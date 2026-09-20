@@ -28,8 +28,9 @@ a hex value. New surfaces use tokens only; an arbitrary `[#hex]` value in new co
 | Radii | `rounded-control` (10px), `rounded-panel` (16px), `rounded-card` (20px), `rounded-overlay`, `rounded-chip` | Controls, panels, cards, popovers and dialogs, chips and pill buttons |
 | Elevation | `shadow-raised`, `shadow-card`, `shadow-lift`, `shadow-popover`, `shadow-dialog` | Panels, cards, a hovered card, floating layers |
 | Display type | `heading-display` | Page and section headings in Fraunces (self-hosted by `next/font`); body text stays Geist |
-| Motion | `lift`, `press`, `rise`, `fade-in`, `drop-in`, `drift-track`, `bob-once`, `step-in`, `pop-in`, `confetti-piece` | A hovered card, a pressed button, hero text entering, the hero chart's openings dropping in and its window fading in, the Just opened strip drifting, the not-found character's single bob, a first-run step entering, the payoff's checkmark and burst. Every one stops under `prefers-reduced-motion`, the burst is not drawn at all, and the strip does not move |
-| Depth | `glow` with `glow-accent` or `glow-warm`, and the page's grain | A blurred radial wash behind the hero and the closing call to action, and a fixed grain over the page background at 3.5% so large flat areas are not perfectly flat |
+| Motion | `lift`, `press`, `rise`, `fade-in`, `drop-in`, `drift-track`, `bob-once`, `step-in`, `pop-in`, `confetti-piece` | A hovered card, a pressed button, hero text entering, the hero chart's openings dropping in and its window fading in, the Just opened strip drifting, every hand-drawn character's single bob as it arrives (`--bob` sets how far, 8px by default and 4px on a small one), a first-run step entering, the payoff's burst. Every one stops under `prefers-reduced-motion`, the burst is not drawn at all, and the strip does not move |
+| Depth | `glow` with `glow-accent` or `glow-warm`, and the page's grain | A blurred radial wash behind the hero and the closing call to action, mixed from `focus` and `warm` so it is a colour rather than grey haze, and a fixed grain over the page background at 3.5% so large flat areas are not perfectly flat |
+| Characters | `Doodle` in `doodle.tsx`, sizes `hero` (240 to 320px), `empty` (160 to 200px), `small` (96 to 120px) | Open Doodles recoloured to the palette (`docs/credits.md`), one per moment and never two on one screenful: the landing page's "How it works" and closing call to action, each first-run step and its payoff, every empty state, each confirmation, the sign-in form, and the not-found and error pages. Each is `aria-hidden` with an empty alt, because the words beside it carry the meaning; `hideOnPhone` leaves out the ones that would push those words below the fold |
 
 ### Contrast
 
@@ -101,7 +102,7 @@ re-solve it. `/design-system` renders every one of them for verification; it exi
 | `Tabs` | `tabs.tsx` | Roving tabindex, arrows wrap, Home and End, automatic activation; panels labelled by their tabs and focusable |
 | `DateRangeField` | `tabs.tsx` | Two native date inputs in a fieldset; each end bounds the other; a problem is text, tied to both inputs and announced politely |
 | `Skeleton`, `LoadingRegion` | `status.tsx` | Shapes hidden from assistive technology; the region is one `role="status"` with a label; motion stops under reduced motion |
-| `EmptyState` | `status.tsx` | A heading, a reason, and a next step: a deliberate state, never a blank panel or an error |
+| `EmptyState` | `status.tsx` | A heading, a reason, and a next step: a deliberate state, never a blank panel or an error. One mark above the words, either a `doodle` or an `icon`, never both |
 
 The pure logic behind them (option filtering, arrow-key movement, date-range validation) is in `apps/web/lib/ui` and is
 unit-tested in `ui-primitives.test.mjs`, which also checks the rendered wiring of every primitive on `/design-system`.
@@ -134,7 +135,8 @@ Every product surface now uses tokens only: no `[#hex]` class or inline hex colo
 | Frame | File | Used by |
 | --- | --- | --- |
 | Site header | `site-header.tsx`, `site-header-bar.tsx` | Every app page and the landing page: the mark, the navigation from `lib/site-nav.ts`, the page's action, the account. A guest sees Explore, Just opened, and Ask, with Sign in and Get started; a signed-in user also sees Watchlist and Calendar. Replay and digests are not in the navigation |
-| Landing page | `landing/landing-page.tsx` | `/` for a first-time visitor: the site header, a hero with a real role's forecast, the Just opened strip, how it works, and Opening soon |
+| Landing page | `landing/landing-page.tsx` | `/` for a first-time visitor: the site header, a hero with one followed program's chart, the Just opened strip, how it works, Opening soon, the questions people ask, and one way in |
+| Opening chart | `landing/opening-timeline.tsx` | The hero card's picture of one program's rhythm: a January-to-December axis, one row per year of its openings, each opening a 12px dot linking to the page it was seen on, and the predicted window a tinted band with dashed edges. Ordinary elements, not a scaled drawing, so the 12px labels stay 12px at 390px. The featured program is chosen by `lib/landing-data.ts`: of the current forecasts, the most distinct years of openings, then the soonest window |
 | First run | `onboarding/onboarding-flow.tsx` | `/welcome`: full screen, progress dots, a sticky action bar, "Skip, just browse" on every step |
 | Focused shell | `focused-shell.tsx` | Single-purpose pages: settings, sign-in, confirmation, password reset |
 | Document page | `document-page.tsx` | Pages that are read rather than used: methodology and accuracy, terms, privacy, data sources, contact |

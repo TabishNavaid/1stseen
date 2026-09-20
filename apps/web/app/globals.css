@@ -405,8 +405,8 @@
 /* The not-found and error pages' character: one small bob as the page appears. Under prefers-reduced-motion it stays put. */
 @keyframes bob-once {
   0%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-8px); }
-  70% { transform: translateY(2px); }
+  40% { transform: translateY(calc(var(--bob, 8px) * -1)); }
+  70% { transform: translateY(calc(var(--bob, 8px) * 0.25)); }
 }
 
 @utility bob-once {
@@ -470,21 +470,33 @@
   &:active { transform: translateY(1px) scale(0.995); }
 }
 
-/** Soft colour behind a section: a decorative, blurred radial wash. */
+/**
+ * Soft colour behind a section: a decorative, blurred radial wash, drawn from the two light tints rather than from the
+ * inks. The deep accent behind a cream page only ever made grey haze, neither present nor absent; these are light
+ * enough to leave every contrast ratio on the page alone and saturated enough to be seen.
+ */
 @utility glow {
   position: absolute;
   pointer-events: none;
   z-index: 0;
   border-radius: 9999px;
-  filter: blur(64px);
+  filter: blur(60px);
 }
 
 @utility glow-accent {
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-accent) 30%, transparent), transparent);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-focus) 32%, transparent),
+    color-mix(in oklab, var(--color-focus) 0%, transparent) 76%
+  );
 }
 
 @utility glow-warm {
-  background: radial-gradient(closest-side, color-mix(in oklab, var(--color-warm) 42%, transparent), transparent);
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--color-warm) 56%, transparent),
+    color-mix(in oklab, var(--color-warm) 0%, transparent) 76%
+  );
 }
 
 /*

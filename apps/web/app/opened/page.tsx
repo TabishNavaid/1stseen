@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Doodle } from "@/components/doodle";
 import { RecruitingTimeline, type OpenedProgram } from "@/components/recruiting-timeline";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
@@ -98,6 +99,17 @@ export default async function JustOpenedPage({ searchParams }: { searchParams: P
                 ? `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} at ${company.name} opened in the last ${days} days, newest first.`
                 : `${total.toLocaleString("en-US")} ${total === 1 ? "program" : "programs"} opened in the last ${days} days. Newest first, mixed so one company cannot fill the list.`}
         </p>
+
+        {/* A quiet stretch is a fact about the last 45 days, not a fault: the character says so beside the sentence. */}
+        {mode === "real" && total === 0 && (
+          <div className="card mt-8 flex flex-col items-center px-6 py-10 text-center">
+            <Doodle name="chilling" size="empty" />
+            <p className="mt-4 max-w-md text-sm leading-6 text-ink-muted">
+              New openings arrive as collection runs.{" "}
+              <Link href="/roles" className="link-accent focus-ring">Browse every program</Link> for the windows coming up.
+            </p>
+          </div>
+        )}
 
         {programs.length > 0 && <div className="mt-8"><RecruitingTimeline programs={programs} /></div>}
         {programs.length === 0 && listed > 0 && (

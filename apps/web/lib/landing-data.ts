@@ -5,6 +5,7 @@ import { createPublicReader, type PublicReader } from "@/lib/public-read";
 import type { ForecastBasis } from "@/lib/forecast-basis";
 import { displayCompany, displayTitle } from "@/lib/display-names";
 import { hasServiceRoleConfig, loadForecastBasis, loadJustOpened, loadRecordedTitles, type RealOpening } from "@/lib/real-data";
+import { fetchAllIn } from "@/lib/supabase/paging";
 import type { DatePrecision } from "@/lib/role-view";
 
 /** One recorded opening of the preview role, with where it was seen. `windowStart` is a bounded date's earlier end. */
@@ -81,8 +82,17 @@ type PageRow = {
 
 const PRECISIONS: readonly string[] = ["exact", "bounded", "observed_by"];
 
-/** How many past openings the preview card's timeline draws, newest first. */
-export const PREVIEW_OPENINGS = 6;
+/** How many past openings the preview card's chart draws, newest first. */
+export const PREVIEW_OPENINGS = 8;
+
+/**
+ * How many current forecasts the featured rule weighs. They arrive best-evidenced first, so a program with more years
+ * of openings than any of these is not reachable through this sort.
+ */
+export const FEATURED_CANDIDATES = 24;
+
+/** Three years of openings is the least that shows a rhythm rather than a pair of dots. */
+export const FEATURED_YEARS = 3;
 
 /** "Opening soon" shows at most this many roles, one per company, and is hidden when none has a current window. */
 export const OPENING_SOON_LIMIT = 6;
@@ -104,13 +114,13 @@ function windowOf(row: PageRow, basis: ForecastBasis | null): LandingForecastWin
 }
 
 async function openingsOf(reader: PublicReader, roleId: string): Promise<LandingOpening[]> {
-  // bounded: the 12 newest openings of one role, from which the card lists PREVIEW_OPENINGS with a source.
+  // bounded: the 16 newest openings of one role, from which the card draws PREVIEW_OPENINGS with a source.
   const events = await reader
     .from("historical_opening_events", "id,opened_on,opening_window_start,date_precision,raw_job_observations(source_url,source_type)")
     .eq("canonical_role_id", roleId)
     .order("opened_on", { ascending: false })
     .order("id", { ascending: true })
-    .limit(12);
+    .limit(16);
   if (events.error) throw new Error("landing_read_failed");
   return (events.data ?? []).flatMap((event): LandingOpening[] => {
     const embedded = event.raw_job_observations as { source_url: string | null; source_type: string } | { source_url: string | null; source_type: string }[] | null;
@@ -129,13 +139,52 @@ async function openingsOf(reader: PublicReader, roleId: string): Promise<Landing
 }
 
 /**
+ * How many distinct calendar years each role's recorded openings cover, for the roles given.
+ *
+ * The chart's whole claim is that a program comes back around the same time each year, so the number of years its
+ * openings cover is what decides which program shows it best.
+ */
+async function openingYears(reader: PublicReader, roleIds: string[]): Promise<Map<string, number>> {
+  const years = new Map<string, Set<string>>();
+  if (roleIds.length === 0) return new Map();
+  const rows = await fetchAllIn<Record<string, unknown>>(
+    (ids) => reader.from("historical_opening_events", "id,canonical_role_id,opened_on").in("canonical_role_id", ids),
+    [...new Set(roleIds)],
+    "landing_opening_years",
+    "id",
+  );
+  for (const row of rows) {
+    const roleId = String(row.canonical_role_id);
+    const seen = years.get(roleId) ?? new Set<string>();
+    seen.add(String(row.opened_on).slice(0, 4));
+    years.set(roleId, seen);
+  }
+  return new Map([...years].map(([roleId, seen]) => [roleId, seen.size]));
+}
+
+/**
+ * The featured program, by a stated rule rather than by hand: of the current forecasts, the one whose openings cover
+ * the most distinct years, and among equals the one whose window comes first. FEATURED_YEARS is what makes a rhythm
+ * visible; when nothing reaches it the most-covered program is still the clearest thing to show, so the same order
+ * answers both cases.
+ */
+function featuredOf(rows: PageRow[], years: Map<string, number>): PageRow | null {
+  return [...rows].sort((a, b) =>
+    (years.get(b.role_id) ?? 0) - (years.get(a.role_id) ?? 0)
+    || String(a.window_start ?? "").localeCompare(String(b.window_start ?? ""))
+    || a.role_id.localeCompare(b.role_id),
+  )[0] ?? null;
+}
+
+/**
  * What the landing page shows, read through the public reader and nothing more.
  *
- * The preview role is chosen by a stated rule, never by hand: the highest confidence score among current forecasts
- * resting on two or more of the program's own cycles; when there is none, the role with the most recorded dated
- * openings, shown as its observed history with no window. "Opening soon" is every current forecast, soonest window
- * first, one role per company, up to six; a window that has already ended is not a coming opening and is left out.
- * "Just opened" is the start of the Just opened page's feed: newest first, no company taking more than two of any six.
+ * The preview role is chosen by a stated rule, never by hand (`featuredOf`): among current forecasts, the most years
+ * of its own openings, then the soonest window. When no forecast qualifies at all, the role with the most recorded
+ * dated openings, shown as its observed history with no window. "Opening soon" is every current forecast, soonest
+ * window first, one role per company, up to six; a window that has already ended is not a coming opening and is left
+ * out. "Just opened" is the start of the Just opened page's feed: newest first, no company taking more than two of
+ * any six.
  */
 export async function loadLandingData(now: Date = new Date()): Promise<LandingData | null> {
   if (!hasServiceRoleConfig()) return null;
@@ -143,9 +192,9 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const today = now.toISOString().slice(0, 10);
   const withForecast: DashboardFilters = { ...defaultDashboardFilters, confidence: ["strong", "moderate", "limited"] };
 
-  const [featured, byEvidence, soonest, justOpened, summary, latest] = await Promise.all([
-    // bounded: p_limit 1, the single featured forecast.
-    reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, minCycles: 2 }, now, "confidence", 3, 1)),
+  const [candidates, byEvidence, soonest, justOpened, summary, latest] = await Promise.all([
+    // bounded: p_limit FEATURED_CANDIDATES, the current forecasts the featured rule chooses one of.
+    reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "evidence", 3, FEATURED_CANDIDATES)),
     // bounded: p_limit 1, the role with the most dated openings, for when no forecast qualifies.
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, precision: "exact_or_bounded" }, now, "evidence", 3, 1)),
     // bounded: p_limit 12, from which at most OPENING_SOON_LIMIT current windows are shown.
@@ -157,9 +206,10 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
     // bounded: limit 1, the newest observation, which is when collection last wrote anything.
     reader.from("raw_job_observations", "id,observed_at").order("observed_at", { ascending: false }).order("id", { ascending: true }).limit(1),
   ]);
-  if (featured.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
+  if (candidates.error || byEvidence.error || soonest.error) throw new Error("landing_read_failed");
 
-  const featuredRow = ((featured.data ?? []) as PageRow[]).find((row) => row.forecastable && (row.window_end ?? "") >= today);
+  const current = ((candidates.data ?? []) as PageRow[]).filter((row) => row.forecastable && (row.window_end ?? "") >= today);
+  const featuredRow = featuredOf(current, await openingYears(reader, current.map((row) => row.role_id)));
   const fallbackRow = ((byEvidence.data ?? []) as PageRow[])[0];
   const previewRow = featuredRow ?? fallbackRow ?? null;
   const soonRows = ((soonest.data ?? []) as PageRow[]).filter((row) => row.forecastable && (row.window_end ?? "") >= today).slice(0, OPENING_SOON_LIMIT);

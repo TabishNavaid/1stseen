@@ -2,10 +2,15 @@ import type { ReactNode } from "react";
 import { FocusedShell } from "@/components/focused-shell";
 import { Icon } from "@/components/ui/icon";
 
-/** Shared frame for the sign-in, confirmation, and password pages: the focused shell the first run and settings use. */
-export function AuthShell({ eyebrow, children }: { eyebrow: string; children: ReactNode }) {
+/**
+ * Shared frame for the sign-in, confirmation, and password pages: the focused shell the first run and settings use.
+ *
+ * `aside` is the character that sits beside the form from `lg` up, where there is room either side of a 480px column.
+ * It is decoration and is not drawn at all on a narrower screen, where the form itself should reach the fold.
+ */
+export function AuthShell({ eyebrow, aside, children }: { eyebrow: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <FocusedShell width="narrow">
+    <FocusedShell width="narrow" aside={aside}>
       <p className="label-caps text-accent-ink">{eyebrow}</p>
       {children}
       <p className="mt-6 flex gap-2 text-xs leading-5 text-ink-muted">

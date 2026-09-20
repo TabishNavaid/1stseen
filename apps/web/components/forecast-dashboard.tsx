@@ -259,7 +259,7 @@ export function ForecastDashboard({
           {items.length === 0 && mode !== "unconfigured" && emptyWatchlist && (
             <div className="card mt-4">
               <EmptyState
-                icon="bell"
+                doodle="plant"
                 title="Your watchlist is empty"
                 description={
                   signedInAs
@@ -278,12 +278,9 @@ export function ForecastDashboard({
             </div>
           )}
           {items.length === 0 && mode !== "unconfigured" && !emptyWatchlist && (
-            <div className="card mt-4 flex flex-col items-center px-6 pb-4 pt-8 text-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a small self-hosted SVG, which the image optimizer skips */}
-              <img src="/illustrations/reading-side.svg" alt="" width={978} height={615} className="w-44" />
+            <div className="card mt-4">
               <EmptyState
-                className="pt-4"
-                icon="search"
+                doodle="readingSide"
                 title={pastLastPage ? "This page is past the last listed role" : applied.length ? "No roles match these filters" : "No in-scope role has been collected yet"}
                 description={
                   pastLastPage

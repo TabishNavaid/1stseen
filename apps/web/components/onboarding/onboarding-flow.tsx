@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { ConfidenceWord } from "@/components/confidence-word";
+import { Doodle, type DoodleName } from "@/components/doodle";
 import { LikelyWindow } from "@/components/likely-window";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { Chip } from "@/components/ui/status";
@@ -131,10 +132,16 @@ function ChoiceCard({
   );
 }
 
-function Question({ id, title, hint, children, headingRef }: { id: string; title: string; hint: string; children: ReactNode; headingRef: React.RefObject<HTMLHeadingElement | null> }) {
+/**
+ * One question of the first run. Its character marks the step it is on, and is left out on a phone, where the choices
+ * themselves have to reach the fold.
+ */
+function Question({ id, title, hint, children, headingRef, doodle }: { id: string; title: string; hint: string; children: ReactNode; headingRef: React.RefObject<HTMLHeadingElement | null>; doodle: DoodleName }) {
   return (
     <fieldset className="step-in m-0 border-0 p-0" aria-describedby={`${id}-hint`}>
+      {/* Inside the legend: a fieldset draws its legend at its own top edge, whatever the order of the elements. */}
       <legend className="p-0">
+        <Doodle name={doodle} size="small" hideOnPhone className="mb-4" />
         <h1 id={id} ref={headingRef} tabIndex={-1} className="heading-display text-3xl leading-tight text-ink outline-none sm:text-4xl">{title}</h1>
       </legend>
       <p id={`${id}-hint`} className="mt-3 text-base leading-7 text-ink-muted">{hint}</p>
@@ -160,7 +167,7 @@ function Celebration({ reducedMotion }: { reducedMotion: boolean }) {
   const pieces = confettiPieces(reducedMotion);
   const tone = { accent: "bg-accent", warm: "bg-warm", "warm-line": "bg-warm-line", success: "bg-success-line" } as const;
   return (
-    <div className="relative mx-auto grid size-20 place-items-center" aria-hidden="true">
+    <div className="relative mx-auto grid place-items-center" aria-hidden="true">
       {pieces.length > 0 && (
         <span className="confetti pointer-events-none absolute inset-0">
           {pieces.map((piece, index) => (
@@ -172,9 +179,7 @@ function Celebration({ reducedMotion }: { reducedMotion: boolean }) {
           ))}
         </span>
       )}
-      <span className="pop-in grid size-20 place-items-center rounded-full bg-warm text-ink shadow-card">
-        <Icon name="check" size={38} strokeWidth={3} />
-      </span>
+      <Doodle name="jumping" size="small" className="pop-in relative sm:h-32" />
     </div>
   );
 }
@@ -384,7 +389,7 @@ export function OnboardingFlow({
 
       <main id="welcome-content" className="mx-auto w-full max-w-3xl flex-1 px-4 pb-12 pt-8 md:px-6 md:pt-14">
         {step === 1 && (
-          <Question key="q1" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Tap one to go on.">
+          <Question key="q1" doodle="meditating" id="q-looking-for" headingRef={headingRef} title={rerun ? "What are you looking for now?" : "What are you looking for?"} hint="Tap one to go on.">
             {/* Buttons, not radios: choosing one is the action that moves on, and a keyboard can reach and press each. */}
             <div className="grid gap-3" role="group" aria-labelledby="q-looking-for">
               {LOOKING_FOR.map((option) => (
@@ -416,7 +421,7 @@ export function OnboardingFlow({
         )}
 
         {step === 2 && (
-          <Question key="q2" id="q-fields" headingRef={headingRef} title="Which fields?" hint="Choose as many as you like. None means every field.">
+          <Question key="q2" doodle="coffee" id="q-fields" headingRef={headingRef} title="Which fields?" hint="Choose as many as you like. None means every field.">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {FIELDS.map((field) => (
                 <ChoiceCard
@@ -436,7 +441,7 @@ export function OnboardingFlow({
         )}
 
         {step === 3 && (
-          <Question key="q3" id="q-companies" headingRef={headingRef} title="Any companies you're watching?" hint="Optional. Their programs go to the top of your list.">
+          <Question key="q3" doodle="strolling" id="q-companies" headingRef={headingRef} title="Any companies you're watching?" hint="Optional. Their programs go to the top of your list.">
             <label htmlFor="company-search" className="text-sm font-semibold text-ink">Search companies</label>
             <div className="relative mt-2">
               <Icon name="search" size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-subtle" />
@@ -491,8 +496,11 @@ export function OnboardingFlow({
         {step === 4 && payoff && (
           <section aria-labelledby="payoff-title" className="step-in">
             <div className="grid justify-items-center text-center">
-              {/* eslint-disable-next-line @next/next/no-img-element -- a small self-hosted SVG, which the image optimizer skips */}
-              {payoff.matchingRoles > 0 ? <Celebration reducedMotion={reducedMotion} /> : <img src="/illustrations/reading-side.svg" alt="" width={978} height={615} className="w-56" />}
+              {saved
+                ? <Doodle name="dancing" size="small" />
+                : payoff.matchingRoles > 0
+                  ? <Celebration reducedMotion={reducedMotion} />
+                  : <Doodle name="readingSide" size="empty" />}
               <h1 id="payoff-title" ref={headingRef} tabIndex={-1} className="heading-display mt-6 text-3xl leading-tight text-ink outline-none sm:text-4xl">
                 {saved
                   ? "Saved to your watchlist"

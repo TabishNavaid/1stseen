@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
+import { Doodle, type DoodleName } from "@/components/doodle";
 import { cn } from "@/lib/utils";
 import { Icon, type IconName } from "./icon";
 
@@ -73,6 +74,7 @@ export function LoadingRegion({ label, children, className }: { label: string; c
  */
 export function EmptyState({
   icon = "search",
+  doodle,
   title,
   description,
   action,
@@ -80,6 +82,8 @@ export function EmptyState({
   className,
 }: {
   icon?: IconName;
+  /** A hand-drawn character for the moment, in place of the icon: one mark above the words, never both. */
+  doodle?: DoodleName;
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
@@ -89,7 +93,7 @@ export function EmptyState({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
   return (
     <div className={cn("flex flex-col items-center px-6 py-10 text-center", className)}>
-      <Icon name={icon} size={20} className="text-ink-subtle" />
+      {doodle ? <Doodle name={doodle} size="empty" className="mb-2" /> : <Icon name={icon} size={20} className="text-ink-subtle" />}
       <Heading className="mt-3 text-sm font-semibold text-ink">{title}</Heading>
       {description && <p className="mt-1 max-w-sm text-xs leading-5 text-ink-subtle">{description}</p>}
       {action && <div className="mt-4">{action}</div>}

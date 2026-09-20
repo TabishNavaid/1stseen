@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { CountUp } from "@/components/count-up";
+import { Doodle } from "@/components/doodle";
 import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { StatusLine } from "@/components/landing/status-line";
@@ -79,8 +80,8 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
       <StatusLine status={data?.status ?? null} now={now} />
       <main id="landing-content">
         <section aria-labelledby="hero-title" className="relative overflow-hidden">
-          <span className="glow glow-accent -left-40 -top-32 size-[34rem] opacity-60" aria-hidden="true" />
-          <span className="glow glow-warm -right-24 top-24 size-[26rem] opacity-70" aria-hidden="true" />
+          <span className="glow glow-accent -left-40 -top-32 size-[38rem]" aria-hidden="true" />
+          <span className="glow glow-warm -right-24 top-24 size-[28rem]" aria-hidden="true" />
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 md:px-6 md:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:gap-16 lg:pb-24">
             <div>
               <h1 id="hero-title" className="rise heading-display text-[2.6rem] leading-[1.05] text-ink sm:text-6xl">
@@ -129,7 +130,11 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
 
         <section id="how" aria-labelledby="how-title" className="border-y border-line bg-surface">
           <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:px-6 md:py-20">
-            <h2 id="how-title" className="heading-display text-3xl leading-tight sm:text-4xl">How it works</h2>
+            <div>
+              <h2 id="how-title" className="heading-display text-3xl leading-tight sm:text-4xl">How it works</h2>
+              {/* Reading the pages, one year at a time: the work the two paragraphs beside this describe. */}
+              <Doodle name="sittingReading" size="hero" hideOnPhone className="mt-8" />
+            </div>
             <div className="max-w-2xl text-base leading-8 text-ink-muted">
               <p>
                 1stSeen reads company career pages, the job boards they post on, and archived copies of both, and records
@@ -183,9 +188,11 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
         </section>
 
         <section aria-labelledby="start-title" className="relative overflow-hidden px-4 py-20 md:px-6 md:py-24">
-          <span className="glow glow-accent left-1/2 top-0 size-[30rem] -translate-x-1/2 opacity-70" aria-hidden="true" />
-          <span className="glow glow-warm right-10 bottom-0 size-[20rem] opacity-60" aria-hidden="true" />
+          <span className="glow glow-accent left-1/2 top-0 size-[34rem] -translate-x-1/2" aria-hidden="true" />
+          <span className="glow glow-warm right-10 bottom-0 size-[22rem]" aria-hidden="true" />
           <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
+            {/* Off at a run: the page ends where watching starts. */}
+            <Doodle name="sprinting" size="hero" className="mb-6 max-sm:h-40" />
             <h2 id="start-title" className="heading-display text-3xl leading-tight sm:text-4xl">Start watching the programs you care about</h2>
             <p className="mt-3 max-w-lg text-base leading-7 text-ink-muted">Pick a few, and their likely dates and prep plan are waiting the next time you open 1stSeen.</p>
             <Link href="/welcome" className="press focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">
