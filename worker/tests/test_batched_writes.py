@@ -402,3 +402,74 @@ class StoredRowKeepsItsIdTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchiveCaptureWriteTests(unittest.TestCase):
+    """A second pass over an archived page updates the capture it already stored.
+
+    Wayback derives a capture's id, and its page observation's with it, from the archive digest, which archive.org can
+    report differently for a capture it served before. The rows are keyed by the capture instead, so a recomputed id
+    must not insert a second row (unique source_id, original_url, captured_at — how the first weekly historical run
+    failed on 2026-09-19) or point at an observation id the database does not have.
+    """
+
+    URL = "https://careers.example.test/early-careers/"
+    CAPTURED = datetime(2022, 11, 17, 23, 22, 42, tzinfo=UTC)
+
+    def capture(self, suffix: str) -> Any:
+        from firstseen.models import ArchiveCapture
+
+        return ArchiveCapture(
+            id=UUID(f"00000000-0000-4000-8000-00000000c0{suffix}"),
+            observation_id=UUID(f"00000000-0000-4000-8000-00000000d0{suffix}"),
+            source_id=SOURCE_ID,
+            original_url=self.URL,
+            archive_url=f"https://web.archive.org/web/20221117232242/{self.URL}",
+            captured_at=self.CAPTURED,
+            status_code=200,
+            change_kind="unchanged",
+            completeness=0.9,
+            is_partial=False,
+            evidence_excerpt="Early careers at Example",
+        )
+
+    def client_with_stored_rows(self) -> Client:
+        return Client(
+            {
+                "raw_job_observations": [
+                    {"id": "stored-observation", "source_id": str(SOURCE_ID),
+                     "archive_original_url": self.URL, "archive_capture_at": self.CAPTURED.isoformat()}
+                ],
+                "archive_captures": [
+                    {"id": "stored-capture", "source_id": str(SOURCE_ID),
+                     "original_url": self.URL, "captured_at": self.CAPTURED.isoformat()}
+                ],
+            }
+        )
+
+    def written(self, client: Client) -> tuple[Any, dict[str, Any]]:
+        writes = [(payload, options) for table, op, payload, options in client.requests
+                  if table == "archive_captures" and op == "upsert"]
+        self.assertEqual(len(writes), 1)
+        return writes[0]
+
+    def test_a_capture_already_stored_keeps_its_id_and_its_observation(self):
+        client = self.client_with_stored_rows()
+        repository(client).record_archive_captures([self.capture("11")])
+        payload, options = self.written(client)
+        self.assertEqual(payload[0]["id"], "stored-capture")
+        self.assertEqual(payload[0]["observation_id"], "stored-observation")
+        self.assertEqual(options["on_conflict"], "source_id,original_url,captured_at")
+        self.assertEqual(payload[0]["change_kind"], "unchanged", "the capture's own data is still written")
+
+    def test_a_new_capture_is_written_with_its_own_ids(self):
+        client = Client({"raw_job_observations": [], "archive_captures": []})
+        repository(client).record_archive_captures([self.capture("22")])
+        payload, _ = self.written(client)
+        self.assertEqual(payload[0]["id"], "00000000-0000-4000-8000-00000000c022")
+        self.assertEqual(payload[0]["observation_id"], "00000000-0000-4000-8000-00000000d022")
+
+    def test_no_captures_reads_nothing(self):
+        client = Client({})
+        repository(client).record_archive_captures([])
+        self.assertEqual(client.requests, [])

@@ -858,15 +858,58 @@ class IntelligenceRepository:
         )
         return int(response.count or 0)
 
+    def _stored_archive_rows(self, source_ids: set[str]) -> tuple[dict[tuple[str, str, datetime], str], dict[tuple[str, str, datetime], str]]:
+        """What the database already holds for each (source, archived URL, capture time): its observation and capture.
+
+        Wayback derives a capture's id, and the page observation's with it, from the archive digest, which archive.org
+        can report differently for a capture it served before. The rows themselves are keyed by the capture instead
+        (`archive_captures` is unique on source, URL, and capture time; the observation carries the same three
+        columns), so a second pass finds them here rather than inventing ids the database would refuse.
+        """
+        if not source_ids:
+            return {}, {}
+        ids = sorted(source_ids)
+        observations = fetch_all_rows(
+            lambda: self.client.table("raw_job_observations")
+            .select("id,source_id,archive_original_url,archive_capture_at")
+            .in_("source_id", ids)
+            .not_.is_("archive_capture_at", "null"),
+            key="id",
+        )
+        captures = fetch_all_rows(
+            lambda: self.client.table("archive_captures")
+            .select("id,source_id,original_url,captured_at")
+            .in_("source_id", ids),
+            key="id",
+        )
+        def key(row: dict[str, Any], url_column: str, time_column: str) -> tuple[str, str, datetime] | None:
+            url, moment = row.get(url_column), row.get(time_column)
+            if not url or not moment:
+                return None
+            return str(row["source_id"]), str(url), datetime.fromisoformat(str(moment))
+
+        return (
+            {item: str(row["id"]) for row in observations if (item := key(row, "archive_original_url", "archive_capture_at"))},
+            {item: str(row["id"]) for row in captures if (item := key(row, "original_url", "captured_at"))},
+        )
+
     def record_archive_captures(self, captures: list[ArchiveCapture]) -> None:
         if not captures:
             return
+        stored_observations, stored_captures = self._stored_archive_rows({str(capture.source_id) for capture in captures})
+
+        def identity(capture: ArchiveCapture) -> tuple[str, str, datetime]:
+            return str(capture.source_id), str(capture.original_url), capture.captured_at
+
         self.client.table("archive_captures").upsert(
             [
                 {
-                    "id": str(capture.id),
+                    # A capture the database already holds keeps its own id and the observation it points at: its
+                    # observation_id is unique and references raw_job_observations, and that row kept the id it was
+                    # first written with (upsert_job).
+                    "id": stored_captures.get(identity(capture), str(capture.id)),
                     "source_id": str(capture.source_id),
-                    "observation_id": str(capture.observation_id),
+                    "observation_id": stored_observations.get(identity(capture), str(capture.observation_id)),
                     "original_url": str(capture.original_url),
                     "archive_url": str(capture.archive_url),
                     "captured_at": capture.captured_at.isoformat(),
@@ -883,7 +926,10 @@ class IntelligenceRepository:
                 }
                 for capture in captures
             ],
-            on_conflict="id",
+            # The schema's natural key, not the generated id: a capture re-read with a different digest recomputes a
+            # different id, and inserting it beside the stored row violates unique (source_id, original_url,
+            # captured_at) — which is how the first weekly historical run failed on 2026-09-19.
+            on_conflict="source_id,original_url,captured_at",
         ).execute()
 
     def save_historical_openings(self, events: list[HistoricalOpeningEvent]) -> None:
