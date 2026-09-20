@@ -71,20 +71,20 @@ if TYPE_CHECKING:
 HISTORICAL_ATTRIBUTION_VERSION = "archive-attribution-v1"
 # How much of an out-of-scope role's text is kept: enough for a citation and a weak matching prototype.
 OUT_OF_SCOPE_TEXT_KEPT = 300
-# What trim_out_of_scope_text reports (migration 202608140047), in its order.
+# Rows a column one call shortens. Measured, not guessed: at 200 the whole trim converged over a copy of the rig corpus
+# in 47 calls with the slowest taking 1.4 s, against the eight-second statement timeout PostgREST connects under.
+OUT_OF_SCOPE_TRIM_CHUNK = 200
+# What trim_out_of_scope_text reports (migration 202608140048), in its order.
 TRIM_REPORT_FIELDS = (
     "observations",
     "roles",
     "events",
-    "excerpt_bytes_before",
-    "excerpt_bytes_after",
-    "prototype_bytes_before",
-    "prototype_bytes_after",
-    "quote_bytes_before",
-    "quote_bytes_after",
-    "database_bytes_before",
-    "database_bytes_after",
+    "remaining_observations",
+    "remaining_roles",
+    "remaining_events",
 )
+# What out_of_scope_text_bytes reports.
+TEXT_BYTES_FIELDS = ("excerpt_bytes", "prototype_bytes", "quote_bytes", "database_bytes")
 ENRICHMENT_FINGERPRINT_PIPELINE = "enrichment_fingerprints"
 
 
@@ -338,7 +338,17 @@ class IntelligenceRepository:
             )
         return configs
 
-    def trim_out_of_scope_text(self, *, keep: int = OUT_OF_SCOPE_TEXT_KEPT) -> dict[str, int]:
+    def out_of_scope_text_bytes(self) -> dict[str, int]:
+        """What the text costs now (migration 202608140048): asked once before a trim and once after."""
+        # bounded: one row, four sums.
+        response = self.client.rpc("out_of_scope_text_bytes", {}).execute()
+        rows = cast(list[dict[str, Any]], response.data or [])
+        row = rows[0] if rows else {}
+        return {name: int(row.get(name) or 0) for name in TEXT_BYTES_FIELDS}
+
+    def trim_out_of_scope_text(
+        self, *, keep: int = OUT_OF_SCOPE_TEXT_KEPT, limit: int = OUT_OF_SCOPE_TRIM_CHUNK
+    ) -> dict[str, int]:
         """Shorten the text held against roles nobody can apply to (migration 202608140047).
 
         Half the corpus is the text of postings that are not early-career technical roles, and it is also most of what
@@ -346,8 +356,11 @@ class IntelligenceRepository:
         would download every byte it removes. In-scope and ambiguous roles keep everything, and so does a posting that
         has not been resolved yet, because resolution reads its text.
         """
-        # bounded: one row, the counts it changed and the bytes each column held on both sides.
-        response = self.client.rpc("trim_out_of_scope_text", {"p_keep": keep}).execute()
+        # PostgREST connects as a role with an eight-second statement timeout, which one statement over the whole
+        # bounded: `limit` rows a column at most, and one row of counts back; the caller loops until nothing is left.
+        response = self.client.rpc(
+            "trim_out_of_scope_text", {"p_keep": keep, "p_limit": limit or OUT_OF_SCOPE_TRIM_CHUNK}
+        ).execute()
         rows = cast(list[dict[str, Any]], response.data or [])
         row = rows[0] if rows else {}
         return {name: int(row.get(name) or 0) for name in TRIM_REPORT_FIELDS}

@@ -559,9 +559,13 @@ class SchemaContractTests(unittest.TestCase):
         so the rows it spares are part of the contract: an ambiguous role is waiting on a person's judgement and that
         person needs the text, and an unresolved posting's text is what resolution reads.
         """
+        # 048 replaces 047's one-statement form with a chunked one; both are read, because the rules the trim must
+        # keep are stated in 047 and carried by 048.
         schema = (
             Path(__file__).resolve().parents[2]
             / "supabase/migrations/202608140047_trim_out_of_scope_text.sql"
+        ).read_text() + (
+            Path(__file__).resolve().parents[2] / "supabase/migrations/202608140048_trim_in_chunks.sql"
         ).read_text()
         # Only out-of-scope roles' own text.
         self.assertIn("where scope_status = 'out_of_scope'", schema)
@@ -577,8 +581,15 @@ class SchemaContractTests(unittest.TestCase):
             self.assertNotIn(f"{column} = null", schema)
             self.assertNotIn(f"{column} = ''", schema)
         # It reports what it changed and what it cost, because the run that calls it is the only record.
-        for field in ("excerpt_bytes_before", "excerpt_bytes_after", "database_bytes_before", "database_bytes_after"):
+        for field in ("excerpt_bytes", "prototype_bytes", "quote_bytes", "database_bytes"):
             self.assertIn(field, schema)
+        # A call is bounded, because PostgREST connects under an eight-second statement timeout: one statement over the
+        # whole corpus failed with 57014 on the first scheduled run that tried it.
+        self.assertIn("p_limit must be between 1 and 5000", schema)
+        self.assertIn("limit p_limit", schema)
+        for field in ("remaining_observations", "remaining_roles", "remaining_events"):
+            self.assertIn(field, schema)
+        self.assertIn("drop function if exists public.trim_out_of_scope_text(integer);", schema)
         # Service-only, like every function the worker calls, and bounded.
         self.assertIn("p_keep must be between 1 and 8192", schema)
         self.assertIn(") from public, anon, authenticated;", schema)
