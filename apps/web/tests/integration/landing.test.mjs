@@ -53,10 +53,12 @@ test("the landing page states what the corpus holds, and draws the program's own
       assert.equal(stated, null, `collection last wrote ${Math.round(freshness.hours)} hours ago, so the line is left out`);
     }
 
-    // The hero chart: one dot per opening the card lists, each a link to where that date was seen.
-    const chartStart = html.indexOf('role="group"');
-    const chart = html.slice(chartStart, html.indexOf("</svg>", chartStart));
-    const dots = [...chart.matchAll(/<circle[^>]*class="[^"]*drop-in[^"]*"/g)];
+    // The hero chart: one dot per opening the card lists, each a link to where that date was seen. It is drawn in
+    // ordinary elements rather than one scaled drawing, so its labels keep their size on a narrow card.
+    const chartStart = html.indexOf('<figure class="m-0">');
+    assert.ok(chartStart > -1, "the card draws a chart");
+    const chart = html.slice(chartStart, html.indexOf("</figure>", chartStart));
+    const dots = [...chart.matchAll(/<span[^>]*class="[^"]*drop-in[^"]*"/g)];
     const links = [...chart.matchAll(/<a href="(https?:[^"]+)"[^>]*aria-label="([^"]+)"/g)];
     assert.ok(dots.length > 0, "the chart draws the program's openings");
     assert.equal(links.length, dots.length, "every dot is a link to the page it was seen on");
