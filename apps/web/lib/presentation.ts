@@ -58,3 +58,23 @@ export function contributionLabel(contribution: string): string {
 export function humanize(value: string): string {
   return value.replace(/_/g, " ").replace(/^\w/, (letter) => letter.toUpperCase());
 }
+
+/**
+ * Why an opening's date is not exact, in the reader's words.
+ *
+ * `historical_opening_events.uncertainty_reason` is written by collection for the record
+ * (worker/src/firstseen/history.py), in its own vocabulary: "absence boundary", "trustworthy earlier capture", "the
+ * source supplied". Those are the words of a system explaining itself to its authors. A reason this does not
+ * recognise is left out rather than shown raw, because a sentence from inside the machine is worse than no sentence.
+ */
+const UNCERTAINTY_REASONS: Array<[RegExp, string]> = [
+  [/^The source supplied an explicit publication date\.$/i, "The posting itself carried this date."],
+  [/absence boundary is available/i, "This is the first day 1stSeen saw it listed. It may have opened earlier."],
+  [/No trustworthy earlier capture establishes absence/i, "No earlier copy of the page is on record, so it may have opened before this."],
+];
+
+export function uncertaintyReason(stored: string): string | null {
+  const trimmed = stored.trim();
+  if (!trimmed) return null;
+  return UNCERTAINTY_REASONS.find(([pattern]) => pattern.test(trimmed))?.[1] ?? null;
+}

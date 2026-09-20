@@ -8,6 +8,8 @@ import { FocusedShell } from "@/components/focused-shell";
 import { Icon } from "@/components/ui/icon";
 import { loadGoogleConnectionSummary } from "@/lib/account/data";
 import { hasSupabaseConfig } from "@/lib/config";
+import { hasGmailConfig } from "@/lib/email-digests/config";
+import { hasGoogleCalendarConfig } from "@/lib/google-calendar/config";
 import { FIELDS, SEASON_LABELS } from "@/lib/onboarding";
 import { loadOnboardingState } from "@/lib/onboarding-data";
 import { hasServiceRoleConfig } from "@/lib/real-data";
@@ -44,6 +46,8 @@ export default async function SettingsPage() {
   const { answers, legacy } = state;
   const answered = state.completedAt !== null;
   const fields = FIELDS.filter((field) => answers.fields.includes(field.value)).map((field) => field.name);
+  const calendarSync = hasGoogleCalendarConfig();
+  const gmailDelivery = hasGmailConfig();
 
   return (
     <FocusedShell>
@@ -78,10 +82,13 @@ export default async function SettingsPage() {
           <p className="text-sm">{state.followedRoles === 1 ? "You watch 1 program." : `You watch ${state.followedRoles} programs.`}</p>
           <Link href={state.followedRoles ? "/roles?watched=1" : "/roles"} className="link-accent focus-ring inline-flex min-h-touch items-center text-sm">{state.followedRoles ? "Open your watchlist" : "Browse programs to watch"}</Link>
         </div>
-        <p className="mt-2 text-caption text-ink-subtle">
-          Google Calendar sync is on the <Link href="/calendar" className="link-accent focus-ring">recruiting calendar</Link>, and Gmail delivery is on{" "}
-          <Link href="/digests" className="link-accent focus-ring">email digests</Link>.
-        </p>
+        {/* Only what this deployment can actually do: an offer that is not configured is not mentioned at all. */}
+        {(calendarSync || gmailDelivery) && (
+          <p className="mt-2 text-caption text-ink-subtle">
+            {calendarSync && <>Add your dates to Google Calendar on the <Link href="/calendar" className="link-accent focus-ring">recruiting calendar</Link>{gmailDelivery ? ", and send" : "."}</>}
+            {gmailDelivery && <>{calendarSync ? " " : "Send "}yourself a digest from <Link href="/digests" className="link-accent focus-ring">email digests</Link>.</>}
+          </p>
+        )}
       </section>
 
       <section className="mt-10" aria-labelledby="account-title">

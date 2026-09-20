@@ -14,7 +14,7 @@ import { confidenceOutOf, formatConfidence } from "@/lib/confidence";
 import { formatDay, formatStamp } from "@/lib/dates";
 import { BASIS } from "@/lib/forecast-basis";
 import { PLAN_OUTCOME_MESSAGES, type PlanOutcome } from "@/lib/onboarding";
-import { contributionLabel, humanize, locationLabel } from "@/lib/presentation";
+import { contributionLabel, humanize, locationLabel, uncertaintyReason } from "@/lib/presentation";
 
 /**
  * Evidence precision must never blur. `exact` requires a source-supplied publication timestamp, `bounded` requires an
@@ -158,7 +158,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
 
         <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
-            {eyebrow && <p className="label-caps text-ink-subtle">{eyebrow}</p>}
+            {eyebrow && <p className="text-caption font-semibold text-ink-subtle">{eyebrow}</p>}
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
             <h1 id="role-title" className="heading-display mt-1 text-3xl leading-tight sm:text-4xl md:text-5xl">{view.role}</h1>
             <div className="mt-3 flex flex-wrap items-center gap-x-4">
@@ -207,7 +207,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                         )}
                         {cycle.uncertaintyDays ? <span className="tabular text-ink-subtle">give or take {cycle.uncertaintyDays} days</span> : null}
                       </p>
-                      {cycle.uncertaintyReason && <p className="mt-1 text-micro text-ink-subtle">{cycle.uncertaintyReason}</p>}
+                      {uncertaintyReason(cycle.uncertaintyReason) && <p className="mt-1 text-micro text-ink-subtle">{uncertaintyReason(cycle.uncertaintyReason)}</p>}
                     </div>
                   </li>
                 ))}
