@@ -40,8 +40,7 @@ const MARKETING = [/\bseamless(?:ly)?\b/i, /\bunlock\b/i, /\bsupercharge\b/i, /\
 /**
  * Words from inside the build, in copy a person reads. Someone signing in has not arrived at a "workspace", does not
  * have a "deployment", and has never thought about a session cookie; and what the site follows is a program, which it
- * should be called on every page and not only on most of them. ("Readiness milestones" is the same kind of phrase and
- * still reaches the calendar, digest, and Google Calendar pages; those are their own copy pass.)
+ * should be called on every page and not only on most of them.
  */
 const INSIDE_OUT = [
   /\brecruiting workspace\b/i,
@@ -71,6 +70,16 @@ const WRONG_NOUN = [
 ];
 
 /**
+ * The plan a forecast is worked back into is a prep plan, and each thing on it is a prep step. "Readiness milestone"
+ * is what `readiness.py` calls one and what its table is named; "preparation milestone" was the half-translated form
+ * that reached the calendar. Neither is what anybody says out loud.
+ */
+const WRONG_WORD = [
+  /\breadiness milestones?\b/i,
+  /\bpreparation milestones?\b/i,
+];
+
+/**
  * Every voice leak in the product's own words. This reads source files, not rendered pages: a company's job title can
  * carry an em dash or the word "honest", and that is their copy, not ours. Comments are stripped first, so only what
  * reaches a person is checked.
@@ -87,6 +96,7 @@ export function voiceLeaksInSource(source) {
   for (const pattern of MARKETING) find("marketing", pattern);
   for (const pattern of INSIDE_OUT) find("inside out", pattern);
   for (const pattern of WRONG_NOUN) find("wrong noun", pattern);
+  for (const pattern of WRONG_WORD) find("wrong word", pattern);
   // An em dash is a writer's tic here: the product's sentences are short enough not to need one.
   find("em dash", /\u2014/);
   return leaks;
@@ -123,5 +133,6 @@ export function pageLanguageLeaks(html, { allow = [] } = {}) {
   for (const word of DEV_WORDS) find("dev word", word);
   for (const pattern of INSIDE_OUT) find("inside out", pattern);
   for (const pattern of WRONG_NOUN) find("wrong noun", pattern);
+  for (const pattern of WRONG_WORD) find("wrong word", pattern);
   return leaks;
 }

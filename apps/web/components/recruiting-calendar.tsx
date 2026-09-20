@@ -28,7 +28,7 @@ export type UnforecastableRole = {
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const milestoneGroups: Array<{ value: string; label: string; types: CalendarEventType[] }> = [
-  { value: "all", label: "All milestones", types: [] },
+  { value: "all", label: "All prep steps", types: [] },
   { value: "networking", label: "Start networking", types: ["networking"] },
   { value: "referrals", label: "Identify referrals", types: ["referrals"] },
   { value: "resume", label: "Resume ready", types: ["resume_ready"] },
@@ -46,7 +46,7 @@ function formatDate(value: string, options: Intl.DateTimeFormatOptions = { month
 const KIND = {
   confirmed: { utility: "date-confirmed", marker: "●", label: "Confirmed opening" },
   predicted: { utility: "date-predicted", marker: "◇", label: "Predicted opening" },
-  readiness: { utility: "date-preparation", marker: "▪", label: "Preparation milestone" },
+  readiness: { utility: "date-preparation", marker: "▪", label: "Prep step" },
 } as const;
 
 function kindOf(event: CalendarEvent) {
@@ -129,7 +129,7 @@ export function RecruitingCalendar({
       <section className="grid gap-5 border-b border-line pb-6 lg:grid-cols-[minmax(0,1fr)_minmax(380px,.65fr)] lg:items-end" aria-labelledby="calendar-title">
         <div>
           <h1 id="calendar-title" className="heading-display mt-3 text-3xl md:text-4xl">Recruiting Calendar</h1>
-          <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for preparation milestones, predicted opening windows, and confirmed openings.</p>
+          <p className="mt-3 max-w-xl text-sm leading-6 text-ink-muted">One timeline for your prep steps, predicted opening windows, and confirmed openings.</p>
         </div>
         <div className="flex flex-col items-start gap-4 lg:items-end">
           {googleCalendar && <GoogleCalendarSync events={events} />}
@@ -168,7 +168,7 @@ export function RecruitingCalendar({
           <h2 id="empty-title" className="text-sm font-semibold">Your watchlist is empty</h2>
           <p className="mt-1.5 max-w-2xl text-caption text-ink-muted">
             This calendar fills itself from the programs you watch: their predicted opening windows, confirmed
-            openings, and the preparation milestones worked back from each forecast. Answer four questions
+            openings, and the prep steps worked back from each forecast. Answer four questions
             for a starting watchlist, or use Save to my watchlist on any program page.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -207,7 +207,7 @@ export function RecruitingCalendar({
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {weekEvents.filter((event) => event.semantics === "readiness").map((event) => <button type="button" key={event.id} onClick={() => setSelected(event)} className="focus-ring flex items-start gap-3 border border-line bg-surface p-3 text-left hover:border-line-strong"><span className={cn("mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full", event.completed ? "bg-success-line text-ink-inverse" : "border border-dotted border-date-preparation-line text-date-preparation-ink")} aria-hidden="true">{event.completed ? <Icon name="check" size={11} /> : <Icon name="clock-3" size={11} />}</span><div className="min-w-0"><p className="text-micro font-semibold text-ink-subtle">{formatDate(event.date)} · {event.company}</p><p className={cn("mt-1 text-xs font-semibold", event.completed && "text-ink-subtle line-through")}>{event.label}</p><p className="mt-1 truncate text-micro text-ink-subtle">{event.role}</p></div></button>)}
-              {weekEvents.filter((event) => event.semantics === "readiness").length === 0 && <p className="col-span-full border border-dashed border-line-strong p-5 text-center text-xs text-ink-muted">No preparation milestone falls in this week.</p>}
+              {weekEvents.filter((event) => event.semantics === "readiness").length === 0 && <p className="col-span-full border border-dashed border-line-strong p-5 text-center text-xs text-ink-muted">No prep step falls in this week.</p>}
             </div>
           </div>
         </section>
@@ -220,7 +220,7 @@ export function RecruitingCalendar({
             </div>
             <p className="flex items-center gap-2 text-caption font-semibold text-ink-subtle lg:ml-auto"><Icon name="filter" size={13} />Filters</p>
             <div className="grid gap-2 sm:flex">
-              {([[company, setCompany, "All companies", companies], [family, setFamily, "All fields", families], [milestone, setMilestone, "All milestones", milestoneGroups.map((item) => ({ value: item.value, label: item.label }))]] as const).map(([value, setter, allLabel, options]) => <label key={String(allLabel)} className="relative"><span className="sr-only">{String(allLabel)}</span><select value={String(value)} onChange={(event) => (setter as (value: string) => void)(event.target.value)} className={selectClass}><option value="all">{String(allLabel)}</option>{(options as ReadonlyArray<string | { value: string; label: string }>).filter((option) => typeof option === "string" || option.value !== "all").map((option) => typeof option === "string" ? <option key={option} value={option}>{option}</option> : <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevron-down" size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle" /></label>)}
+              {([[company, setCompany, "All companies", companies], [family, setFamily, "All fields", families], [milestone, setMilestone, "All prep steps", milestoneGroups.map((item) => ({ value: item.value, label: item.label }))]] as const).map(([value, setter, allLabel, options]) => <label key={String(allLabel)} className="relative"><span className="sr-only">{String(allLabel)}</span><select value={String(value)} onChange={(event) => (setter as (value: string) => void)(event.target.value)} className={selectClass}><option value="all">{String(allLabel)}</option>{(options as ReadonlyArray<string | { value: string; label: string }>).filter((option) => typeof option === "string" || option.value !== "all").map((option) => typeof option === "string" ? <option key={option} value={option}>{option}</option> : <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevron-down" size={11} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle" /></label>)}
             </div>
           </div>
 

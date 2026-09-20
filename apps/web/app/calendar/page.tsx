@@ -10,7 +10,7 @@ import { currentSession } from "@/lib/session";
 
 export const metadata: Metadata = {
   title: "Recruiting Calendar",
-  description: "Watched opportunities, preparation milestones, predicted windows, and confirmed openings in one timeline.",
+  description: "The programs you watch, your prep steps, predicted windows, and confirmed openings in one timeline.",
 };
 
 // User-owned readiness state and live forecasts; never a cached shared snapshot.

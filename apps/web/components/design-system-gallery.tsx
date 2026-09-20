@@ -102,7 +102,7 @@ export function DesignSystemGallery() {
           description="You will no longer see its updates in digests or on your calendar."
           footer={<><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Keep watching</Button><Button type="button" onClick={() => setDialogOpen(false)}>Stop watching</Button></>}
         >
-          <Checkbox id="gallery-dialog-confirm" label="Also remove its preparation milestones" />
+          <Checkbox id="gallery-dialog-confirm" label="Also remove its prep steps" />
         </Dialog>
       </Section>
 
@@ -145,7 +145,7 @@ export function DesignSystemGallery() {
           <span className="rounded-control border px-2 py-1 evidence-observed">Observed by</span>
           <span className="rounded-control border px-2 py-1 date-confirmed">Confirmed opening</span>
           <span className="rounded-control border px-2 py-1 date-predicted">Predicted opening</span>
-          <span className="rounded-control border px-2 py-1 date-preparation">Preparation milestone</span>
+          <span className="rounded-control border px-2 py-1 date-preparation">Prep step</span>
         </div>
       </Section>
     </main>

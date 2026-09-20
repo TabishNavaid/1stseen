@@ -87,7 +87,7 @@ export default function PrivacyPage() {
             for today.
           </li>
           <li>
-            <strong>Preparation plans.</strong> For a followed role with a forecast, the milestones worked back from it, such as
+            <strong>Prep plans.</strong> For a program you follow that has a forecast, the prep steps worked back from it, such as
             when to have a résumé ready, with their due dates, and when you mark one done.
           </li>
         </ul>

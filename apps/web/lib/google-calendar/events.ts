@@ -76,7 +76,7 @@ export async function mapSelectedEvent(input: SelectedCalendarEvent, userId: str
     ? "This is a 1stSeen statistical forecast, not a confirmed company date. Forecasts can change as new evidence arrives."
     : confirmed
       ? "This date was recorded from confirmed recruiting evidence in 1stSeen."
-      : "This readiness milestone was selected for sync in 1stSeen.";
+      : "You chose this prep step in 1stSeen.";
   const confidence = predicted && input.confidence !== undefined
     ? `\nForecast ${confidencePhrase(input.confidence)}: how much consistent evidence backs the window, not the chance it is right.`
     : "";

@@ -57,7 +57,7 @@ class EarliestCompaniesIntentTest(unittest.TestCase):
         self.assertIsNone(UsefulQuestionIntent.parse("When does Stripe open its software engineering internship?"))
 
     def test_asking_when_one_program_opens_and_what_to_prepare_is_about_that_program(self) -> None:
-        # The watchlist-wide preparation answer ("0 preparation milestones for watched roles") ignored the program.
+        # The watchlist-wide preparation answer ("0 prep steps for the programs you watch arles") ignored the program.
         self.assertIsNone(
             UsefulQuestionIntent.parse(
                 "When will the PDT Partners Summer Systems Engineering Intern program open, and what should I prepare?"

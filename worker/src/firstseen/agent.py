@@ -750,7 +750,7 @@ class RecruitingAgent:
                 cast(RoleEntity, role),
                 user_id=state.actor_id,
             )
-            return plan, f"Created {len(plan.milestones)} forecast-based readiness milestones."
+            return plan, f"Built a prep plan with {len(plan.milestones)} steps."
         raise ValueError(f"tool preconditions not met for {action}")
 
     def _apply(self, action: ToolName, result: Any, state: RecruitingAgentState) -> None:
@@ -791,7 +791,7 @@ class RecruitingAgent:
             )
         elif action == "create_readiness_plan":
             state.readiness_plan = cast(ReadinessPlan, result)
-            state.known_facts.append("Readiness milestones were calculated from the forecast interval.")
+            state.known_facts.append("The prep steps were worked back from the predicted window.")
         elif action == "answer_portfolio_question":
             state.structured_result = cast(UsefulQuestionResult, result)
             state.known_facts.append(state.structured_result.summary)

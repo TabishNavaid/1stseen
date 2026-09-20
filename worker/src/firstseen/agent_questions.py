@@ -360,7 +360,8 @@ class SupabasePortfolioQueries:
     def preparation_priorities(self, as_of: date, horizon_days: int, user_id: UUID) -> UsefulQuestionResult:
         watched = self._watched_role_ids(user_id)
         items = self._workback_items(as_of, horizon_days, watched, user_id, overdue_days=14)
-        summary = f"{len(items)} preparation milestone(s) for watched roles are due now or soon."
+        plural = "" if len(items) == 1 else "s"
+        summary = f"{len(items)} prep step{plural} for the programs you watch are due now or soon."
         return UsefulQuestionResult(
             question_class="prepare_now",
             as_of=as_of,

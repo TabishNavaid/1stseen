@@ -52,7 +52,7 @@ as well as colors, and the product always pairs them with a label:
 | `evidence-observed` | dotted | Visible by that date; it may have opened earlier |
 | `date-confirmed` | solid | A source-supplied opening |
 | `date-predicted` | dashed | A statistical interval boundary, never a confirmed date |
-| `date-preparation` | dotted | A readiness milestone |
+| `date-preparation` | dotted | A prep step |
 
 Do not merge these into a single "quality" scale or a single confidence color.
 
