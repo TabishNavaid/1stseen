@@ -943,9 +943,48 @@ class IntelligenceRepository:
         # reconstruction updates the existing cycle instead of inserting a duplicate
         # alongside a row that was created with a different identifier.
         self.client.table("historical_opening_events").upsert(
-            [self.event_payload(event) for event in events],
+            self.event_payloads(events, self.stored_event_quotes(events)),
             on_conflict=self.EVENT_KEY,
         ).execute()
+
+    def stored_event_quotes(self, events: Sequence[HistoricalOpeningEvent]) -> dict[tuple[str, str, str], str]:
+        """The quote each of these events is already stored with, by natural key."""
+        keys = {str(event.canonical_role_id) for event in events}
+        rows = self._rows_in(
+            "historical_opening_events",
+            "canonical_role_id,opened_on,observation_id,evidence_quote",
+            "canonical_role_id",
+            sorted(keys),
+        )
+        return {
+            (str(row["canonical_role_id"]), str(row["opened_on"]), str(row["observation_id"])): str(row["evidence_quote"])
+            for row in rows
+            if row.get("evidence_quote")
+        }
+
+    @classmethod
+    def event_payloads(
+        cls,
+        events: Sequence[HistoricalOpeningEvent],
+        stored_quotes: dict[tuple[str, str, str], str],
+    ) -> list[dict[str, Any]]:
+        """Each event's row, with a stored event keeping the quote it was created with.
+
+        An opening is dated from the evidence that was visible when it was established, and reconstruction runs again
+        over the same cycle every pass. Re-deriving the quote each time rewrote an opening dated 2025 with text a
+        posting carried in 2026, and made every pass read the text of every observation of every role, which was the
+        largest part of what enrichment downloaded. The quote a stored event was created with is kept.
+        """
+        payloads = []
+        for event in events:
+            payload = cls.event_payload(event)
+            stored = stored_quotes.get(
+                (payload["canonical_role_id"], str(payload["opened_on"]), payload["observation_id"])
+            )
+            if stored:
+                payload["evidence_quote"] = stored
+            payloads.append(payload)
+        return payloads
 
     EVENT_KEY = "canonical_role_id,opened_on,observation_id"
 
@@ -1506,12 +1545,17 @@ class IntelligenceRepository:
             self.match_payload(resolution), on_conflict="observation_id,canonical_role_id"
         ).execute()
 
-    _OBSERVATION_COLUMNS = (
+    # Everything an observation carries except its evidence excerpt, which averages 3,041 bytes on hosted and is about
+    # three fifths of what enriching one company downloads. Two decisions read it: resolving an observation for the
+    # first time, and quoting an opening the first time that opening is recorded. It is read for those and no others
+    # (`observation_excerpts`).
+    _OBSERVATION_COLUMNS_SLIM = (
         "id,source_id,external_job_id,identity_key,source_url,apply_url,raw_title,company_name,"
         "location,employment_type,published_at,first_seen_at,last_seen_at,content_hash,source_type,"
-        "source_reliability,extraction_method,evidence_excerpt,archive_capture_at,archive_url,"
+        "source_reliability,extraction_method,archive_capture_at,archive_url,"
         "archive_original_url,archive_digest"
     )
+    _OBSERVATION_COLUMNS = f"{_OBSERVATION_COLUMNS_SLIM},evidence_excerpt"
 
     @staticmethod
     def _observation_from_row(row: dict[str, Any]) -> JobObservation | None:
@@ -1570,16 +1614,24 @@ class IntelligenceRepository:
 
         return CompanyEnrichmentSession(self, company_id)
 
-    def company_observation_rows(self, source_ids: list[str]) -> list[dict[str, Any]]:
-        """Every stored observation of these sources, including rows without an identity key."""
+    def company_observation_rows(self, source_ids: list[str], *, with_excerpt: bool = True) -> list[dict[str, Any]]:
+        """Every stored observation of these sources, including rows without an identity key.
+
+        Without `with_excerpt` the rows carry no `evidence_excerpt` key at all, so a reader that needs one asks for it
+        (`observation_excerpts`) instead of quietly seeing an empty string where the database holds text.
+        """
         if not source_ids:
             return []
+        columns = self._OBSERVATION_COLUMNS if with_excerpt else self._OBSERVATION_COLUMNS_SLIM
         return fetch_all_rows(
-            lambda: self.client.table("raw_job_observations")
-            .select(self._OBSERVATION_COLUMNS)
-            .in_("source_id", source_ids),
+            lambda: self.client.table("raw_job_observations").select(columns).in_("source_id", source_ids),
             key="id",
         )
+
+    def observation_excerpts(self, observation_ids: list[str]) -> dict[str, str]:
+        """The evidence excerpt of each of these observations, read in chunks."""
+        rows = self._rows_in("raw_job_observations", "id,evidence_excerpt", "id", sorted(set(observation_ids)))
+        return {str(row["id"]): str(row.get("evidence_excerpt") or "") for row in rows}
 
     def observation_matches_for_sources(self, source_ids: list[str]) -> list[dict[str, Any]]:
         """Every role match, primary or not, of an observation from these sources."""
@@ -1675,15 +1727,18 @@ class IntelligenceRepository:
         visible there, not that the observation's own identity is settled. Oldest evidence comes first so the earliest
         observation of a program establishes its canonical identity and later cycles match into it.
         """
-        matched = {str(item["observation_id"]) for item in matches if item.get("is_primary")}
         observations = [
             observation
-            for row in rows
-            if row.get("identity_key") is not None
-            and str(row["id"]) not in matched
-            and (observation := cls._observation_from_row(row)) is not None
+            for row in cls.unresolved_rows(rows, matches)
+            if (observation := cls._observation_from_row(row)) is not None
         ]
         return sorted(observations, key=lambda item: (item.first_seen_at, str(item.id)))
+
+    @classmethod
+    def unresolved_rows(cls, rows: list[dict[str, Any]], matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The rows `unresolved_among` builds from, so a caller can prepare them before it does."""
+        matched = {str(item["observation_id"]) for item in matches if item.get("is_primary")}
+        return [row for row in rows if row.get("identity_key") is not None and str(row["id"]) not in matched]
 
     def list_recurring_roles(self, company_id: UUID) -> list[RecurringRoleIdentity]:
         rows = fetch_all_rows(

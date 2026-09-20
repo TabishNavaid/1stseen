@@ -68,8 +68,27 @@ resolved) took 16 minutes end to end with 3,277 requests, well inside the 45-min
 steady-state pass over Figma (324 observations, 144 roles, nothing new to resolve) took 1,251 requests and 78 s before
 and 26 requests and 4.7 s after.
 
-What a run still reads is every company's evidence: its observations' text, its stored opening events, and its archive
-captures, because reconstruction re-derives every role from them. On Figma that is about 2.5 KB per observation on the
+### An opening keeps the quote it was created with
+
+Reconstruction rebuilds a role's whole history every pass. It used to write each event with the quote it derived that
+pass, which had two costs: an opening dated 2025 was rewritten with text its posting carried in 2026, and every pass
+read the text of every observation of every role, which was the largest part of what enrichment downloaded. A stored
+event now keeps its quote (`IntelligenceRepository.event_payloads`), so an opening is evidenced by what was visible
+when it was established, and the text a pass reads is only what it needs: the postings it resolves, and the postings a
+role has no opening of its own for yet.
+
+Measured on hosted over five companies of different sizes, a whole pass fell from 4,578 to 3,598 bytes per
+observation; corpus-wide the posting text a settled pass reads falls from 73.7 MB to 16.7 MB. The remainder is the
+postings that merge into another's cycle: several postings of one cycle collapse into a single opening, and the ones
+merged away keep a role match without ever carrying an event, so their text is read every pass even though the merge
+discards it. Reading it only for the candidates that survive the merge would need the quote to be resolved after
+merging rather than before, which is the next step if that 16.7 MB matters.
+
+One consequence to know: a quote recorded poorly stays poor. If a posting's text was missing when its opening was
+first recorded, the event keeps the title it fell back to, and a later pass will not improve it.
+
+What a run still reads is every company's evidence: its observations' text where an opening has yet to be recorded, its
+stored opening events, and its archive captures, because reconstruction re-derives every role from them. On Figma that is about 2.5 KB per observation on the
 wire, so about 45 MB per current-jobs run over the whole corpus. Four runs a day would be about 5.5 GB a month, more
 than Supabase Free's 5 GB of egress before anything else is counted, so current jobs run twice a day (about 2.7 GB).
 

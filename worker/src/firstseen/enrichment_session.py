@@ -20,6 +20,7 @@ own per-item methods, so a row the database rejects fails only its own decision,
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -62,9 +63,14 @@ class CompanyEnrichmentSession:
         self.repository = repository
         self.company_id = company_id
         self._source_ids = repository.company_source_ids(company_id)
+        # Without their evidence excerpts: those average 3,041 bytes on hosted and are about three fifths of what
+        # enriching one company downloads. Only two decisions read one -- resolving an observation, and quoting an
+        # opening the first time it is recorded -- so they are read for those observations and no others.
         self._observation_rows = {
-            str(row["id"]): row for row in repository.company_observation_rows(self._source_ids)
+            str(row["id"]): row
+            for row in repository.company_observation_rows(self._source_ids, with_excerpt=False)
         }
+        self._excerpts_read: set[str] = set()
         self._observation_matches = repository.observation_matches_for_sources(self._source_ids)
         # Any match, primary or an archive attribution, marks an observation as already resolved (role_match_exists).
         self._matched_observations = {str(row["observation_id"]) for row in self._observation_matches}
@@ -96,7 +102,24 @@ class CompanyEnrichmentSession:
 
     def list_unresolved_observations(self, company_id: UUID) -> list[JobObservation]:
         self._require(company_id)
-        return self.repository.unresolved_among(list(self._observation_rows.values()), self._observation_matches)
+        rows = list(self._observation_rows.values())
+        # Resolving a posting reads its text; a posting already resolved is not resolved again.
+        self._hydrate_excerpts([str(row["id"]) for row in self.repository.unresolved_rows(rows, self._observation_matches)])
+        return self.repository.unresolved_among(rows, self._observation_matches)
+
+    def _hydrate_excerpts(self, observation_ids: Iterable[str]) -> None:
+        """Read the evidence excerpt of each of these observations, once per session, in one request."""
+        missing = sorted({
+            observation_id
+            for observation_id in observation_ids
+            if observation_id not in self._excerpts_read and observation_id in self._observation_rows
+        })
+        if not missing:
+            return
+        self._excerpts_read.update(missing)
+        excerpts = self.repository.observation_excerpts(missing)
+        for observation_id in missing:
+            self._observation_rows[observation_id]["evidence_excerpt"] = excerpts.get(observation_id, "")
 
     def list_canonical_roles_for_resolution(self, company_id: UUID) -> list[CanonicalRoleIdentity]:
         self._require(company_id)
@@ -269,7 +292,9 @@ class CompanyEnrichmentSession:
         try:
             self.repository.upsert_rows(
                 "historical_opening_events",
-                [IntelligenceRepository.event_payload(event) for item in history.values() for event in item.events],
+                IntelligenceRepository.event_payloads(
+                    [event for item in history.values() for event in item.events], self._stored_quotes()
+                ),
                 on_conflict=IntelligenceRepository.EVENT_KEY,
             )
             self.repository.upsert_rows(
@@ -298,6 +323,15 @@ class CompanyEnrichmentSession:
                     failed.append((UUID(role_id), len(item.events), exc))
             return failed
 
+    def _stored_quotes(self) -> dict[tuple[str, str, str], str]:
+        """The quote each stored event was created with, from the events this session already read."""
+        return {
+            (str(row["canonical_role_id"]), str(row["opened_on"]), str(row["observation_id"])): str(row["evidence_quote"])
+            for rows in self._event_rows.values()
+            for row in rows
+            if row.get("evidence_quote") and row.get("observation_id")
+        }
+
     def _load_history(self) -> dict[str, list[str]]:
         if self._role_observation_ids is None:
             if self._resolutions or self._role_writes:
@@ -314,4 +348,19 @@ class CompanyEnrichmentSession:
             for row in self.repository.event_rows_for_company(self.company_id):
                 self._event_rows[str(row["canonical_role_id"])].append(row)
             self._role_observation_ids = dict(by_role)
+            # Reconstruction quotes an observation only in an event it creates, and an event it already created keeps
+            # the quote it has (repository.event_payloads). So the text needed is that of the observations this
+            # company's roles have no event for yet -- in one request, not one per role.
+            evidenced = {
+                (str(row["canonical_role_id"]), str(row["observation_id"]))
+                for rows in self._event_rows.values()
+                for row in rows
+                if row.get("observation_id")
+            }
+            self._hydrate_excerpts(
+                observation_id
+                for role_id, ids in by_role.items()
+                for observation_id in ids
+                if (role_id, observation_id) not in evidenced
+            )
         return self._role_observation_ids

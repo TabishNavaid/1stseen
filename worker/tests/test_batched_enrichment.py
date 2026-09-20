@@ -121,7 +121,7 @@ class MemoryRepository:
 
     def __getattribute__(self, name: str) -> Any:
         attribute = object.__getattribute__(self, name)
-        if callable(attribute) and not name.startswith("_") and name not in {"enrichment_session", "unresolved_among"}:
+        if callable(attribute) and not name.startswith("_") and name not in {"enrichment_session", "unresolved_among", "unresolved_rows"}:
             object.__setattr__(self, "requests", object.__getattribute__(self, "requests") + 1)
         return attribute
 
@@ -138,8 +138,21 @@ class MemoryRepository:
     def company_source_ids(self, company_id: UUID) -> list[str]:
         return self._source_ids(company_id)
 
-    def company_observation_rows(self, source_ids: list[str]) -> list[dict[str, Any]]:
-        return [deepcopy(row) for _, row in sorted(self.db.observations.items()) if row["source_id"] in source_ids]
+    def company_observation_rows(self, source_ids: list[str], *, with_excerpt: bool = True) -> list[dict[str, Any]]:
+        rows = [deepcopy(row) for _, row in sorted(self.db.observations.items()) if row["source_id"] in source_ids]
+        if not with_excerpt:
+            # As PostgREST does when the column is not selected: the key is absent, not empty.
+            for row in rows:
+                row.pop("evidence_excerpt", None)
+        return rows
+
+    def observation_excerpts(self, observation_ids: list[str]) -> dict[str, str]:
+        self.excerpts_requested = sorted({*getattr(self, "excerpts_requested", set()), *observation_ids})
+        return {
+            str(item): str(self.db.observations[item].get("evidence_excerpt") or "")
+            for item in observation_ids
+            if item in self.db.observations
+        }
 
     def observation_matches_for_sources(self, source_ids: list[str]) -> list[dict[str, Any]]:
         return [
@@ -150,6 +163,9 @@ class MemoryRepository:
 
     def unresolved_among(self, rows: list[dict[str, Any]], matches: list[dict[str, Any]]) -> list[JobObservation]:
         return Repo.unresolved_among(rows, matches)
+
+    def unresolved_rows(self, rows: list[dict[str, Any]], matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return Repo.unresolved_rows(rows, matches)
 
     def _company_roles(self, company_id: UUID) -> list[dict[str, Any]]:
         return [deepcopy(row) for _, row in sorted(self.db.roles.items()) if row["company_id"] == str(company_id)]
@@ -288,7 +304,13 @@ class MemoryRepository:
         return Repo.events_from_rows(deepcopy(rows))
 
     def save_historical_openings(self, events: list[HistoricalOpeningEvent]) -> None:
-        self.db.upsert_events([Repo.event_payload(event) for event in events])
+        # As the repository does: a stored event keeps the quote it was created with.
+        stored = {
+            key: str(row["evidence_quote"])
+            for key, row in self.db.events.items()
+            if row.get("evidence_quote")
+        }
+        self.db.upsert_events(Repo.event_payloads(events, stored))
 
     def role_evidence_exists(self, observation_id: UUID, role_id: UUID) -> bool:
         return (str(observation_id), str(role_id)) in self.db.matches
@@ -370,6 +392,52 @@ class BatchedEnrichmentEquivalenceTests(unittest.TestCase):
         self.assertEqual(reference.observations_considered, 0)
         self.assertEqual(reference.as_dict(), batched.as_dict())
         self.assertEqual(reference_db.snapshot(), batched_db.snapshot())
+
+    def test_a_stored_event_keeps_the_quote_it_was_created_with(self) -> None:
+        """An opening is evidenced by what was visible when it was established, on both paths.
+
+        Reconstruction rebuilds a role's whole history every pass. Re-deriving each quote rewrote an opening dated
+        2025 with text its posting carried in 2026, and made every pass read the text of every observation of every
+        role, which was the largest part of what enrichment downloaded.
+        """
+        for sessions in (False, True):
+            db = collected_evidence(extra_cycles=1)
+            enrich(db, sessions=sessions)
+            first = {key: row["evidence_quote"] for key, row in db.events.items()}
+            self.assertTrue(any(first.values()), "the fixtures evidence their openings")
+
+            # The postings are rewritten, as a company editing its own pages rewrites them.
+            for row in db.observations.values():
+                if row.get("evidence_excerpt"):
+                    row["evidence_excerpt"] = "Rewritten long after the opening was established."
+            enrich(db, sessions=sessions)
+
+            after = {key: row["evidence_quote"] for key, row in db.events.items()}
+            self.assertEqual(first, {key: after[key] for key in first}, f"sessions={sessions}")
+            self.assertNotIn("Rewritten long after", " ".join(after.values()), f"sessions={sessions}")
+
+    def test_a_pass_reads_the_text_of_the_postings_whose_text_it_needs_and_no_others(self) -> None:
+        """The excerpts are three fifths of what enrichment downloads, and a settled company needs few of them.
+
+        A first pass resolves every posting and records every opening, so it reads all of their text. A second pass
+        resolves nothing and every stored opening keeps its quote, so it reads only the postings a role has no opening
+        of its own for: several postings of one cycle merge into a single opening, and the ones merged away keep a role
+        match without ever carrying an event. Their text is not needed either, but which candidates survive the merge
+        is only known after it, so they are read. On hosted that is 16.7 MB of the 73.7 MB of stored posting text.
+        """
+        db = collected_evidence(extra_cycles=1)
+        first, _ = enrich(db, sessions=True)
+        self.assertTrue(getattr(first, "excerpts_requested", []), "a first pass reads the text it resolves and quotes")
+
+        second, summary = enrich(db, sessions=True)
+        self.assertEqual(summary.observations_considered, 0)
+        read_again = set(getattr(second, "excerpts_requested", []))
+        evidenced = {key[1] for key in db.events}
+        self.assertTrue(read_again, "the postings merged away from a cycle are read")
+        self.assertEqual(
+            read_again & evidenced, set(), "a posting whose opening is stored keeps its quote and is not read again"
+        )
+        self.assertLess(len(read_again), len(db.observations), "and the rest of the company's text is left alone")
 
     def test_a_created_role_that_exists_inactive_stays_inactive_and_out_of_the_candidates(self) -> None:
         def seeded() -> MemoryDatabase:
