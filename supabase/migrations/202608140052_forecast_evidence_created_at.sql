@@ -1,0 +1,24 @@
+-- The health report can count the forecast evidence written in a day without reading the whole table.
+--
+-- `collection-health` counts the rows each corpus table gained in 24 hours, as `count=exact` over
+-- `created_at=gte.<yesterday>`. Nothing indexed `forecast_evidence.created_at`, so that count was a sequential scan of
+-- the whole table, and forecast_evidence is the fastest growing table in the corpus: every regenerated forecast writes
+-- one row per contributing observation, about 64 of them (18,066 rows against 281 forecasts on 2026-09-20), so one
+-- regeneration that rewrites 200 forecasts adds about 12,800 rows.
+--
+-- The scan crossed PostgREST's eight-second statement timeout somewhere past 09-21, and the count began failing with
+-- HTTP 500 intermittently -- four of the last seven regeneration runs. Each time, regeneration itself had already
+-- succeeded and only the health step failed, but the step's failure is the workflow's, so it opened "Changed-evidence
+-- forecast regeneration failed" and read as though the site's forecasts had stopped being rebuilt.
+--
+-- A plain btree on created_at answers the 24-hour window from an index range instead. Measured on the rig's 27,880
+-- rows, the count went from 670 ms cold (22 ms warm) to 0.5 ms, for 216 kB. A BRIN index is a tenth of the size and
+-- was 3.7 ms, but forecast_evidence's rows are inserted beside forecasts that regeneration rewrites in bulk, and BRIN
+-- degrades as the physical order stops matching the timestamp; at this size the btree's predictability is worth the
+-- extra space.
+--
+-- The other tables the report counts are 14,000 to 26,000 rows and are on the same path, more slowly. They are not
+-- indexed here: an index on each of them is write cost on the collectors' hottest tables, and which of them earn it
+-- should be decided from a measurement, not from this one.
+
+create index forecast_evidence_created_idx on public.forecast_evidence (created_at);
