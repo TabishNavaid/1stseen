@@ -24,6 +24,7 @@ from .base import (
     JobCandidate,
     SourceAdapter,
     SourceConfig,
+    access_interstitial_marker,
     build_observations,
 )
 from .common import (
@@ -268,7 +269,7 @@ class GenericCareerPageAdapter(SourceAdapter):
                     )
                 ],
             )
-        interstitial = _access_interstitial(document.text)
+        interstitial = access_interstitial_marker(document.text)
         if interstitial:
             return AdapterResult(
                 [],
@@ -586,16 +587,3 @@ def _is_navigation_phrase(title: str) -> bool:
         return True
     # Requisition titles are short noun phrases; prose sentences are not.
     return len(compact.split()) > 12 or compact.endswith((".", "!", "?"))
-
-
-def _access_interstitial(html: str) -> str | None:
-    lowered = " ".join(html.casefold().split())[:20_000]
-    markers = (
-        "cf-chl-",
-        "checking your browser before accessing",
-        "verify you are human",
-        "captcha challenge",
-        "unusual traffic from your computer network",
-        "access denied reference number",
-    )
-    return next((marker for marker in markers if marker in lowered), None)

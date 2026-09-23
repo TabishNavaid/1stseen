@@ -31,6 +31,13 @@ depends on the owner watching a dashboard.
   a source failing three times in a row, or a run that never finished. It closes when no warning remains.
 - **Production health** (`scripts/ops-health.mjs --alert`, every six hours) raises one "Production health" issue while
   any check fails. It is the watchdog for the other workflows: it checks each one's last success against its interval.
+- **A site that refuses is not a collector that is failing.** A source answering with a bot challenge (Cloudflare's
+  managed challenge: HTTP 403 or 503 carrying `cf-mitigated`, or a challenge page's own wording) is recorded as the
+  typed `access_challenged` diagnostic and counted as a refusal honoured, not a failed attempt, so it does not build a
+  failure streak and cannot hold a collection-health alert open. The block itself is honoured exactly as before: the
+  request is not repeated, no browser is started, and nothing is written. OpenAI, Pinterest and ID.me all answer this
+  way. A plain 403 that carries no challenge is still a failure.
+
 - **One issue per problem.** Each problem has a stable key in a hidden marker. While it stays open the issue is edited
   silently, and a comment (which notifies) is added only when what is wrong changes or a day has passed. A collector
   failing four times a day produces one issue and at most one reminder a day.

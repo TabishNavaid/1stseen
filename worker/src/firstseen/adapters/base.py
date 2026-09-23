@@ -138,7 +138,17 @@ class UrlLibTransport:
                 "User-Agent": COLLECTOR_USER_AGENT,
             },
         )
-        with self.opener.open(request, timeout=self.settings.http_timeout_seconds) as response:
+        try:
+            response_context = self.opener.open(request, timeout=self.settings.http_timeout_seconds)
+        except HTTPError as error:
+            # A bot challenge is the site refusing, not a fault to retry. It is raised as itself so the run can record
+            # it as a refusal honoured; every other HTTP error is left exactly as it was.
+            marker = _challenge_marker(error)
+            error.close()
+            if marker is None:
+                raise
+            raise AccessChallengedError(url, status=error.code, marker=marker) from None
+        with response_context as response:
             self.url_policy.validate(response.url)
             declared_length = response.headers.get("content-length")
             if declared_length:
@@ -260,6 +270,81 @@ class CollectionDiagnostic:
             "url": redact_sensitive_text(self.url, limit=2_000) if self.url else None,
             "details": bounded_details,
         }
+
+
+def access_interstitial_marker(html: str) -> str | None:
+    """The phrase that shows a page is a bot challenge rather than the page that was asked for, or None."""
+    lowered = " ".join(html.casefold().split())[:20_000]
+    markers = (
+        "cf-chl-",
+        "checking your browser before accessing",
+        "verify you are human",
+        "captcha challenge",
+        "unusual traffic from your computer network",
+        "access denied reference number",
+    )
+    return next((marker for marker in markers if marker in lowered), None)
+
+
+class AccessChallengedError(ValueError):
+    """Raised when a site answers a collector's request with a bot challenge instead of the page.
+
+    This is the site refusing, in the same sense robots.txt refuses: the difference is that it says so in a response
+    rather than in a rule. It is raised so the refusal can be recorded as what it is, because an HTTP error reads as a
+    fault that should be retried, and a challenge is neither. Nothing about how it is handled changes: the request is
+    not repeated, no browser is started, and no observation or state is written.
+    """
+
+    def __init__(self, url: str, *, status: int, marker: str) -> None:
+        self.url = url
+        self.status = status
+        # What identified the challenge: a response header, or a phrase in the body.
+        self.marker = marker
+        self.code = "access_challenged"
+        super().__init__(f"{url} answered {status} with a bot challenge ({marker})")
+
+    def details(self) -> dict[str, Any]:
+        return {"status": self.status, "marker": self.marker}
+
+
+# Cloudflare states a challenge in this header, whatever the body is; it is the authoritative signal and the only one
+# that does not depend on the challenge page's wording.
+_CHALLENGE_HEADER = "cf-mitigated"
+# A challenge served without that header is read from the body, using the same phrases the generic adapter looks for in
+# a challenge returned as HTTP 200.
+_CHALLENGE_BODY_BYTES = 20_000
+
+
+def _challenge_marker(error: HTTPError) -> str | None:
+    """What says this error is a bot challenge rather than a refusal to serve us this page, or None."""
+    # 403 is Cloudflare's managed challenge; 503 is the interstitial it serves while checking a browser.
+    if error.code not in (403, 503):
+        return None
+    mitigated = (error.headers.get(_CHALLENGE_HEADER) or "").strip().casefold()
+    if mitigated:
+        return f"{_CHALLENGE_HEADER}: {mitigated}"
+    try:
+        body = error.read(_CHALLENGE_BODY_BYTES).decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001 - an unreadable body simply is not evidence of a challenge
+        return None
+    marker = access_interstitial_marker(body)
+    return f"body: {marker}" if marker else None
+
+
+def access_challenge_diagnostic(refusal: AccessChallengedError) -> CollectionDiagnostic:
+    """A source that answered with a bot challenge, as a typed diagnostic.
+
+    A warning, like a robots.txt rule and for the same reason: the site has said no, the answer is stable, and there is
+    nothing for a later run to recover. Reporting it as an error made every run partial and made the source look like
+    it was failing, which is what held a collection-health alert open over sites that were simply refusing us.
+    """
+    return CollectionDiagnostic(
+        refusal.code,
+        "Skipped a source that answered with a bot challenge instead of the page.",
+        "warning",
+        refusal.url,
+        refusal.details(),
+    )
 
 
 def robots_diagnostic(refusal: RobotsDisallowedError) -> CollectionDiagnostic:

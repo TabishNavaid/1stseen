@@ -14,7 +14,14 @@ from firstseen.inference import (
 )
 from firstseen.models import ArchiveCapture, JobObservation
 
-from .adapters.base import CollectionDiagnostic, HttpTransport, SourceConfig, robots_diagnostic
+from .adapters.base import (
+    AccessChallengedError,
+    CollectionDiagnostic,
+    HttpTransport,
+    SourceConfig,
+    access_challenge_diagnostic,
+    robots_diagnostic,
+)
 from .adapters.registry import AdapterRegistry
 from .recruiting_paths import page_source_allowed
 from .robots import RobotsDisallowedError
@@ -116,6 +123,22 @@ class SourceIngestionService:
                 self.transport,
                 observed_at=observed_at,
                 previous_document_hash=previous_hash,
+            )
+        except AccessChallengedError as refusal:
+            # The site answered with a bot challenge (adapters/base.py). It is honoured exactly as before -- no retry,
+            # no browser, nothing written, earlier observations left alone -- and recorded as a refusal rather than a
+            # failure, so a site that is simply saying no stops reading as a collector that is breaking.
+            return IngestionSummary(
+                source_id=source.id,
+                detected=0,
+                created=0,
+                changed=0,
+                unchanged=0,
+                page_unchanged=False,
+                document_hash="",
+                inference_metrics=InferenceMetrics.from_decisions([]),
+                complete=True,
+                diagnostics=(access_challenge_diagnostic(refusal),),
             )
         except RobotsDisallowedError as refusal:
             # The source's own address is one robots.txt does not allow (robots.py). Nothing was requested and nothing

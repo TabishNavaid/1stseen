@@ -16,7 +16,7 @@ from xml.etree import ElementTree
 
 from pydantic import BaseModel, Field, HttpUrl, model_validator
 
-from .adapters.base import ExtractionRoute, HttpTransport, SourceConfig
+from .adapters.base import AccessChallengedError, ExtractionRoute, HttpTransport, SourceConfig
 from .adapters.common import parse_published_datetime, strip_html
 from .forecasting import Forecast, Signal
 from .recruiting_paths import sitemap_children
@@ -531,7 +531,8 @@ class SignalIngestionSummary:
     unchanged: int
     affected_role_ids: tuple[UUID, ...]
     signal_ids: tuple[UUID, ...]
-    # Set when the source was not read at all, to the typed reason (`robots_disallowed`, `robots_unreachable`).
+    # Set when the source was not read at all, to the typed reason (`robots_disallowed`, `robots_unreachable`,
+    # `access_challenged`).
     skipped: str | None = None
     # Children of a sitemap index that could not be read; the source itself was read.
     unreadable_children: tuple[str, ...] = ()
@@ -554,6 +555,11 @@ class RecruitingSignalIngestionService:
             result = self.registry.get(source).collect(
                 source, self.transport, observed_at=observed_at, previous_state=previous
             )
+        except AccessChallengedError as refusal:
+            # The site answered with a bot challenge (adapters/base.py): like a robots.txt rule, no observation and no
+            # state change, so the next read that is served diffs against what was last actually seen. Recorded as a
+            # refusal rather than a failure; nothing else about the handling changes.
+            return SignalIngestionSummary(source.id, 0, 0, 0, (), (), skipped=refusal.code)
         except RobotsDisallowedError as refusal:
             # robots.txt does not allow this source (robots.py): no observation and no state change, so the next
             # permitted read diffs against what was last actually seen.
