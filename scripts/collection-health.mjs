@@ -75,7 +75,9 @@ const WORKFLOWS = [
   { file: "current-jobs.yml", label: "Current jobs", pipeline: "current", staleHours: 24 },
   { file: "career-page-signals.yml", label: "Career page signals", pipeline: "signals", staleHours: 12 },
   { file: "historical-enrichment.yml", label: "Historical enrichment", pipeline: "historical", staleHours: 24 * 14 },
-  { file: "forecast-regeneration.yml", label: "Forecast regeneration", pipeline: "regeneration", staleHours: 12 },
+  // Once a day since 2026-09-23. GitHub starts these schedules up to eight hours late, so the limit is the
+  // interval plus that lateness plus the job's own timeout, the way current jobs allows 24 for a 12-hour cron.
+  { file: "forecast-regeneration.yml", label: "Forecast regeneration", pipeline: "regeneration", staleHours: 36 },
   { file: "backtest.yml", label: "Backtest (manual)", pipeline: "backtest", staleHours: null },
 ];
 

@@ -10,7 +10,7 @@ allows. Every number here was measured on the local rig on 18 September 2026 unl
 | --- | --- | --- | --- |
 | `current-jobs.yml` | 00:17, 12:17 | Current postings from every enabled source | ops-alert issue |
 | `career-page-signals.yml` | 01:37, 13:37 | Career-page changes and recruiting signals | ops-alert issue |
-| `forecast-regeneration.yml` | 02:52, 08:52, 14:52, 20:52 | Re-forecasts changed roles, writes plans, then `collection-health --alert` | ops-alert issue, and a separate "Collection health" issue for any warning |
+| `forecast-regeneration.yml` | 20:52 | Re-forecasts changed roles, writes plans, then `collection-health --alert` | ops-alert issue, and a separate "Collection health" issue for any warning |
 | `historical-enrichment.yml` | Sunday 04:07 | Wayback history | ops-alert issue |
 | `backup-corpus.yml` | Monday 05:41 | Dumps the corpus, proves it restores, keeps it 14 days | ops-alert issue |
 | `backtest.yml` | 3rd of the month 05:23 | Leak-safe backtest, then the evaluable-case history | ops-alert issue |
@@ -237,7 +237,7 @@ Supabase counts as egress), with the corpus at 79 companies:
 | --- | --- | --- | --- |
 | `career-page-signals.yml` | 6.71 MB over 254 sources, about 8.7 MB over 397 | 60 | ~520 MB |
 | `current-jobs.yml` | 2.50 MB read floor (24,057 stored postings x 104 B) plus each changed company's evidence | 60 | ~360-600 MB |
-| `forecast-regeneration.yml` | 3.76 MB | 120 | ~450 MB |
+| `forecast-regeneration.yml` | 13.4 MB on a run that has changes to work through | 30 | ~400 MB |
 | `backup-corpus.yml` | 63.8 MB (the whole corpus, dumped) | 4 | ~256 MB |
 | `historical-enrichment.yml` | 2.55 MB per company in the slice | 4 | ~60 MB |
 | `ops-health.yml` | one PostgREST read | 60 | ~6 MB |
