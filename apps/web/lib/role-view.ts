@@ -82,6 +82,8 @@ export type RoleForecastView = {
   historyCount: number;
   inputFingerprint: string;
   forecastedAt: string;
+  /** The last recompute that confirmed this forecast, changed or not: freshness is measured from here. */
+  lastVerifiedAt: string;
   calibratedProbability: number;
   priorEffectiveSampleSize: number;
   confidenceFactors: { label: string; value: string; tone: "positive" | "neutral" | "warning" }[];

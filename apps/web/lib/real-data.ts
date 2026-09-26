@@ -710,7 +710,7 @@ export async function loadRealRoleView(
     fetchAll(
       () =>
         reader
-          .from("forecasts", "id,as_of,point_date,window_start,window_end,confidence,confidence_factors,method,model_version,history_count,input_fingerprint,forecasted_at,calibrated_probability,prior_effective_sample_size")
+          .from("forecasts", "id,as_of,point_date,window_start,window_end,confidence,confidence_factors,method,model_version,history_count,input_fingerprint,forecasted_at,calibrated_probability,prior_effective_sample_size,last_verified_at")
           .eq("canonical_role_id", roleId)
           .order("as_of", { ascending: false })
           .order("forecasted_at", { ascending: false }),
@@ -960,6 +960,9 @@ function changeNoteFor(
           inputFingerprint: latest.input_fingerprint as string,
           forecastedAt: latest.forecasted_at as string,
           calibratedProbability: Number(latest.calibrated_probability),
+          // When this forecast was last recomputed and found unchanged, so a reader can be told it was checked
+          // today rather than shown a date that moved every night (migration 202608140053).
+          lastVerifiedAt: (latest.last_verified_at ?? latest.forecasted_at) as string,
           priorEffectiveSampleSize: Number(latest.prior_effective_sample_size),
           confidenceFactors: Object.entries(factors).map(([key, value]) => ({
             label: factorLabel(key),
