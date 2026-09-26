@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/icon";
 export function FocusedShell({ status, children, aside, width = "regular" }: { status?: ReactNode; children: ReactNode; aside?: ReactNode; width?: "regular" | "narrow" }) {
   return (
     <div className="flex-1 bg-canvas text-ink">
-      <a href="#focused-content" className="sr-only z-[60] rounded-control bg-surface px-3 py-2 text-xs font-semibold text-ink focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-2 focus:outline-focus">Skip to content</a>
+      <a href="#focused-content" className="skip-link">Skip to content</a>
       <header className="border-b border-line bg-surface/90">
         <div className="mx-auto flex h-16 max-w-3xl items-center gap-3 px-4 md:px-6">
           <BrandMark />

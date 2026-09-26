@@ -71,7 +71,8 @@ test("every number the product displays matches a direct query", async () => {
       const rows = [...raw.matchAll(/<li[^>]*class="card flex[^"]*"[^>]*>[\s\S]*?<p class="text-xs font-semibold text-ink-muted">([^<]*)<\/p>/g)].map((match) => match[1]);
       feedCompanies.push(...rows);
       for (const match of raw.matchAll(/<span>([\d,]+)(?:<!-- -->)? more from(?:<!-- -->)? /g)) overflow += Number(match[1].replace(/,/g, ""));
-      if (!raw.includes(">Older<")) break;
+      // The pager marks the link to the next page; when there is none, this was the last one.
+      if (!raw.includes('rel="next"')) break;
     }
     const crowded = feedCompanies.some((_, start) => {
       const window = feedCompanies.slice(start, start + 6);

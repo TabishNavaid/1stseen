@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { DashboardFiltersForm } from "@/components/dashboard-filters";
 import { EvidenceDrawer } from "@/components/evidence-drawer";
 import { ForecastCard } from "@/components/forecast-card";
 import { ForecastChange } from "@/components/forecast-change";
 import { InsufficientRoleCard } from "@/components/insufficient-role-card";
+import { Pagination } from "@/components/pagination";
 import { SkipFirstRunButton } from "@/components/onboarding/skip-first-run-button";
 import { CountUp } from "@/components/count-up";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -155,10 +156,23 @@ export function ForecastDashboard({
   const selectedItem = forecasts.find((item) => item.id === selectedId) ?? forecasts[0];
   const selected = selectedItem?.forecast;
   const cap = perCompanyLimit(filters);
-  const pageStart = (filters.page - 1) * DASHBOARD_PAGE_SIZE;
-  const hasPreviousPage = filters.page > 1;
-  const hasNextPage = pageStart + items.length < summary.shownRoles;
   const pastLastPage = items.length === 0 && summary.shownRoles > 0;
+  /*
+   * Turning a page moves the reader to the head of the list, not to the top of the document. The router's own jump
+   * to the top left a reader looking at the tiles, and the next click landed on whichever of them was under the
+   * pointer; the pager passes `scroll={false}` and this puts the list where the pager was instead, and focus with
+   * it, so the keyboard carries on from the same place.
+   */
+  const listRef = useRef<HTMLElement>(null);
+  const shownPage = useRef(filters.page);
+  useEffect(() => {
+    if (shownPage.current === filters.page) return;
+    shownPage.current = filters.page;
+    const list = listRef.current;
+    if (!list) return;
+    list.focus({ preventScroll: true });
+    list.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  }, [filters.page]);
   const relax = relaxSuggestion(filters, summary);
   const applied = appliedFilterKeys(filters);
   const emptyWatchlist = watchedOnly && summary.followedRoles === 0;
@@ -177,7 +191,7 @@ export function ForecastDashboard({
   ) : null;
   return (
     <div className="flex-1 text-ink">
-      <main id="dashboard-content" tabIndex={-1} className="mx-auto max-w-6xl px-4 py-8 focus:outline-none md:px-6 md:py-10">
+      <main id="dashboard-content" tabIndex={-1} className="fade-in mx-auto max-w-6xl px-4 py-8 focus:outline-none md:px-6 md:py-10">
         {picks}
         <header className="flex flex-col gap-2">
           <h1 className="heading-display text-3xl leading-tight sm:text-4xl">{watchedOnly ? "Programs you watch" : "Explore programs"}</h1>
@@ -214,7 +228,7 @@ export function ForecastDashboard({
           </section>
         )}
 
-        <section id="roles" className="mt-8 scroll-mt-20" aria-labelledby="forecast-list-title">
+        <section id="roles" ref={listRef} tabIndex={-1} className="mt-8 scroll-mt-20 focus:outline-none" aria-labelledby="forecast-list-title">
           <h2 id="forecast-list-title" className="sr-only">Roles and forecasts</h2>
           <DashboardFiltersForm filters={filters} options={options} showWatched={signedInAs !== null || watchedOnly} />
           {mode !== "unconfigured" && (
@@ -290,13 +304,14 @@ export function ForecastDashboard({
             </div>
           )}
           {items.length > 0 && (
-            <nav className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1 text-caption text-ink-subtle" aria-label="Pages">
-              <span>{`${pageStart + 1}–${pageStart + items.length} of ${summary.shownRoles} listed`}</span>
-              <span className="flex items-center gap-2">
-                {hasPreviousPage && <Link href={dashboardHref(filters, { page: filters.page - 1 })} className="focus-ring inline-flex min-h-touch items-center gap-1 rounded-chip border border-line-strong bg-surface px-4 font-semibold text-ink hover:bg-surface-hover"><Icon name="arrow-left" size={13} />Previous</Link>}
-                {hasNextPage && <Link href={dashboardHref(filters, { page: filters.page + 1 })} className="focus-ring inline-flex min-h-touch items-center gap-1 rounded-chip border border-line-strong bg-surface px-4 font-semibold text-ink hover:bg-surface-hover">Next<Icon name="arrow-right" size={13} /></Link>}
-              </span>
-            </nav>
+            <Pagination
+              page={filters.page}
+              size={DASHBOARD_PAGE_SIZE}
+              shown={items.length}
+              total={summary.shownRoles}
+              // Every page keeps this view: `dashboardHref` writes back the tab, each filter and the sort.
+              href={(page) => dashboardHref(filters, { page })}
+            />
           )}
         </section>
 

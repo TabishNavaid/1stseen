@@ -231,8 +231,14 @@ export function parseDashboardFilters(params: SearchParams): DashboardFilters {
   };
 }
 
-/** The URL for these filters with `changes` applied. Any change other than the page returns to page 1. */
-export function dashboardHref(filters: DashboardFilters, changes: Partial<DashboardFilters> = {}): string {
+/**
+ * The URL for these filters with `changes` applied. Any change other than the page returns to page 1.
+ *
+ * `path` is which list the link belongs to. Just opened reads the same filters from the same query string
+ * (`lib/just-opened-filters.ts` says which of them mean anything to a feed of openings that already happened), so it
+ * builds its links the same way rather than growing a second, slightly different builder.
+ */
+export function dashboardHref(filters: DashboardFilters, changes: Partial<DashboardFilters> = {}, path: string = DASHBOARD_PATH): string {
   const next = { ...filters, ...changes };
   if (!("page" in changes)) next.page = 1;
   const params = new URLSearchParams();
@@ -252,7 +258,7 @@ export function dashboardHref(filters: DashboardFilters, changes: Partial<Dashbo
   if (next.sort !== "window") params.set("sort", next.sort);
   if (next.page > 1) params.set("page", String(next.page));
   const query = params.toString();
-  return query ? `${DASHBOARD_PATH}?${query}` : DASHBOARD_PATH;
+  return query ? `${path}?${query}` : path;
 }
 
 /** Zero lists every role: one company's view gathers everything for that employer. */
@@ -291,8 +297,8 @@ function optionLabel(options: FilterOption[], value: string): string {
 export type ActiveFilter = { key: FilterKey; label: string; removeHref: string };
 
 /** One entry per applied filter value, each with a link to the same view without it. */
-export function activeFilters(filters: DashboardFilters, options: DashboardFilterOptions = emptyFilterOptions): ActiveFilter[] {
-  const without = (changes: Partial<DashboardFilters>) => dashboardHref(filters, changes);
+export function activeFilters(filters: DashboardFilters, options: DashboardFilterOptions = emptyFilterOptions, path: string = DASHBOARD_PATH): ActiveFilter[] {
+  const without = (changes: Partial<DashboardFilters>) => dashboardHref(filters, changes, path);
   const chips: ActiveFilter[] = [];
   if (filters.query.trim()) chips.push({ key: "query", label: `Search: ${filters.query.trim()}`, removeHref: without({ query: "" }) });
   for (const value of filters.disciplines) chips.push({ key: "discipline", label: labelFor(DISCIPLINES, value), removeHref: without({ disciplines: filters.disciplines.filter((item) => item !== value) }) });

@@ -415,8 +415,12 @@ export type JustOpenedFeed = {
   total: number;
   /** How many of those opened since the first of the current month. */
   thisMonth: number;
-  /** How many of them the interleaved feed lists; the rest are in `more`. */
+  /** How many of the 45 days' openings match the filters in force; the same as `total` when none are. */
+  matching: number;
+  /** How many of those the interleaved feed lists; the rest are in `more`. */
   listed: number;
+  /** What the filter bar can offer, counted over the whole window rather than over the filtered feed. */
+  options: DashboardFilterOptions;
   /** Companies with more openings than the feed can place without crowding it, each linked to its own list. */
   more: Array<{ companyId: string; company: string; count: number }>;
   company: { id: string; name: string } | null;
@@ -440,6 +444,61 @@ function exactOpeningsSince<Query extends { eq: (column: string, value: unknown)
     .gte("opened_on", since);
 }
 
+type OpenedRole = EmbeddedRoleIdentity & {
+  discipline?: string | null;
+  early_career_type?: string | null;
+  recruiting_season?: string | null;
+  location_scope?: string | null;
+  company_id?: string | null;
+};
+
+const openedRole = (row: OpeningRow) => embeddedOne(row.canonical_roles) as OpenedRole | null;
+
+/** What the feed's own filter bar can offer, counted over the window rather than over what a filter already left. */
+function justOpenedOptions(rows: OpeningRow[], names: Map<string, string>): DashboardFilterOptions {
+  const tally = { discipline: new Map<string, number>(), type: new Map<string, number>(), season: new Map<string, number>(), company: new Map<string, number>(), location: new Map<string, number>() };
+  const add = (into: Map<string, number>, value: string | null | undefined) => {
+    if (value) into.set(value, (into.get(value) ?? 0) + 1);
+  };
+  for (const row of rows) {
+    const role = openedRole(row);
+    if (!role) continue;
+    add(tally.discipline, role.discipline);
+    add(tally.type, role.early_career_type);
+    add(tally.season, role.recruiting_season);
+    add(tally.company, role.company_id);
+    add(tally.location, role.location_scope);
+  }
+  const list = (into: Map<string, number>, label: (value: string) => string) =>
+    [...into].map(([value, roles]) => ({ value, label: label(value), roles }));
+  return {
+    discipline: list(tally.discipline, (value) => value),
+    type: list(tally.type, (value) => value),
+    season: list(tally.season, (value) => value),
+    // The feed offers no program-year facet: a title's stated year says nothing about when a posting went up.
+    year: [],
+    company: list(tally.company, (value) => names.get(value) ?? "").sort((a, b) => a.label.localeCompare(b.label)),
+    location: list(tally.location, (value) => value).sort((a, b) => b.roles - a.roles || a.label.localeCompare(b.label)),
+  };
+}
+
+/** Whether one opening is in the filtered feed. Only the facets that describe a program, never a forecast's. */
+function rowMatchesFilters(row: OpeningRow, filters: DashboardFilters, names: Map<string, string>): boolean {
+  const role = openedRole(row);
+  if (!role) return false;
+  const holds = (chosen: readonly string[], value: string | null | undefined) => chosen.length === 0 || (value !== null && value !== undefined && chosen.includes(value));
+  if (!holds(filters.disciplines, role.discipline)) return false;
+  if (!holds(filters.types, role.early_career_type)) return false;
+  if (!holds(filters.seasons, role.recruiting_season)) return false;
+  if (!holds(filters.companies, role.company_id ?? null)) return false;
+  if (!holds(filters.locations, role.location_scope)) return false;
+  const query = filters.query.trim().toLowerCase();
+  if (!query) return true;
+  // The same three things the search box names: the company, the program, and where it is.
+  const haystack = [names.get(String(role.company_id ?? "")) ?? "", role.canonical_title ?? "", role.location_scope ?? ""].join(" ").toLowerCase();
+  return query.split(/\s+/).every((word) => haystack.includes(word));
+}
+
 /**
  * Programs that opened in the last 45 days. The feed is newest first, with no company taking more than two of any six
  * consecutive items (lib/just-opened.ts); a company whose openings cannot all be placed that way is linked to its own
@@ -447,13 +506,13 @@ function exactOpeningsSince<Query extends { eq: (column: string, value: unknown)
  */
 export async function loadJustOpened(
   reader: PublicReader = createPublicReader(),
-  { limit = JUST_OPENED_PAGE_SIZE, offset = 0, companyId = null }: { limit?: number; offset?: number; companyId?: string | null } = {},
+  { limit = JUST_OPENED_PAGE_SIZE, offset = 0, companyId = null, filters = null }: { limit?: number; offset?: number; companyId?: string | null; filters?: DashboardFilters | null } = {},
 ): Promise<JustOpenedFeed> {
   const since = daysAgo(JUST_OPENED_DAYS);
   // The whole 45 days, paged: the feed's order depends on every opening in it, and its total is their count.
   const rows = await fetchAll(() => {
     const query = exactOpeningsSince(
-      reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at,location),canonical_roles!inner(canonical_title,early_career_type,location_scope,scope_status,company_id,companies(id,name))"),
+      reader.from("historical_opening_events", "id,canonical_role_id,opened_on,raw_job_observations(apply_url,source_url,observed_at,location),canonical_roles!inner(canonical_title,discipline,early_career_type,recruiting_season,location_scope,scope_status,company_id,companies(id,name))"),
       since,
     );
     return (companyId ? query.eq("canonical_roles.company_id", companyId) : query).order("opened_on", { ascending: false });
@@ -464,10 +523,17 @@ export async function loadJustOpened(
     const company = role ? embeddedOne(role.companies) : null;
     return { id: String(role?.company_id ?? ""), name: company?.name ? displayCompany(company.name) : "" };
   };
-  const { feed, overflow } = companyId
-    ? { feed: rows, overflow: [] }
-    : interleaveByCompany(rows, (row) => companyOf(row).id);
   const names = new Map(rows.map((row) => [companyOf(row).id, companyOf(row).name]));
+  /*
+   * The filters are applied here rather than in the query, because the window is read whole either way: the feed's
+   * order depends on every opening in it and its counts are their counts. So one read answers what the bar can offer
+   * and which rows match, and a filtered feed costs the database exactly what an unfiltered one does.
+   */
+  const options = justOpenedOptions(rows, names);
+  const matching = filters ? rows.filter((row) => rowMatchesFilters(row, filters, names)) : rows;
+  const { feed, overflow } = companyId
+    ? { feed: matching, overflow: [] }
+    : interleaveByCompany(matching, (row) => companyOf(row).id);
   const page = feed.slice(offset, offset + limit);
   const recorded = await loadRecordedTitles(reader, page.map((row) => String(row.canonical_role_id)));
   const openings = page.flatMap((row): RealOpening[] => {
@@ -493,7 +559,9 @@ export async function loadJustOpened(
     openings,
     total: rows.length,
     thisMonth: rows.filter((row) => row.opened_on >= month).length,
+    matching: matching.length,
     listed: feed.length,
+    options,
     more: overflow.map(({ company, count }) => ({ companyId: company, company: names.get(company) ?? "", count })).sort((a, b) => b.count - a.count || a.company.localeCompare(b.company)),
     company: only,
   };

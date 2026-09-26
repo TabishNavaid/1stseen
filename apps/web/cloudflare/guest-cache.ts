@@ -22,6 +22,7 @@
 
 // The explicit extension lets Node's test runner load this file directly; Vite resolves it either way.
 import { DASHBOARD_PARAMS, DASHBOARD_PATH, dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
+import { JUST_OPENED_PATH, justOpenedFilters, justOpenedHref } from "../lib/just-opened-filters.ts";
 
 export const CACHE_STATUS_HEADER = "x-firstseen-cache";
 export const STORED_NONCE_HEADER = "x-firstseen-stored-nonce";
@@ -29,7 +30,6 @@ export const GUEST_PAGE_TTL_SECONDS = 300;
 export const VERSION_MEMO_MS = 10_000;
 
 const ROLE_PAGE = /^\/roles\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export type GuestCache = {
   match(request: Request): Promise<Response | undefined>;
@@ -74,15 +74,20 @@ export function guestCachePath(request: Request): string | null {
   }
   // The methodology page reads the latest backtest and forecast counts, both of which advance the public data version.
   if (url.pathname === "/methodology") return url.pathname;
-  // Just opened reads opening events, which advance the version; its parameters are one company and the page.
-  if (url.pathname === "/opened") {
-    const page = Number.parseInt(url.searchParams.get("page") ?? "1", 10);
-    const company = url.searchParams.get("company") ?? "";
-    const query = new URLSearchParams();
-    if (UUID.test(company)) query.set("company", company);
-    if (Number.isFinite(page) && page > 1) query.set("page", String(Math.min(page, 1000)));
-    const search = query.toString();
-    return search ? `/opened?${search}` : "/opened";
+  // Just opened reads opening events, which advance the version. Its key is every filter it reads, canonicalised the
+  // same way the roles view's is: a key that named only the company and the page served one guest's filtered feed to
+  // the next guest's unfiltered one, because the parameters that decided the difference were not in it.
+  if (url.pathname === JUST_OPENED_PATH) {
+    const params: Record<string, string | string[]> = {};
+    for (const [key, value] of url.searchParams) {
+      const existing = params[key];
+      params[key] = existing === undefined ? value : ([] as string[]).concat(existing, value);
+    }
+    const filters = justOpenedFilters(params);
+    const canonical = Object.fromEntries(
+      Object.entries(filters).map(([key, value]) => [key, Array.isArray(value) ? [...new Set(value)].sort() : value]),
+    ) as typeof filters;
+    return justOpenedHref(canonical, { page: canonical.page });
   }
   return ROLE_PAGE.test(url.pathname) ? url.pathname : null;
 }
