@@ -25,8 +25,8 @@ export function companyInitials(company: string): string {
 }
 
 const SIZE = {
-  sm: { box: "size-8 rounded-control", text: "text-caption", pixels: 32 },
-  md: { box: "size-11 rounded-control", text: "text-sm", pixels: 44 },
+  sm: { box: "size-8", text: "text-micro", pixels: 32 },
+  md: { box: "size-10", text: "text-caption", pixels: 40 },
 } as const;
 
 export function CompanyMark({ company, size = "md", priority = false, className }: { company: string; size?: keyof typeof SIZE; priority?: boolean; className?: string }) {
@@ -35,10 +35,17 @@ export function CompanyMark({ company, size = "md", priority = false, className 
   return (
     <span
       aria-hidden="true"
+      /*
+       * One tile, whichever it holds. A logo used to sit on a bordered white square and a monogram on an unbordered
+       * warm one, so a column of them alternated between two shapes and read as half-finished rather than as a column.
+       * The ground, the border and the radius are now the same for both, and the monogram is quiet, because it is
+       * what the product has rather than what the company published. A cell is never empty: `companyInitials` answers
+       * "?" for a name it cannot read.
+       */
       className={cn(
-        "grid shrink-0 place-items-center overflow-hidden border border-line bg-surface",
+        "grid shrink-0 place-items-center overflow-hidden rounded-control border border-line bg-surface",
         style.box,
-        !logo && "border-transparent bg-warm-soft font-bold text-warm-ink",
+        !logo && "font-semibold tracking-tight text-ink-subtle",
         !logo && style.text,
         className,
       )}

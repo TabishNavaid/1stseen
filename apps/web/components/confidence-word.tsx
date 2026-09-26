@@ -17,17 +17,23 @@ const DOT = { strong: "bg-confidence-strong", moderate: "bg-confidence-moderate"
  * score itself. The word is a button so the explanation is reachable by keyboard and by tap as well as by pointer; its
  * hit area reaches 44px on a phone without drawing a big pill.
  */
-export function ConfidenceWord({ value, align = "center", className }: { value: number; align?: "center" | "start" | "end"; className?: string }) {
+export function ConfidenceWord({ value, align = "center", variant = "chip", className }: { value: number; align?: "center" | "start" | "end"; variant?: "chip" | "plain"; className?: string }) {
   const word = confidenceWord(value);
   const dot = DOT[confidenceTone(value)];
+  // `plain` is the same word and the same explanation without the chip around it, for a list row where a bordered
+  // pill on every line is the chrome the row is trying not to have.
+  const plain = variant === "plain";
   return (
     <Tooltip content={confidenceExplanation(value)} align={align}>
       <button
         type="button"
         className={cn(
-          "focus-ring relative inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:border-line-strong",
+          "focus-ring relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip",
+          plain
+            ? "text-caption font-medium text-ink-muted hover:text-ink"
+            : "h-8 border border-line bg-surface px-2.5 text-xs font-semibold text-ink hover:border-line-strong",
           "before:absolute before:-inset-y-1.5 before:inset-x-0 before:content-['']  sm:before:hidden",
-          !dot && "border-line-strong text-ink-muted",
+          !dot && !plain && "border-line-strong text-ink-muted",
           className,
         )}
       >

@@ -177,6 +177,11 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
                 {/* How long that is from today, which is the thing a reader actually wants from a date in the future. */}
                 {countdown !== null && <WindowCountdown days={countdown} className="mt-3" />}
+                {/*
+                  How old the window is, beside the window itself rather than behind the expander: a reader deciding
+                  whether to trust a date wants to know when it was last looked at without opening anything.
+                */}
+                <p className="mt-2 text-caption text-ink-subtle">{freshnessNote(forecast)}</p>
               </>
             ) : (
               <div>
@@ -272,7 +277,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
             </summary>
 
             {forecast ? (
-              <Detail id="forecast" title="The likely window" note={freshnessNote(forecast) ?? undefined}>
+              <Detail id="forecast" title="The likely window">
                 <WindowVisualization view={view} />
                 {basis && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">

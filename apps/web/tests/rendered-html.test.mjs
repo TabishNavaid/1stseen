@@ -242,7 +242,7 @@ test("labels fixture provenance and derives visible portfolio counts", async () 
   const html = await (await render("/roles")).text();
   assert.match(html, />2<\/span><\/strong><span[^>]*>of <!-- -->3 forecasts<!-- --> in this view/);
   // The default view states the whole in-scope set, not only the forecasts.
-  assert.match(html, /in-scope roles: /);
+  assert.match(html, /programs in scope: /);
   assert.match(html, /reserved \.example sources/);
   assert.match(html, /Every displayed count is derived/);
 });
