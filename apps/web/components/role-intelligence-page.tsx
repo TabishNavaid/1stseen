@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HandMark } from "@/components/brand/hand-mark";
 import { Icon } from "@/components/ui/icon";
 import { freshnessNote } from "@/lib/forecast-freshness";
 import { PROVENANCE_PAGE_SIZE } from "@/lib/role-view";
@@ -51,15 +52,25 @@ function stamp(value: string | null): string {
   return value ? formatStamp(value) : "None";
 }
 
-function Section({ id, title, note, children }: {
-  id?: string; title: string; note?: string; children: React.ReactNode;
+/**
+ * One part of the page: a heading, a rule under it, and the thing itself.
+ *
+ * It was a panel around each part, and five panels down a page read as five separate products rather than one page
+ * about one program. The list next door is headings and hairlines, and this is the same language: the whitespace
+ * between sections does the separating that five borders used to.
+ */
+function Section({ id, title, note, aside, children }: {
+  id?: string; title: string; note?: string; aside?: React.ReactNode; children: React.ReactNode;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   return (
-    <section id={id} className="panel scroll-mt-32" aria-labelledby={headingId} aria-label={headingId ? undefined : title}>
-      <div className="border-b border-line px-4 py-3 md:px-5">
-        <h2 id={headingId} className="mt-1 text-base font-semibold">{title}</h2>
-        {note && <p className="mt-1 text-caption text-ink-subtle">{note}</p>}
+    <section id={id} className="scroll-mt-32" aria-labelledby={headingId} aria-label={headingId ? undefined : title}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-line-strong pb-2">
+        <div>
+          <h2 id={headingId} className="heading-display text-xl leading-tight text-ink">{title}</h2>
+          {note && <p className="mt-1 text-caption text-ink-subtle">{note}</p>}
+        </div>
+        {aside}
       </div>
       {children}
     </section>
@@ -101,7 +112,7 @@ function WindowVisualization({ view }: { view: RoleView }) {
 /** A block inside "How this forecast was made": a small heading, an optional note, and its content. */
 function Detail({ id, title, note, children }: { id?: string; title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-24 border-t border-line px-4 py-5 md:px-6" aria-labelledby={id ? `${id}-title` : undefined} aria-label={id ? undefined : title}>
+    <section id={id} className="scroll-mt-24 border-t border-line py-5" aria-labelledby={id ? `${id}-title` : undefined} aria-label={id ? undefined : title}>
       <h3 id={id ? `${id}-title` : undefined} className="text-sm font-semibold text-ink">{title}</h3>
       {note && <p className="mt-1 text-caption text-ink-subtle">{note}</p>}
       <div className="mt-3">{children}</div>
@@ -160,7 +171,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
           </div>
         )}
 
-        <section className="card grid gap-6 p-5 md:p-7 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
+        <section className="grid gap-6 border-b border-line pb-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end" aria-labelledby="role-title">
           <div className="min-w-0">
             {eyebrow && <p className="text-caption font-semibold text-ink-subtle">{eyebrow}</p>}
             <p className="mt-3 text-sm font-semibold text-ink-muted">{view.company}</p>
@@ -202,12 +213,22 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
           </div>
         </section>
 
-        <div className="mt-6 space-y-5">
+        <div className="mt-10 space-y-10">
           {view.cycles.length > 0 && (
-            <Section id="history" title="When it opened before">
+            <Section
+              id="history"
+              title="When it opened before"
+              /* The one handwritten thing on this page, beside the section it is about. */
+              aside={
+                <span aria-hidden="true" className="hidden items-center gap-1 sm:flex">
+                  <HandMark name="arrowToWindow" className="h-5 w-7 text-warm-ink" />
+                  <span className="hand text-lg leading-none text-warm-ink">each one links to where it was seen</span>
+                </span>
+              }
+            >
               <ol className="divide-y divide-line">
                 {view.cycles.slice(0, 24).map((cycle) => (
-                  <li key={cycle.id} className="flex items-start gap-3 px-4 py-4 md:px-5">
+                  <li key={cycle.id} className="flex items-start gap-3 py-4">
                     <EvidenceMark precision={cycle.precision} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold tabular text-ink">{historyWords(cycle)}</p>
@@ -232,7 +253,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
             {view.milestones.length > 0 ? (
               <ol className="divide-y divide-line">
                 {view.milestones.map((milestone) => (
-                  <li key={`${milestone.kind}-${milestone.dueOn}`} className="px-4 py-3 md:px-5">
+                  <li key={`${milestone.kind}-${milestone.dueOn}`} className="py-3">
                     <div className="flex items-start justify-between gap-3">
                       <p className="text-xs font-semibold text-ink">{milestoneLabels[milestone.kind] ?? humanize(milestone.kind)}</p>
                       <time dateTime={milestone.dueOn} className="shrink-0 text-caption font-medium tabular text-ink-muted">{day(milestone.dueOn)}</time>
@@ -245,7 +266,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 ))}
               </ol>
             ) : (
-              <p className="px-4 py-4 text-caption leading-5 text-ink-muted md:px-5">
+              <p className="py-4 text-caption leading-5 text-ink-muted">
                 {view.isFollowed === null
                   ? <>{forecast
                       ? "Save this program to your watchlist and 1stSeen works back from its likely date: when to start networking, and when your résumé should be ready."
@@ -258,15 +279,15 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                     : "Save it to your watchlist to get a prep plan worked back from its likely date."}
               </p>
             )}
-            {view.isFollowed === true && forecast && !fixture && <div className="px-4 pb-4 md:px-5"><GenerateReadinessButton roleId={view.id} /></div>}
+            {view.isFollowed === true && forecast && !fixture && <div className="pt-4"><GenerateReadinessButton roleId={view.id} /></div>}
           </Section>
 
           <AgentInvestigation company={view.company} role={view.role} roleId={view.origin === "real" ? view.id : undefined} />
 
-          <details id="how-made" className="panel group scroll-mt-24" open={view.provenancePage > 1}>
-            <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-3 rounded-panel px-4 py-4 md:px-6 [&::-webkit-details-marker]:hidden">
+          <details id="how-made" className="group scroll-mt-24 border-t-2 border-line-strong" open={view.provenancePage > 1}>
+            <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-3 rounded-sm py-4 [&::-webkit-details-marker]:hidden">
               <span>
-                <span className="block text-base font-semibold text-ink">{forecast ? "How this forecast was made" : "Why there is no date yet"}</span>
+                <span className="heading-display block text-xl leading-tight text-ink">{forecast ? "How this forecast was made" : "Why there is no date yet"}</span>
                 <span className="mt-0.5 block text-caption text-ink-subtle">
                   {forecast
                     ? "The window, the sources and their weights, earlier versions, and the model\u2019s details."

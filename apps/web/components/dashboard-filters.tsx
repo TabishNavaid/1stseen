@@ -126,7 +126,11 @@ export function DashboardFiltersForm({
         }
       }}
     >
-      <div className="card flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
+            {/*
+        No card around the bar. Its controls carry their own borders, which is where a thing you can type in or press
+        should say so; a shadowed white box around them was one more box on a page that is trying to have fewer.
+      */}
+      <div className="flex flex-col gap-2 border-b border-line pb-4 sm:flex-row sm:items-center">
         <Field id="dashboard-query" label={searchLabel} hideLabel className="min-w-0 flex-1">
           {(control) => (
             <div className="relative">

@@ -23,10 +23,10 @@ export function AgentInvestigation({ company, role, roleId }: { company: string;
   }
 
   return (
-    <section className="card overflow-hidden" aria-labelledby="agent-investigation-title">
-      <div className="flex flex-col gap-4 border-b border-line bg-accent-soft p-5 sm:flex-row sm:items-center sm:justify-between">
+    <section aria-labelledby="agent-investigation-title">
+      <div className="flex flex-col gap-4 border-b-2 border-line-strong pb-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h2 id="agent-investigation-title" className="text-lg font-semibold tracking-title">Check the latest evidence</h2>
+          <h2 id="agent-investigation-title" className="heading-display text-xl leading-tight text-ink">Check the latest evidence</h2>
           <p className="mt-1 max-w-2xl text-caption leading-5 text-ink-muted">1stSeen looks again at the postings, the past openings, and any recruiting news for this program, and lists each step as it goes.</p>
         </div>
         <button type="button" onClick={check} disabled={busy} className="focus-ring inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-chip bg-accent px-5 text-sm font-semibold text-ink-inverse hover:bg-accent-hover disabled:opacity-70">
@@ -34,7 +34,7 @@ export function AgentInvestigation({ company, role, roleId }: { company: string;
           {run.status === "complete" ? "Check again" : "Check now"}
         </button>
       </div>
-      <div className="p-5">
+      <div className="pt-4">
         {run.status === "idle" ? (
           <details className="group">
             <summary className="focus-ring flex min-h-touch cursor-pointer list-none items-center justify-between gap-3 rounded-control text-sm font-semibold text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
