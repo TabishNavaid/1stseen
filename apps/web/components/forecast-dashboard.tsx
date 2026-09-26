@@ -4,9 +4,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { DashboardFiltersForm } from "@/components/dashboard-filters";
 import { EvidenceDrawer } from "@/components/evidence-drawer";
-import { ForecastCard } from "@/components/forecast-card";
+import { ForecastRow } from "@/components/forecast-row";
 import { ForecastChange } from "@/components/forecast-change";
-import { InsufficientRoleCard } from "@/components/insufficient-role-card";
+import { InsufficientRoleRow } from "@/components/insufficient-role-row";
+import { HandMark } from "@/components/brand/hand-mark";
 import { Pagination } from "@/components/pagination";
 import { SkipFirstRunButton } from "@/components/onboarding/skip-first-run-button";
 import { CountUp } from "@/components/count-up";
@@ -30,6 +31,7 @@ import {
   type DashboardSummary,
 } from "@/lib/dashboard-query";
 import { dashboardTiles } from "@/lib/dashboard-tiles";
+import { bandRoles } from "@/lib/list-groups";
 import { formatShortDay } from "@/lib/dates";
 import { PLAN_OUTCOME_MESSAGES } from "@/lib/onboarding";
 import type { RealForecastChange, RealOpening } from "@/lib/real-data";
@@ -53,6 +55,8 @@ export type ForecastDashboardProps = {
   welcome?: "none" | null;
   /** A guest's own first-run picks, offered back on the default view (rendered from their browser's storage). */
   picks?: ReactNode;
+  /** Today, for the bands the list is cut into. The caller passes one so a render is the same twice.  */
+  now?: Date;
 };
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
@@ -67,12 +71,12 @@ function ViewStatement({ filters, summary }: { filters: DashboardFilters; summar
     <div className="grid gap-1 text-caption leading-5 text-ink-muted">
       {applied.length === 0 ? (
         <p>
-          All <strong className="text-ink">{summary.inScopeRoles}</strong> in-scope roles: {summary.forecastableRoles} with a forecast, listed first, and{" "}
+          All <strong className="text-ink">{summary.inScopeRoles}</strong> programs in scope: {summary.forecastableRoles} with a forecast, listed first, and{" "}
           {summary.insufficientRoles} without enough history to forecast yet, listed after them.
         </p>
       ) : (
         <p>
-          <strong className="text-ink">{summary.matchingRoles}</strong> of {summary.inScopeRoles} in-scope roles match: {summary.matchingForecastable} with a
+          <strong className="text-ink">{summary.matchingRoles}</strong> of {summary.inScopeRoles} programs in scope match: {summary.matchingForecastable} with a
           forecast and {summary.matchingInsufficient} without enough history.
         </p>
       )}
@@ -130,6 +134,7 @@ export function ForecastDashboard({
   firstRun = false,
   welcome = null,
   picks = null,
+  now = new Date(),
 }: ForecastDashboardProps = {}) {
   // Real data never falls back to fixtures; an unconfigured deployment shows an
   // empty, clearly-labelled workspace instead of demo forecasts.
@@ -173,6 +178,8 @@ export function ForecastDashboard({
     list.focus({ preventScroll: true });
     list.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
   }, [filters.page]);
+  // Headings over the list rather than boxes around each row, and only where the order makes them true.
+  const bands = bandRoles(items, filters.sort, now);
   const relax = relaxSuggestion(filters, summary);
   const applied = appliedFilterKeys(filters);
   const emptyWatchlist = watchedOnly && summary.followedRoles === 0;
@@ -235,30 +242,45 @@ export function ForecastDashboard({
             <details className="group mt-3">
               <summary className="focus-ring inline-flex min-h-touch cursor-pointer list-none items-center gap-1.5 rounded-chip px-2 text-caption font-semibold text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
                 <Icon name="info" size={13} />
-                {applied.length === 0 ? `${summary.inScopeRoles} roles, ${summary.forecastableRoles} with a forecast` : `${summary.matchingRoles} of ${summary.inScopeRoles} programs match`}
+                {applied.length === 0 ? `${summary.inScopeRoles} programs, ${summary.forecastableRoles} with a forecast` : `${summary.matchingRoles} of ${summary.inScopeRoles} programs match`}
                 <Icon name="chevron-down" size={12} className="transition-transform group-open:rotate-180" />
               </summary>
               <div className="mt-2 rounded-card border border-line bg-surface-sunken px-4 py-3"><ViewStatement filters={filters} summary={summary} /></div>
             </details>
           )}
 
-          {items.length > 0 && (
-            <ul className="mt-3 grid gap-3">
-              {items.map((item) => (
-                <li key={item.id} className="grid gap-2">
-                  {item.forecast
-                    ? <ForecastCard role={item.forecast} item={item} active={drawerOpen && item.id === (selected?.id ?? "")} onSelect={() => { setSelectedId(item.id); setDrawerOpen(true); }} />
-                    : <InsufficientRoleCard item={item} />}
-                  {cap > 0 && item.companyRank === cap && item.companyTotal > cap && (
-                    <Link href={dashboardHref(filters, { companies: [item.companyId] })} className="focus-ring flex min-h-touch items-center justify-between rounded-card border border-dashed border-line-strong px-5 py-2.5 text-caption font-semibold text-accent-ink hover:bg-surface-hover">
-                      Show all {item.companyTotal} roles at {item.company}
-                      <Icon name="arrow-right" size={13} />
-                    </Link>
+          {items.length > 0 && bands.map((band, index) => (
+            <section key={band.key} className={index === 0 ? "mt-6" : "mt-12"} aria-labelledby={band.title ? `band-${band.key}` : undefined}>
+              {band.title && (
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b-2 border-line-strong pb-2">
+                  <h3 id={`band-${band.key}`} className="heading-display text-xl leading-tight text-ink">{band.title}</h3>
+                  <p className="text-caption tabular text-ink-subtle">{plural(band.items.length, "program")}</p>
+                  {/* The one handwritten thing on this page, beside the first heading, saying how the list is ordered. */}
+                  {index === 0 && (
+                    <span aria-hidden="true" className="hidden items-center gap-1 lg:flex">
+                      <HandMark name="arrowToWindow" className="h-5 w-7 text-warm-ink" />
+                      <span className="hand text-lg leading-none text-warm-ink">soonest first</span>
+                    </span>
                   )}
-                </li>
-              ))}
-            </ul>
-          )}
+                </div>
+              )}
+              <ul className="m-0 list-none p-0">
+                {band.items.map((item) => (
+                  <li key={item.id}>
+                    {item.forecast
+                      ? <ForecastRow role={item.forecast} item={item} active={drawerOpen && item.id === (selected?.id ?? "")} onSelect={() => { setSelectedId(item.id); setDrawerOpen(true); }} />
+                      : <InsufficientRoleRow item={item} />}
+                    {cap > 0 && item.companyRank === cap && item.companyTotal > cap && (
+                      <Link href={dashboardHref(filters, { companies: [item.companyId] })} className="focus-ring flex min-h-touch items-center gap-1.5 border-b border-line py-2.5 pl-[3.75rem] text-caption font-semibold text-accent-ink hover:bg-surface-hover">
+                        Show all {item.companyTotal} roles at {item.company}
+                        <Icon name="arrow-right" size={13} />
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
           {items.length === 0 && mode !== "unconfigured" && emptyWatchlist && (
             <div className="card mt-4">
               <EmptyState

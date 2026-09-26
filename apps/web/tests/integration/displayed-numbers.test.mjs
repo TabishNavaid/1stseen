@@ -80,8 +80,8 @@ test("every number the product displays matches a direct query", async () => {
     });
     check("/opened feed", "windows of six with one company three times or more", crowded ? 1 : 0, 0);
     check("/opened feed", "listed plus linked", feedCompanies.length + overflow, opened.n);
-    check("/roles list", "all in-scope roles", num(dash, /All ([\d,]+) in-scope roles:/), roles.n);
-    check("/roles list", "with a forecast", num(dash, /in-scope roles: ([\d,]+) with a forecast/), withForecast.n);
+    check("/roles list", "all in-scope roles", num(dash, /All ([\d,]+) programs in scope:/), roles.n);
+    check("/roles list", "with a forecast", num(dash, /programs in scope: ([\d,]+) with a forecast/), withForecast.n);
     check("/roles list", "without a forecast", num(dash, /listed first, and ([\d,]+) without/), roles.n - withForecast.n);
     check("/roles list", "outside or not yet in scope", num(dash, /([\d,]+) collected roles outside/), outside.n);
 
@@ -99,11 +99,11 @@ test("every number the product displays matches a direct query", async () => {
       if (shown !== null) check("/roles facets", `program ${v}`, shown, n);
     }
 
-    // Each listed card's "Likely around" date against its role's latest forecast.
-    const strip = (html) => html.replace(/<!-- -->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    // Each listed row's likely date against its role's latest forecast. The row carries the date with no label on it,
+    // so it is found by the dashed underline the product marks a predicted date with, which nothing else in a row has.
     const cards = (await rawPage("/roles")).split("<article").slice(1).flatMap((chunk) => {
       const id = /href="\/roles\/([0-9a-f-]{36})"/.exec(chunk)?.[1];
-      const date = /Likely around ([A-Z][a-z]{2} \d{1,2}, \d{4})/.exec(strip(chunk))?.[1];
+      const date = /decoration-dashed[^>]*">\s*([A-Z][a-z]{2} \d{1,2}, \d{4})\s*</.exec(chunk)?.[1];
       return id && date ? [{ id, date }] : [];
     });
     const expected = await all(`select l.canonical_role_id::text id, l.point_date::text d from (${latest}) l where l.canonical_role_id = any($1::uuid[])`, [cards.map((card) => card.id)]);
