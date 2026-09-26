@@ -351,8 +351,8 @@ class SupabasePortfolioQueries:
         items.sort(key=lambda item: (item.expected_opening_date, -item.confidence, item.company, item.role))
         limitation = (
             (
-                f"{stale} role(s) were excluded because their latest forecast was more than "
-                f"{self.forecast_freshness_days} days old."
+                f"{stale} role(s) were excluded because their forecast has not been rechecked in more than "
+                f"{self.forecast_freshness_days} days."
             )
             if stale
             else None
