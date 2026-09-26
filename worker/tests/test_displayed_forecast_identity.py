@@ -59,34 +59,40 @@ class DisplayedIdentityTests(unittest.TestCase):
         self.assertEqual(displayed_forecast_identity(first), displayed_forecast_identity(second))
 
     def test_it_holds_for_several_days_when_no_signal_is_decaying(self) -> None:
-        """Measured, not assumed: with four openings and a prior, the displayed set survives five days.
+        """Measured, not assumed: with four openings and a prior, the displayed set survives fifteen days.
 
-        What ends it is `evidence_recency`, which the drawer shows to two decimals and which decays on a two-cycle
-        scale: around day five it crosses a hundredth and the role legitimately stores a version. So this asserts four,
-        one inside the measured band. A change here means the model's decay or the drawer's precision moved.
+        What ends it is `evidence_recency`, which the drawer shows to one decimal and which decays on a two-cycle
+        scale: around day fifteen it crosses a tenth and the role legitimately stores a version. So this asserts
+        fourteen, one inside the measured band. A change here means the model's decay or the drawer's precision moved.
+        It was five days while the drawer showed a hundredth.
         """
         start = date(2026, 6, 1)
         baseline = displayed_forecast_identity(forecast(HISTORY, start))
-        for offset in range(1, 5):
+        for offset in range(1, 15):
             with self.subTest(day=offset):
                 self.assertEqual(
                     baseline, displayed_forecast_identity(forecast(HISTORY, start + timedelta(days=offset)))
                 )
 
-    def test_a_role_with_a_fresh_signal_still_versions_daily_and_that_is_correct(self) -> None:
-        """The honest limit of this change, recorded rather than hidden.
+    def test_a_role_with_a_fresh_signal_holds_for_a_week_rather_than_a_day(self) -> None:
+        """The limit this used to record, and where it moved to.
 
-        Signal recency decays on a 45-day scale, about 0.018 a day, and the drawer shows each factor to two decimals.
-        So a role carrying a recent signal shows a different number tomorrow, and by the rule that the stored version
-        must match what a reader sees, it has to store one. The saving therefore applies to roles whose evidence is
-        settled, not to every role. Widening the band for these would mean showing factors to one decimal, which is the
-        product's decision and not this function's.
+        Signal recency decays on a 45-day scale, about 0.018 a day. Against a shown hundredth that was a different
+        number every morning, so a role carrying a recent signal stored a version every day and the watchlist reported
+        a change that no reader could feel. Against a shown tenth it takes about a week, which is measured here as
+        seven; this asserts six, one inside the band. The saving now reaches these roles too, not only settled ones.
         """
         today = date(2026, 6, 1)
         signals = (Signal(date(2026, 5, 28), 0.6, 0.9, kind="ats_posting_opened", evidence_id="signal-1"),)
+        baseline = displayed_forecast_identity(forecast(HISTORY, today, signals))
+        for offset in range(1, 7):
+            with self.subTest(day=offset):
+                self.assertEqual(
+                    baseline, displayed_forecast_identity(forecast(HISTORY, today + timedelta(days=offset), signals))
+                )
+        # It still moves eventually: a comparison that never fires would have built nothing.
         self.assertNotEqual(
-            displayed_forecast_identity(forecast(HISTORY, today, signals)),
-            displayed_forecast_identity(forecast(HISTORY, today + timedelta(days=1), signals)),
+            baseline, displayed_forecast_identity(forecast(HISTORY, today + timedelta(days=21), signals))
         )
 
     def test_a_new_opening_is_a_new_version(self) -> None:

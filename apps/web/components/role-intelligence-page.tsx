@@ -284,7 +284,10 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 <dl className="mt-4 grid grid-cols-2 overflow-hidden rounded-card border-l border-t border-line sm:grid-cols-4">
                   {[
                     ["Expected date", day(forecast.expectedOpening)],
-                    ["Confidence score", confidenceOutOf(forecast.confidence, 1)],
+                    // Whole numbers, like every other place the score is written, and like the precision a recompute
+                    // counts a change at (CONFIDENCE_DISPLAYED_DECIMALS). Shown to a tenth, this one line could move
+                    // from 33.4 to 33.6 while the stored version correctly said nothing had changed.
+                    ["Confidence score", confidenceOutOf(forecast.confidence)],
                     ["Recruiting cycles used", String(forecast.historyCount)],
                     ["Similar-program sample", forecast.priorEffectiveSampleSize.toFixed(1)],
                   ].map(([label, value]) => (

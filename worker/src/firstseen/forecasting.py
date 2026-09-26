@@ -675,17 +675,21 @@ class HierarchicalCircularForecastModel:
 # rounds harder than the page displays, the page shows a number that moved while the stored version says it did not.
 #
 #   CONFIDENCE_DISPLAYED_DECIMALS        the score out of 100 (apps/web/lib/confidence.ts, shown as "48 / 100")
-#   PROBABILITY_DISPLAYED_DECIMALS       role-intelligence-page.tsx, toFixed(3)
-#   FACTOR_DISPLAYED_DECIMALS            evidence-drawer.tsx and role-intelligence-page.tsx, toFixed(2)
+#   PROBABILITY_DISPLAYED_DECIMALS       role-intelligence-page.tsx, toFixed(2)
+#   FACTOR_DISPLAYED_DECIMALS            evidence-drawer.tsx and role-intelligence-page.tsx, toFixed(1)
 #   BASIS_SHARE_DISPLAYED_DECIMALS       forecast-basis.ts, Math.round(share * 100), so a whole percent
 #   PRIOR_SAMPLE_DISPLAYED_DECIMALS      as stored; priors do not decay with as_of, so this cannot drift on its own
 #
-# Rounding harder widens the band between stored versions. Measured on four openings and a company prior: at these
-# values a settled role stores a version every five days, a sparse one every nine, and a role carrying a signal from
-# the last few weeks every day, because signal recency decays about 0.018 a day against a shown hundredth.
+# Rounding harder widens the band between stored versions. Measured on four openings and a company prior at the
+# earlier values (probability to a thousandth, factors to a hundredth): a settled role stored a version every five
+# days, a sparse one every nine, and a role carrying a signal from the last few weeks every day, because signal
+# recency decays about 0.018 a day against a shown hundredth. The factors are shown to a tenth now, which is about
+# five and a half days of that decay, so the every-day case should become an every-few-days one; the displayed
+# precision was cut because three decimals on a probability built from four cycles claims more than the evidence
+# carries, and the quieter change feed follows from that rather than the other way round.
 CONFIDENCE_DISPLAYED_DECIMALS = 0
-PROBABILITY_DISPLAYED_DECIMALS = 3
-FACTOR_DISPLAYED_DECIMALS = 2
+PROBABILITY_DISPLAYED_DECIMALS = 2
+FACTOR_DISPLAYED_DECIMALS = 1
 BASIS_SHARE_DISPLAYED_DECIMALS = 0
 PRIOR_SAMPLE_DISPLAYED_DECIMALS = 2
 
