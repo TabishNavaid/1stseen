@@ -316,6 +316,19 @@ class UsefulQuestionTools:
         return self.store.referral_ready(as_of, intent.horizon_days, cast(UUID, user_id))
 
 
+def _verified_on(row: dict[str, Any]) -> date | None:
+    """The day this forecast was last recomputed and confirmed, changed or not.
+
+    Freshness is this, not the row's age. `as_of` is a forecast input, so a forecast used to be rewritten every night
+    whether or not anything had been learned, and a seven-day window on the row's own date happened to work because of
+    it. Now an identical recompute updates `last_verified_at` instead of storing a duplicate (migration 202608140053),
+    so measuring the row's age would call a forecast confirmed this morning stale. A row written before that column
+    existed falls back to when it was written, which is what a backfill would have set it to.
+    """
+    stamp = parse_timestamp(row.get("last_verified_at")) or parse_timestamp(row.get("forecasted_at"))
+    return stamp.date() if stamp else None
+
+
 class SupabasePortfolioQueries:
     """Indexed database questions; never performs fresh network collection."""
 
@@ -612,6 +625,7 @@ class SupabasePortfolioQueries:
     ) -> tuple[list[RoleForecastItem], int]:
         columns = (
             "id,canonical_role_id,as_of,point_date,window_start,window_end,confidence,model_version,forecasted_at,"
+            "last_verified_at,"
             "canonical_roles!inner(canonical_title,track,company_id,scope_status,active,forecast_refused_at,"
             "companies!inner(name))"
         )
@@ -638,8 +652,10 @@ class SupabasePortfolioQueries:
             if not _current(row):
                 # The model has declined the role since this, its latest forecast: it has no current forecast.
                 continue
+            # The forecast's own as_of is what the item reports; freshness is when it was last confirmed.
             forecast_as_of = date.fromisoformat(str(row["as_of"]))
-            if (as_of - forecast_as_of).days > self.forecast_freshness_days:
+            verified_on = _verified_on(row)
+            if verified_on is None or (as_of - verified_on).days > self.forecast_freshness_days:
                 stale += 1
                 continue
             role = cast(dict[str, Any], row["canonical_roles"])
@@ -707,7 +723,7 @@ class SupabasePortfolioQueries:
                     lambda ids: self.client.table("readiness_milestones")
                     .select(
                         "id,canonical_role_id,forecast_id,kind,due_on,rationale,"
-                        "forecasts!inner(as_of),"
+                        "forecasts!inner(as_of,forecasted_at,last_verified_at),"
                         "canonical_roles!inner(canonical_title,scope_status,active,companies!inner(name))"
                     )
                     .eq("user_id", str(user_id))
@@ -729,8 +745,8 @@ class SupabasePortfolioQueries:
         for row in rows:
             action = action_by_kind.get(str(row["kind"]))
             forecast_row = cast(dict[str, Any], row["forecasts"])
-            forecast_as_of = date.fromisoformat(str(forecast_row["as_of"]))
-            if action is None or (as_of - forecast_as_of).days > self.forecast_freshness_days:
+            verified_on = _verified_on(forecast_row)
+            if action is None or verified_on is None or (as_of - verified_on).days > self.forecast_freshness_days:
                 continue
             role = cast(dict[str, Any], row["canonical_roles"])
             if not _in_product(role):

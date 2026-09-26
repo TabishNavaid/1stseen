@@ -10,7 +10,12 @@
  * Dependency-free (Node 20+, preinstalled on GitHub's runners), so no job needs `npm ci` for it. Never prints or posts a
  * credential.
  *
- * Usage: node scripts/ops-alert.mjs --status <success|failure|cancelled> [--workflow <label>]
+ * Usage: node scripts/ops-alert.mjs --status <success|failure|cancelled> [--workflow <label>] [--component <name>]
+ *
+ * A component is a step whose failure is not the workflow's. The health report is the regeneration
+ * workflow's last step, so when its own read timed out the workflow was marked failed and the alert read
+ * "Changed-evidence forecast regeneration failed" -- which says the site's dates have stopped being rebuilt,
+ * when regeneration had in fact succeeded. A component reports under its own key and closes on its own.
  */
 
 import { raiseAlert, resolveAlert, runUrl } from "./lib/ops-issues.mjs";
@@ -23,14 +28,17 @@ const flag = (name) => {
 
 const status = flag("--status");
 if (!["success", "failure", "cancelled"].includes(status ?? "")) {
-  process.stderr.write("usage: node scripts/ops-alert.mjs --status <success|failure|cancelled> [--workflow <label>]\n");
+  process.stderr.write("usage: node scripts/ops-alert.mjs --status <success|failure|cancelled> [--workflow <label>] [--component <name>]\n");
   process.exit(2);
 }
 
 // GITHUB_WORKFLOW_REF is "owner/repo/.github/workflows/<file>@<ref>": the file name is the stable key.
 const file = /\/([^/@]+\.ya?ml)@/.exec(process.env.GITHUB_WORKFLOW_REF ?? "")?.[1] ?? process.env.GITHUB_WORKFLOW ?? "unknown-workflow";
-const label = flag("--workflow") || process.env.GITHUB_WORKFLOW || file;
-const key = `workflow:${file}`;
+const component = flag("--component");
+const workflowLabel = flag("--workflow") || process.env.GITHUB_WORKFLOW || file;
+// A component's failure is its own problem, under its own stable key, so it neither opens nor closes the workflow's.
+const label = component ? `${component} (${workflowLabel})` : workflowLabel;
+const key = component ? `workflow:${file}#${component}` : `workflow:${file}`;
 const trigger = process.env.GITHUB_EVENT_NAME ?? "local";
 
 async function main() {

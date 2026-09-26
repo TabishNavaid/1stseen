@@ -572,7 +572,14 @@ class RecruitingSignalIngestionService:
         observation_id = self.store.save_signal_observation(
             source,
             observed_at=observed_at,
-            document_hash=result.document_hash,
+            # The hash change detection just used, not the raw bytes. `save_signal_observation` looks for an existing
+            # row on (source_id, content_hash) and writes one when it finds none, so keying it on the response's bytes
+            # stored a new observation whenever a page's bytes moved -- a rendered-at comment, a rotating banner, lines
+            # served in another order -- which is exactly the churn `_meaningful_hash` exists to ignore. The detector
+            # said nothing had changed and the store wrote a row anyway: 959 observations a day, and every one of them
+            # moved the company's enrichment fingerprint, so no company was ever skipped. It also broke the rule that a
+            # content hash is built from normalized fields and never from what a retrieval happened to return.
+            document_hash=result.state.meaningful_hash,
             evidence_text=result.evidence_text[:65_536],
             extraction_method=route,
         )

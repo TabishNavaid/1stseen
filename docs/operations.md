@@ -38,6 +38,20 @@ depends on the owner watching a dashboard.
   request is not repeated, no browser is started, and nothing is written. OpenAI, Pinterest and ID.me all answer this
   way. A plain 403 that carries no challenge is still a failure.
 
+- **A reporting step's failure is not the workflow's.** `collection-health` runs as the last step of forecast
+  regeneration, after the forecasts are already written, so when its own 24-hour row count timed out the workflow was
+  marked failed and the alert said "Changed-evidence forecast regeneration failed" -- which reads as the site's dates
+  having stopped being rebuilt, while regeneration had in fact succeeded four times out of four. The step now carries
+  its own alert under its own key (`--component`, `scripts/ops-alert.mjs`) and closes on its own, and the workflow's
+  alert means the workflow.
+- **The database's own size is watched.** The report reads `pg_database_size` through `corpus_text_sizes` and warns past
+  **60% of the 8 GB Pro ceiling**, about 4.8 GB. A full database goes read-only, which stops collection and every write
+  the site makes, so the warning is deliberately early: at the growth this corpus has seen, 60% is weeks of notice.
+- **A once-a-day schedule needs a wider staleness limit than a twice-a-day one.** Regeneration moved to one run a day on
+  2026-09-23; GitHub has been starting these schedules up to eight hours late, so a healthy gap reaches about 32 hours.
+  The limits are 40 hours in both the health report and the production check. They were 36 and 34, and 34 against a
+  34-hour gap opened a "Scheduled workflows failing" issue on 2026-09-24 for a schedule that was working.
+
 - **One issue per problem.** Each problem has a stable key in a hidden marker. While it stays open the issue is edited
   silently, and a comment (which notifies) is added only when what is wrong changes or a day has passed. A collector
   failing four times a day produces one issue and at most one reminder a day.
