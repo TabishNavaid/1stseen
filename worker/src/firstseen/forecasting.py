@@ -670,6 +670,86 @@ class HierarchicalCircularForecastModel:
         )
 
 
+# The precision at which the product shows each forecast value, and therefore the precision at which a recompute
+# counts as a change. These mirror the web layer and must be changed with it, never ahead of it: if the comparison
+# rounds harder than the page displays, the page shows a number that moved while the stored version says it did not.
+#
+#   CONFIDENCE_DISPLAYED_DECIMALS        the score out of 100 (apps/web/lib/confidence.ts, shown as "48 / 100")
+#   PROBABILITY_DISPLAYED_DECIMALS       role-intelligence-page.tsx, toFixed(3)
+#   FACTOR_DISPLAYED_DECIMALS            evidence-drawer.tsx and role-intelligence-page.tsx, toFixed(2)
+#   BASIS_SHARE_DISPLAYED_DECIMALS       forecast-basis.ts, Math.round(share * 100), so a whole percent
+#   PRIOR_SAMPLE_DISPLAYED_DECIMALS      as stored; priors do not decay with as_of, so this cannot drift on its own
+#
+# Rounding harder widens the band between stored versions. Measured on four openings and a company prior: at these
+# values a settled role stores a version every five days, a sparse one every nine, and a role carrying a signal from
+# the last few weeks every day, because signal recency decays about 0.018 a day against a shown hundredth.
+CONFIDENCE_DISPLAYED_DECIMALS = 0
+PROBABILITY_DISPLAYED_DECIMALS = 3
+FACTOR_DISPLAYED_DECIMALS = 2
+BASIS_SHARE_DISPLAYED_DECIMALS = 0
+PRIOR_SAMPLE_DISPLAYED_DECIMALS = 2
+
+
+def displayed_forecast_identity(forecast: Forecast) -> tuple[object, ...]:
+    """Everything a reader of this forecast can see, at the precision they see it.
+
+    Regeneration stores a new version only when this changes. It compares the displayed values rather than the raw
+    ones because `as_of` is a forecast input: `evidence_recency` decays on a two-cycle scale and signal recency on a
+    45-day one, so the four-decimal factors and the unrounded probability differ every night even when nothing was
+    learned. Versioning on those stored a new forecast and about 101 `forecast_evidence` rows per in-scope role per
+    day (measured 2026-09-24: 66,560 rows against 658 roles), which was most of the database's growth.
+
+    The precisions below are the web layer's, and they are a contract with it. `role-intelligence-page.tsx` renders
+    the probability with `toFixed(3)` and each confidence factor with `toFixed(2)`, `forecast-basis.ts` rounds the
+    basis share to a whole percent, and confidence is shown as a whole score out of 100. Change one of those and
+    change this with it, or the product will show a number that moved while the stored version says it did not.
+
+    `model_version` and `method` are not displayed; they are here because a model change must version by contract.
+    Left out: the input fingerprint (a hash, and it carries `as_of`), `forecasted_at`, and the interval coverage,
+    which is a constant. The raw date weights are out too, but the basis share they drive is in.
+    """
+    own = sum(item.date_weight for item in forecast.feature_contributions if item.kind == "role_history")
+    borrowed = sum(
+        item.date_weight
+        for item in forecast.feature_contributions
+        if item.kind in ("company_prior", "role_family_prior")
+    )
+    # The same two sums migration 202608140040 takes, so the chip's percent and this agree.
+    weighted = own + borrowed
+    evidence_ids: set[str] = set()
+    for item in forecast.feature_contributions:
+        if item.evidence_id:
+            evidence_ids.add(item.evidence_id)
+        evidence_ids.update(item.evidence_ids)
+    shares = (
+        (
+            round(own / weighted * 100, BASIS_SHARE_DISPLAYED_DECIMALS),
+            round(borrowed / weighted * 100, BASIS_SHARE_DISPLAYED_DECIMALS),
+        )
+        if weighted
+        else None
+    )
+    return (
+        forecast.point_date,
+        forecast.window_start,
+        forecast.window_end,
+        round(forecast.confidence, CONFIDENCE_DISPLAYED_DECIMALS),
+        round(forecast.calibrated_probability, PROBABILITY_DISPLAYED_DECIMALS),
+        tuple(
+            sorted(
+                (key, round(value, FACTOR_DISPLAYED_DECIMALS))
+                for key, value in forecast.confidence_factors.items()
+            )
+        ),
+        shares,
+        forecast.sample_size,
+        round(forecast.prior_effective_sample_size, PRIOR_SAMPLE_DISPLAYED_DECIMALS),
+        forecast.method,
+        forecast.model_version,
+        tuple(sorted(evidence_ids)),
+    )
+
+
 def forecast_opening_window(
     history: Iterable[HistoricalOpening],
     signals: Iterable[Signal] = (),
