@@ -38,13 +38,50 @@ a hex value. New surfaces use tokens only; an arbitrary `[#hex]` value in new co
 | Company mark | `CompanyMark` in `brand/company-mark.tsx` | The company's own favicon, self-hosted (`scripts/fetch-company-logos.mjs`), or its initials. Decoration: the name is written beside it |
 | Characters | `Doodle` in `doodle.tsx`, sizes `hero` (240 to 320px), `empty` (160 to 200px), `small` (96 to 120px) | Open Doodles recoloured to the palette (`docs/credits.md`), one per moment and never two on one screenful: the landing page's "How it works" and closing call to action, each first-run step and its payoff, every empty state, each confirmation, the sign-in form, and the not-found and error pages. Each is `aria-hidden` with an empty alt, because the words beside it carry the meaning; each is fetched lazily, because decoration is never what a page waits on; `hideOnPhone` leaves out the ones that would push those words below the fold |
 
+### Light and dark
+
+Every colour token is `light-dark(light, dark)`, so the theme is one inherited property rather than a second copy of
+the palette: `:root` declares `color-scheme: light dark` and follows the reader's system setting, and the appearance
+control in the footer writes `data-theme` on the document to hold one of them instead. A reader on a dark system is
+served a dark page in the server's first byte, with no script involved; a held choice is put on the document by one
+inline script in `<head>`, before the first paint, so there is nothing to correct afterwards.
+
+The choice is kept in `localStorage`, never a cookie (`apps/web/lib/appearance.ts`). A cookie would travel with every
+request, and the guest edge cache keeps one copy of a page for everyone signed out, so a theme in a cookie would be a
+parameter the route renders differently for and the cache key would have to name it. In the browser, the HTML is the
+same for every reader.
+
+The dark palette is its own, not the light one inverted. It is a warm brown, the same stock at night, and its accents
+are derived at the brand's hues with as much chroma as sRGB holds at the lightness their contrast requires: on a
+near-neutral brown ground a colour separates by chroma far more than by lightness, and a light-theme green simply
+brightened goes olive there. Green stays the action colour because the ground never becomes green.
+
+Two things do not use `light-dark()`, and each says why where it is written: the workspace navigation surfaces, which
+are dark in either theme, and the drawn characters, which are files rather than colours (below).
+
 ### Contrast
 
-`apps/web/tests/design-tokens.test.mjs` reads the stylesheet and fails if a token pair falls below WCAG 2.1 AA: 4.5:1
+`apps/web/tests/design-tokens.test.mjs` reads the stylesheet and fails if a token pair falls below WCAG 2.1 AA, in
+both themes: 4.5:1
 for every text token on every surface and on its own semantic surface, 3:1 for control borders, focus, semantic
 lines and marks, and confidence rings. Before the token system, the tertiary grey most surfaces used for labels (#748079 and its
 neighbours) was 3.8 to 4.1:1 on the panel surface, and control borders were 1.5:1. `ink-subtle` and `line-strong`
 replace them.
+
+A token that is one colour in both themes has to say why, in that test's `SAME_IN_BOTH`, so a colour added without a
+dark value cannot reach a dark page as a light one. A token whose job is a fill is never used as a text colour, which
+the same file checks against the product's own source: a fill is dark on paper and dark again on a dark page.
+
+### The drawn characters
+
+The Open Doodles the product ships are two colours, a coral and the dark green everything is inked in. On a dark page
+that ink disappears into the ground, so each drawing has a second copy with the ink taken up to a chalk tone
+(`npm run build:doodle-dark`, output committed beside the originals as `<name>-dark.svg`).
+
+They are painted as a background rather than fetched as an `<img>`, because a theme has to choose between two files
+and an SVG inside an `<img>` cannot read the page it sits on. `components/doodle.tsx` hands the element both
+addresses as `--art` and `--art-dark`; the `drawn-art` utility paints one. Only the theme's own copy is fetched, and
+each character stays decoration: the element is `aria-hidden` and the words beside it say what happened.
 
 ### Evidence classes and date kinds are semantic
 

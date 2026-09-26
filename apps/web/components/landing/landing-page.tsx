@@ -111,7 +111,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 md:px-6 md:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:gap-16 lg:pb-24">
             <div>
               <h1 id="hero-title" className="rise heading-display text-[2.6rem] leading-[1.05] text-ink sm:text-6xl">
-                Know when internships open, <span className="relative whitespace-nowrap text-accent">before<span className="absolute inset-x-0 -bottom-1 h-2 rounded-full bg-warm/60" aria-hidden="true" /></span> everyone else.
+                Know when internships open, <span className="relative whitespace-nowrap text-accent-ink">before<span className="absolute inset-x-0 -bottom-1 h-2 rounded-full bg-warm/60" aria-hidden="true" /></span> everyone else.
               </h1>
               <p className="rise mt-5 max-w-xl text-lg leading-8 text-ink-muted" style={{ animationDelay: "90ms" }}>
                 1stSeen learns when each program opens every year and shows you the window it is likely to open in next.

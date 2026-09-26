@@ -3,7 +3,9 @@ import type { InputHTMLAttributes, ReactNode, Ref } from "react";
 export const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 export const primaryButtonClass = `inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-ink-inverse hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
 export const secondaryButtonClass = `inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-sunken disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
-export const textLinkClass = `rounded-sm font-semibold text-accent-ink underline underline-offset-2 hover:text-accent ${focusRing}`;
+// Hover goes to the page's own ink rather than deeper into the accent: the accent is a fill, and a fill is dark on
+// paper and dark again on a dark page, so "darker on hover" is only an affordance in one of the two themes.
+export const textLinkClass = `rounded-sm font-semibold text-accent-ink underline underline-offset-2 hover:text-ink ${focusRing}`;
 
 /**
  * A labelled input whose hint and error are programmatically associated with it

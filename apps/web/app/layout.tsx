@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Caveat, Fraunces, Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { SiteFooter } from "@/components/site-footer";
+import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 /*
@@ -66,10 +67,21 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // The one inline script the product ships, and the request's own nonce to run it under: the entry sets a fresh
+  // nonce on the request's Content-Security-Policy and vinext renders with it (cloudflare/index.ts).
+  const nonce = /'nonce-([^']+)'/.exec((await headers()).get("content-security-policy") ?? "")?.[1];
   // The page grows to fill the viewport and the footer follows it, so a short page ends at the bottom of the screen.
   return (
     <html lang="en">
+      <head>
+        {/*
+          * A reader who has held light or dark gets it on the document before the first paint, rather than watching
+          * the other theme be corrected (lib/appearance.ts). A reader who has held neither needs nothing from this:
+          * the stylesheet already follows their system setting on its own.
+          */}
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} ${caveat.variable} flex min-h-screen flex-col antialiased`}>
         {children}
         <SiteFooter />

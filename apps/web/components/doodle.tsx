@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -7,8 +8,9 @@ import { cn } from "@/lib/utils";
  * Every one of them is decoration: the words beside it say what happened, so each is `aria-hidden` with an empty alt
  * and nothing is lost when it is not drawn. One character marks one moment, and no screenful holds two.
  *
- * Each is fetched lazily and decoded off the main thread: it is decoration, so it is never what a page waits on. One
- * already in view still arrives with the first paint, because lazy only defers what is below the fold.
+ * Each is painted as a background rather than fetched as an <img>, because the theme picks between two drawings and
+ * an SVG inside an <img> cannot read the page it sits on (the `drawn-art` utility in globals.css). It is still never
+ * what a page waits on: a background arrives after the page it decorates, and only the theme's own copy is fetched.
  *
  * `size` is the weight of the moment, not a measurement: `hero` for a section of its own, `empty` for a state with
  * nothing in it, `small` for a confirmation or a step. Each character bobs once as it arrives (`bob-once`), and stays
@@ -16,6 +18,14 @@ import { cn } from "@/lib/utils";
  */
 
 export type Doodle = { src: string; width: number; height: number };
+
+/**
+ * The two drawings and the shape they share, for the element to hand to the `drawn-art` utility. The dark copy is
+ * the same file with `-dark` on it, written by `npm run build:doodle-dark`.
+ */
+export function drawnArt({ src, width, height }: Doodle): CSSProperties {
+  return { "--art": `url("${src}")`, "--art-dark": `url("${src.replace(/\.svg$/, "-dark.svg")}")`, aspectRatio: `${width} / ${height}` } as CSSProperties;
+}
 
 export const DOODLES = {
   /** Reading at a desk with the record beside them: how the openings are collected. */
@@ -60,6 +70,9 @@ const SIZE = {
   hero: "h-60 sm:h-72 lg:h-80",
   empty: "h-40 sm:h-48",
   small: "h-24 sm:h-28 [--bob:4px]",
+  // Sized by whatever holds it. A box with both sides set ignores the drawing's ratio and the art fits inside it,
+  // which is what an avatar's circle needs: one shape whatever character is in it.
+  fit: "[--bob:4px]",
 } as const;
 
 export function Doodle({
@@ -76,16 +89,10 @@ export function Doodle({
 }) {
   const art = DOODLES[name];
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- a small self-hosted SVG, which the image optimizer skips
-    <img
-      src={art.src}
-      alt=""
+    <span
       aria-hidden="true"
-      width={art.width}
-      height={art.height}
-      loading="lazy"
-      decoding="async"
-      className={cn("bob-once w-auto max-w-full select-none", SIZE[size], hideOnPhone && "max-sm:hidden", className)}
+      style={drawnArt(art)}
+      className={cn("drawn-art bob-once block w-auto max-w-full select-none", SIZE[size], hideOnPhone && "max-sm:hidden", className)}
     />
   );
 }
