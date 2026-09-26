@@ -36,7 +36,7 @@ from .discovery import (
 )
 from .enrichment import EnrichmentSummary, EvidenceEnrichmentService
 from .enrichment_fingerprints import UNCHANGED_RESULT, skip_key, worker_fingerprint
-from .forecasting import Forecast, InsufficientEvidenceError
+from .forecasting import Forecast, InsufficientEvidenceError, displayed_forecast_identity
 from .providers import ModelRouter
 from .readiness import (
     ApplicationReadinessPlanner,
@@ -175,6 +175,11 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
     # Collected evidence only becomes forecastable once it carries canonical role
     # identity and reconstructed opening history, so enrichment runs in the same
     # pass over exactly the companies whose sources were just collected.
+    # Collection and enrichment are the two halves of a run and move for different reasons: collection with how many
+    # sources answered, enrichment with how many companies had anything new. One elapsed_seconds could not tell which
+    # had changed, so a 32% drop had to be argued for rather than shown.
+    collection_seconds = round(time.monotonic() - started, 1)
+    enrichment_started = time.monotonic()
     enrichment_summaries, enrichment_failures, enrichment_unchanged = _enrich_companies(
         repository,
         sorted({source.company_id for source in collected}, key=str),
@@ -182,6 +187,7 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
         router=router,
     )
     enrichment = _enrichment_totals(enrichment_summaries, enrichment_failures, enrichment_unchanged)
+    enrichment_seconds = round(time.monotonic() - enrichment_started, 1)
     # Sources the budget left for the next run are not a failure: the run did what it had time for.
     deferred = len(sources) - len(collected)
     status = (
@@ -206,6 +212,8 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
                 "degraded_sources": degraded,
                 "diagnostics": diagnostic_counts,
                 "enrichment": enrichment,
+                "collection_seconds": collection_seconds,
+                "enrichment_seconds": enrichment_seconds,
                 # Whether any model answered. A deployment with none is the normal one, and a run should say so
                 # rather than leave it to be inferred (providers.py, ModelRouter.model_summary).
                 "models": router.model_summary(),
@@ -486,6 +494,8 @@ def regenerate_changed_forecasts() -> int:
     cursor = repository.collection_checkpoint(pipeline)
     started_at = datetime.now(UTC)
     changed_role_ids = repository.changed_role_ids_since(cursor)
+    unchanged_displayed = 0
+    verified_ids: list[UUID] = []
     # Only in-scope roles are forecast. Out-of-scope and unclassified roles stay as evidence and are
     # skipped here, which is most of the corpus.
     in_scope = repository.in_scope_role_ids()
@@ -539,7 +549,15 @@ def regenerate_changed_forecasts() -> int:
             output: dict[str, Any]
             if current and current.forecast.input_fingerprint == forecast.input_fingerprint:
                 unchanged += 1
+                verified_ids.append(current.id)
                 output = {"result": "unchanged_input_fingerprint"}
+            elif current and displayed_forecast_identity(current.forecast) == displayed_forecast_identity(forecast):
+                # The clock moved and the raw numbers with it -- `as_of` is a forecast input, and evidence and signal
+                # recency decay every day -- but nothing the product shows changed. Storing a version for that wrote
+                # 101 forecast_evidence rows per role per day and told a reader nothing. The check itself is kept.
+                unchanged_displayed += 1
+                verified_ids.append(current.id)
+                output = {"result": "unchanged_displayed_forecast"}
             else:
                 forecast_id = repository.save_agent_forecast_version(
                     role_id,
@@ -603,6 +621,12 @@ def regenerate_changed_forecasts() -> int:
                 started_at=role_started_at,
                 error={"type": type(exc).__name__, "message": redact_sensitive_text(exc)},
             )
+    verified = 0
+    try:
+        verified = repository.mark_forecasts_verified(verified_ids, at=started_at)
+    except Exception as exc:  # noqa: BLE001 - recording the check is bookkeeping, never the work
+        verified_error = redact_sensitive_text(exc, limit=200)
+        print(json.dumps({"forecasts_verified_unavailable": verified_error}), file=sys.stderr)
     status = "succeeded" if failures == 0 else "failed" if failures == len(role_ids) else "partial"
     repository.finish_agent_run(run_id, status=status)
     cursor_advanced = failures == 0
@@ -617,6 +641,7 @@ def regenerate_changed_forecasts() -> int:
                 "out_of_scope_skipped": out_of_scope_skipped,
                 "regenerated": regenerated,
                 "unchanged": unchanged,
+                "unchanged_displayed": unchanged_displayed,
                 "insufficient_evidence": insufficient,
             },
         )
@@ -627,6 +652,10 @@ def regenerate_changed_forecasts() -> int:
                 "out_of_scope_skipped": out_of_scope_skipped,
                 "forecasts_regenerated": regenerated,
                 "unchanged_input_fingerprints": unchanged,
+                # Recomputed, and identical in everything the product shows, so the stored version stands and its
+                # last_verified_at moves instead (migration 202608140053).
+                "unchanged_displayed_forecasts": unchanged_displayed,
+                "forecasts_verified": verified,
                 "insufficient_evidence": insufficient,
                 "readiness_plans_written": plans_written,
                 "readiness_failures": readiness_failures,
@@ -935,8 +964,16 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
     totals = {"observations": 0, "roles": 0, "events": 0}
     calls = 0
     remaining = {"remaining_observations": -1, "remaining_roles": -1, "remaining_events": -1}
+    # A call that fails ends the run, but everything the earlier calls committed stands, and so does the measurement
+    # taken before them. Raising here threw both away: three runs in a row reported nothing at all, and the sizes the
+    # step existed to report were lost with them.
+    stopped_by: dict[str, str] | None = None
     while time.monotonic() - started < max_seconds:
-        report = repository.trim_out_of_scope_text(keep=keep)
+        try:
+            report = repository.trim_out_of_scope_text(keep=keep)
+        except Exception as exc:  # noqa: BLE001 - reported below with what the run did manage
+            stopped_by = {"call": str(calls + 1), "error": type(exc).__name__, "message": redact_sensitive_text(exc, limit=200)}
+            break
         calls += 1
         for name in totals:
             totals[name] += report[name]
@@ -951,7 +988,8 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
                 "calls": calls,
                 "shortened": totals,
                 **remaining,
-                "finished": not any(remaining.values()),
+                "finished": not any(remaining.values()) and stopped_by is None,
+                "stopped_by": stopped_by,
                 "before_mb": _table_megabytes(before),
                 "after_mb": _table_megabytes(after),
                 # An UPDATE leaves the old row version behind, so this does not fall until the tables are vacuumed
@@ -964,7 +1002,8 @@ def run_text_trim(keep: int, *, max_seconds: float = 300.0) -> int:
             indent=2,
         )
     )
-    return 0
+    # Still a failure, so the step stays red and the alert still fires; it now says what it managed first.
+    return 1 if stopped_by else 0
 
 
 def _table_megabytes(sizes: list[dict[str, Any]]) -> dict[str, dict[str, float]]:

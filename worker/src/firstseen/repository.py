@@ -991,16 +991,72 @@ class IntelligenceRepository:
             on_conflict="source_id,original_url,captured_at",
         ).execute()
 
+    @staticmethod
+    def _event_row_matches(payload: dict[str, Any], stored: dict[str, Any]) -> bool:
+        """Whether the database already holds this event exactly, so upserting it would only rewrite the row."""
+        def canonical(value: Any) -> str | None:
+            if value is None:
+                return None
+            # jsonb comes back parsed, and a dict's key order is not stable across the round trip, so provenance is
+            # compared by its sorted form. Everything else (dates, numerics, uuids) arrives as a string.
+            if isinstance(value, (dict, list)):
+                return json.dumps(value, sort_keys=True, separators=(",", ":"))
+            return str(value)
+
+        return all(canonical(stored.get(column)) == canonical(value) for column, value in payload.items())
+
     def save_historical_openings(self, events: list[HistoricalOpeningEvent]) -> None:
         if not events:
             return
         # Conflict on the schema's natural key, not the generated id, so re-running
         # reconstruction updates the existing cycle instead of inserting a duplicate
         # alongside a row that was created with a different identifier.
+        stored = self.stored_events(events)
+        quotes = {
+            key: str(row["evidence_quote"]) for key, row in stored.items() if row.get("evidence_quote")
+        }
+        payloads = [
+            payload
+            for payload in self.event_payloads(events, quotes)
+            if not self._event_row_matches(
+                payload,
+                stored.get(
+                    (payload["canonical_role_id"], str(payload["opened_on"]), payload["observation_id"]), {}
+                ),
+            )
+        ]
+        if not payloads:
+            return
         self.client.table("historical_opening_events").upsert(
-            self.event_payloads(events, self.stored_event_quotes(events)),
+            payloads,
             on_conflict=self.EVENT_KEY,
         ).execute()
+
+    STORED_EVENT_COLUMNS = (
+        "canonical_role_id,opened_on,observation_id,evidence_quote,closed_on,source_quality,extraction_version,"
+        "opening_window_start,opening_window_end,date_precision,uncertainty_days,uncertainty_reason,"
+        "resolution_method,provenance"
+    )
+
+    def stored_events(self, events: Sequence[HistoricalOpeningEvent]) -> dict[tuple[str, str, str], dict[str, Any]]:
+        """Each of these events as it is already stored, by natural key.
+
+        Every column the upsert writes, not only the quote, because an upsert of a row whose values already match still
+        writes a new version of it: reconstruction re-upserted about 19,000 events on every run, which is 25 MB of row
+        versions a run left dead for autovacuum to reclaim, for no change. Reading the extra columns is cheap beside it;
+        the quote, which is the large one, was already being read.
+        """
+        keys = {str(event.canonical_role_id) for event in events}
+        rows = self._rows_in(
+            "historical_opening_events",
+            self.STORED_EVENT_COLUMNS,
+            "canonical_role_id",
+            sorted(keys),
+        )
+        return {
+            (str(row["canonical_role_id"]), str(row["opened_on"]), str(row["observation_id"])): row
+            for row in rows
+        }
 
     def stored_event_quotes(self, events: Sequence[HistoricalOpeningEvent]) -> dict[tuple[str, str, str], str]:
         """The quote each of these events is already stored with, by natural key."""
@@ -2488,6 +2544,20 @@ class IntelligenceRepository:
             return None
         return latest if forecast_is_current(latest.forecast.forecasted_at, self.forecast_refused_at(role_id)) else None
 
+    def mark_forecasts_verified(self, forecast_ids: Sequence[UUID], *, at: datetime) -> int:
+        """Record that these stored forecasts were recomputed and came out the same (migration 202608140053).
+
+        One update per chunk of ids, not one per role: regeneration verifies every in-scope role, which is 658 of them,
+        and 658 statements inside an eight-second call is not a thing that finishes. Every row takes the same timestamp,
+        so the whole set is one `in.()` filter per chunk, bounded by the URL length PostgREST accepts.
+        """
+        ids = [str(forecast_id) for forecast_id in forecast_ids]
+        for start in range(0, len(ids), _FILTER_CHUNK):
+            chunk = ids[start : start + _FILTER_CHUNK]
+            # bounded: a write over an explicit list of primary keys, at most _FILTER_CHUNK of them.
+            self.client.table("forecasts").update({"last_verified_at": at.isoformat()}).in_("id", chunk).execute()
+        return len(ids)
+
     def record_forecast_refusal(self, role_id: UUID, *, reason: str, at: datetime) -> None:
         """The model declined the role: earlier versions stop being current until it forecasts the role again."""
         self.client.table("canonical_roles").update(
@@ -2524,6 +2594,8 @@ class IntelligenceRepository:
                     "method": forecast.method,
                     "model_version": forecast.model_version,
                     "forecasted_at": forecast.forecasted_at.isoformat(),
+                    # A new version is also a verification, so freshness reads the same column either way.
+                    "last_verified_at": forecast.forecasted_at.isoformat(),
                     "history_count": forecast.sample_size,
                     "prior_effective_sample_size": forecast.prior_effective_sample_size,
                     "prediction_interval_coverage": forecast.prediction_interval_coverage,
@@ -2574,6 +2646,8 @@ class IntelligenceRepository:
                     "method": forecast.method,
                     "model_version": forecast.model_version,
                     "forecasted_at": forecast.forecasted_at.isoformat(),
+                    # A new version is also a verification, so freshness reads the same column either way.
+                    "last_verified_at": forecast.forecasted_at.isoformat(),
                     "history_count": forecast.sample_size,
                     "prior_effective_sample_size": forecast.prior_effective_sample_size,
                     "prediction_interval_coverage": forecast.prediction_interval_coverage,

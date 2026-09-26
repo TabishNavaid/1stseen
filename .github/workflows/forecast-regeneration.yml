@@ -75,8 +75,13 @@ jobs:
         if: ${{ always() }}
         with:
           node-version: "22.14.0"
+      # The report runs after the forecasts are already committed, so its own failure is not regeneration's. It was:
+      # when its 24-hour row count timed out, this workflow was marked failed and the owner was told the site's dates
+      # had stopped being rebuilt. It now carries its own alert, under its own key, and closes on its own.
       - name: Report collection health
+        id: collection_health
         if: ${{ always() }}
+        continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -93,6 +98,11 @@ jobs:
           retention-days: 14
       # Last, and on failure, timeout, or cancellation too: opens or updates this workflow's ops-alert issue, assigned
       # to the owner, and the next success closes it (docs/operations.md). A step, not a job: no extra billed minutes.
+      - uses: ./.github/actions/ops-alert
+        if: ${{ always() }}
+        with:
+          status: ${{ steps.collection_health.outcome }}
+          component: Collection health report
       - uses: ./.github/actions/ops-alert
         if: ${{ always() }}
         with:

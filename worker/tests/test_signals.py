@@ -52,6 +52,7 @@ class MemorySignalStore:
         self.states: dict[UUID, SignalSourceState] = {}
         self.signals: dict[str, RecruitingSignal] = {}
         self.observations = 0
+        self.observation_ids: dict[tuple[UUID, str], UUID] = {}
 
     def get_signal_source_state(self, source_id: UUID) -> SignalSourceState | None:
         return self.states.get(source_id)
@@ -60,9 +61,15 @@ class MemorySignalStore:
         self.states[state.source_id] = state
 
     def save_signal_observation(self, source: SourceConfig, **kwargs: object) -> UUID:
-        del source, kwargs
+        # The real store (repository.save_signal_observation) returns the existing row when one already holds this
+        # source and content hash, and inserts only when none does. The fake counted every call, which hid that a page
+        # serving the same content with different bytes was writing a new observation every run.
+        key = (source.id, str(kwargs.get("document_hash")))
+        if key in self.observation_ids:
+            return self.observation_ids[key]
         self.observations += 1
-        return UUID(f"00000000-0000-4000-8000-{self.observations:012d}")
+        self.observation_ids[key] = UUID(f"00000000-0000-4000-8000-{self.observations:012d}")
+        return self.observation_ids[key]
 
     def resolve_signal_role(self, company_id: UUID, evidence: str) -> UUID | None:
         del company_id
@@ -77,6 +84,33 @@ class MemorySignalStore:
             return False
         self.signals[signal.identity_key] = signal
         return True
+
+
+class UnchangedPageWritesNoObservationTests(unittest.TestCase):
+    """A page whose bytes moved but whose content did not must not store an observation.
+
+    `save_signal_observation` writes a row when it finds none on (source_id, content_hash). Keyed on the raw response
+    hash, a rendered-at comment or reordered lines counted as new content, so a signals run wrote an observation for a
+    page it had just decided was unchanged -- and every such row moved the company's enrichment fingerprint, which is
+    why no company was ever skipped. The observation is keyed on the same hash the detector compares.
+    """
+
+    def test_byte_churn_on_an_unchanged_page_is_one_observation_not_three(self) -> None:
+        url = "https://careers.fixture.example/students"
+        body = b"<main>\n<h1>Student programs</h1>\n<p>Applications open in the autumn.</p>\n"
+        pages = [
+            body + b"<!-- rendered 06:00:02Z -->\n</main>",
+            body + b"<!-- rendered 18:00:07Z -->\n</main>",
+            b"<main>\n<p>Applications open in the autumn.</p>\n<h1>Student programs</h1>\n</main>",
+        ]
+        transport = Transport({url: (pages[0], "text/html")})
+        store = MemorySignalStore()
+        service = RecruitingSignalIngestionService(store, transport)
+        for page in pages:
+            transport.responses[url] = (page, "text/html")
+            summary = service.ingest(source("generic", url), observed_at=SEEN)
+            self.assertEqual(summary.detected, 0, "the page never meaningfully changed")
+        self.assertEqual(store.observations, 1, "one observation for a page that never changed, not one per run")
 
 
 class RecruitingSignalTests(unittest.TestCase):

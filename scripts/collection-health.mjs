@@ -77,7 +77,7 @@ const WORKFLOWS = [
   { file: "historical-enrichment.yml", label: "Historical enrichment", pipeline: "historical", staleHours: 24 * 14 },
   // Once a day since 2026-09-23. GitHub starts these schedules up to eight hours late, so the limit is the
   // interval plus that lateness plus the job's own timeout, the way current jobs allows 24 for a 12-hour cron.
-  { file: "forecast-regeneration.yml", label: "Forecast regeneration", pipeline: "regeneration", staleHours: 36 },
+  { file: "forecast-regeneration.yml", label: "Forecast regeneration", pipeline: "regeneration", staleHours: 40 },
   { file: "backtest.yml", label: "Backtest (manual)", pipeline: "backtest", staleHours: null },
 ];
 
@@ -171,6 +171,19 @@ const hoursSince = (value) => (value ? (now - new Date(value).getTime()) / HOUR 
 const cell = (value) => String(value ?? "—").replace(/\|/g, "\\|");
 
 /* ------------------------------------------------------------------ queries */
+
+// Supabase Pro allows 8 GB and the database goes read-only at the ceiling, which stops collection and every write the
+// site makes. 60% is the line: at the growth this corpus has seen that is weeks of warning, not hours, and the check
+// costs one catalogue read. `corpus_text_sizes` already reports the database's own size (migration 202608140050).
+const DATABASE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
+const DATABASE_WARN_FRACTION = 0.6;
+
+async function databaseSize() {
+  const response = await rest("rpc/corpus_text_sizes", { method: "POST" });
+  const rows = await response.json();
+  const bytes = Number(rows?.[0]?.database_bytes ?? 0);
+  return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
 
 async function rowsAdded() {
   const since = iso(now - WINDOW_HOURS * HOUR);
@@ -338,6 +351,24 @@ async function main() {
   // Every ingestion records a fetch row, unchanged pages included, so zero means nothing ran.
   if (fetches && fetches.total > 0 && fetches.added === 0) {
     warn("No source fetches in 24h", "source_fetches gained no rows; current collection did not run or reached no source");
+  }
+
+  const sizeBytes = await databaseSize().catch(() => null);
+  if (sizeBytes === null) {
+    warn("Database size unknown", "corpus_text_sizes did not answer, so the storage ceiling is unwatched");
+  } else {
+    const gib = (sizeBytes / 1024 / 1024 / 1024).toFixed(2);
+    const share = Math.round((sizeBytes / DATABASE_CEILING_BYTES) * 100);
+    out(`### Database size`);
+    out();
+    out(`${gib} GiB of 8 GiB (${share}%). Warns at ${Math.round(DATABASE_WARN_FRACTION * 100)}%.`);
+    out();
+    if (sizeBytes > DATABASE_CEILING_BYTES * DATABASE_WARN_FRACTION) {
+      warn(
+        "Database approaching its ceiling",
+        `${gib} GiB of 8 GiB (${share}%); the database goes read-only at the ceiling, which stops collection and every write the site makes`,
+      );
+    }
   }
 
   out(`### Sources failing ${FAILURE_STREAK}+ consecutive attempts (last ${LOOKBACK_DAYS} days)`);

@@ -2,6 +2,8 @@ import json
 import sys
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -206,6 +208,97 @@ class PreloadFallbackTests(unittest.TestCase):
         self.assertIn("forecast.preload_shared_evidence", PreloadFailureRepository.tool_names)
         self.assertEqual(PreloadFailureRepository.saved_forecasts, 5)
         self.assertIsNotNone(PreloadFailureRepository.finished_status)
+
+
+def _two_days_apart():
+    """The same evidence forecast a day apart: different fingerprints, identical to a reader."""
+    from datetime import date as _date
+
+    from firstseen.forecasting import HistoricalOpening, SeasonalityPrior, forecast_opening_window
+
+    history = [
+        HistoricalOpening(_date(2022, 9, 11), 0.9, evidence_id="h22"),
+        HistoricalOpening(_date(2023, 9, 15), 1.0, evidence_id="h23"),
+        HistoricalOpening(_date(2024, 9, 8), 1.0, evidence_id="h24"),
+        HistoricalOpening(_date(2025, 9, 13), 1.0, evidence_id="h25"),
+    ]
+    prior = SeasonalityPrior(
+        "season", 9, 12, spread_days=13, effective_sample_size=8, quality=0.9, evidence_ids=("p1",)
+    )
+    today = forecast_opening_window(history, as_of=_date(2026, 6, 1), company_prior=prior)
+    tomorrow = forecast_opening_window(history, as_of=_date(2026, 6, 2), company_prior=prior)
+    return today, tomorrow
+
+
+STORED_TODAY, RECOMPUTED_TOMORROW = _two_days_apart()
+STORED_ID = UUID("00000000-0000-4000-8000-0000000009f1")
+
+
+class UnchangedDisplayRepository(ManyRoleForecastRepository):
+    """A role whose recompute differs only in what no reader sees."""
+
+    role_count = 3
+    verified: ClassVar[list] = []
+
+    def build_current_forecast(self, role_id, *, as_of, dataset=None):
+        return RECOMPUTED_TOMORROW
+
+    def current_forecast_version(self, role_id):
+        return SimpleNamespace(id=STORED_ID, forecast=STORED_TODAY)
+
+    def latest_forecast_version(self, role_id):
+        return SimpleNamespace(id=STORED_ID, forecast=STORED_TODAY)
+
+    def mark_forecasts_verified(self, forecast_ids, *, at):
+        type(self).verified = list(forecast_ids)
+        return len(type(self).verified)
+
+
+class ChangedDisplayRepository(UnchangedDisplayRepository):
+    """A role whose window actually moved."""
+
+    def current_forecast_version(self, role_id):
+        moved = replace(STORED_TODAY, point_date=STORED_TODAY.point_date + timedelta(days=30))
+        return SimpleNamespace(id=STORED_ID, forecast=moved)
+
+    def latest_forecast_version(self, role_id):
+        return self.current_forecast_version(role_id)
+
+
+class VerifiedInsteadOfDuplicatedTests(unittest.TestCase):
+    """`as_of` is a forecast input, so the clock alone used to store a version a day for every role.
+
+    66,560 forecast_evidence rows in 24 hours against 658 in-scope roles, measured on 2026-09-24. A recompute that a
+    reader could not tell apart is now recorded on the row that exists instead of duplicating it.
+    """
+
+    def setUp(self):
+        UnchangedDisplayRepository.saved_forecasts = 0
+        UnchangedDisplayRepository.verified = []
+        ChangedDisplayRepository.saved_forecasts = 0
+        ChangedDisplayRepository.verified = []
+
+    def test_an_identical_recompute_stores_nothing_and_is_recorded_as_verified(self):
+        out = StringIO()
+        with patch.object(cli, "IntelligenceRepository", UnchangedDisplayRepository), redirect_stdout(out):
+            cli.regenerate_changed_forecasts()
+
+        self.assertEqual(UnchangedDisplayRepository.saved_forecasts, 0, "a day passing is not a new version")
+        # Every role's stored forecast is recorded as checked, in one batched write rather than one call per role.
+        self.assertEqual(UnchangedDisplayRepository.verified, [STORED_ID] * UnchangedDisplayRepository.role_count)
+        summary = json.loads(out.getvalue())
+        self.assertEqual(summary["unchanged_displayed_forecasts"], UnchangedDisplayRepository.role_count)
+        self.assertEqual(summary["forecasts_verified"], UnchangedDisplayRepository.role_count)
+        self.assertEqual(summary["forecasts_regenerated"], 0)
+
+    def test_a_forecast_whose_window_moved_is_still_stored(self):
+        out = StringIO()
+        with patch.object(cli, "IntelligenceRepository", ChangedDisplayRepository), redirect_stdout(out):
+            cli.regenerate_changed_forecasts()
+
+        self.assertEqual(ChangedDisplayRepository.saved_forecasts, ChangedDisplayRepository.role_count)
+        self.assertEqual(ChangedDisplayRepository.verified, [], "a stored version carries its own verification")
+        self.assertEqual(json.loads(out.getvalue())["unchanged_displayed_forecasts"], 0)
 
 
 class ForecastRegenerationCostTests(unittest.TestCase):

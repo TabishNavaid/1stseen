@@ -33,7 +33,7 @@ const env = process.env;
 const SCHEDULED = [
   { file: "current-jobs.yml", label: "Current job collection", staleHours: 19 },
   { file: "career-page-signals.yml", label: "Career page signals", staleHours: 13 },
-  { file: "forecast-regeneration.yml", label: "Forecast regeneration", staleHours: 34 },
+  { file: "forecast-regeneration.yml", label: "Forecast regeneration", staleHours: 40 },
   { file: "historical-enrichment.yml", label: "Historical enrichment", staleHours: 24 * 8 },
   { file: "backup-corpus.yml", label: "Corpus backup", staleHours: 24 * 8 },
   { file: "backtest.yml", label: "Monthly backtest", staleHours: 24 * 33 },

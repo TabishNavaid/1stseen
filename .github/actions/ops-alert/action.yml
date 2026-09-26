@@ -7,6 +7,11 @@ inputs:
   status:
     description: The job's status. Pass job.status from the calling workflow.
     required: true
+  component:
+    description: >
+      Name of one step whose failure is not the workflow's, such as a reporting step that runs after the work is
+      already committed. Reports under its own alert key and title, leaving the workflow's own alert alone.
+    required: false
 runs:
   using: composite
   steps:
@@ -14,4 +19,10 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
         JOB_STATUS: ${{ inputs.status }}
-      run: node scripts/ops-alert.mjs --status "$JOB_STATUS"
+        ALERT_COMPONENT: ${{ inputs.component }}
+      run: |
+        if [ -n "$ALERT_COMPONENT" ]; then
+          node scripts/ops-alert.mjs --status "$JOB_STATUS" --component "$ALERT_COMPONENT"
+        else
+          node scripts/ops-alert.mjs --status "$JOB_STATUS"
+        fi
