@@ -123,6 +123,21 @@ export const FILTER_KEYS = [
 ] as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
 
+/**
+ * Facets this list parses but does not offer. Everything behind one of these is whole — the key is read, the counts
+ * are gathered, Postgres takes the argument — so withholding a facet is this line and nothing else, and offering it
+ * again is taking its key back out.
+ *
+ * Location is withheld because the field it filters on is thinner than a filter implies. 84% of in-scope programs
+ * state no place at all; one city arrives as four separate choices; "sf office" is offered as somewhere to work. A
+ * panel listing those reads as a broken filter rather than an honest count. And because a value is matched rather
+ * than checked against a vocabulary, one mistyped character returns an empty list instead of saying it knows no such
+ * place. A withheld key parses to its default, so a link still carrying `location=` shows the list unfiltered rather
+ * than silently hiding most of it. The search box already matches a program's place, which is the honest version of
+ * this until collection normalises the field.
+ */
+export const FACETS_WITHHELD: readonly FilterKey[] = ["location"];
+
 export type Exclusion = { excluded: number; without: number };
 
 /** Every count the dashboard states, computed from the same filters as its list. */
@@ -212,7 +227,7 @@ export function parseDashboardFilters(params: SearchParams): DashboardFilters {
   const page = Number.parseInt(first(params, "page") ?? "1", 10);
   const precision = allowed(all(params, "precision"), PRECISIONS)[0] ?? null;
   const sort = allowed(all(params, "sort"), SORTS)[0] ?? "window";
-  return {
+  return withoutWithheldFacets({
     query: (typeof params.q === "string" ? params.q : Array.isArray(params.q) ? params.q[0] ?? "" : "").slice(0, 200),
     disciplines: allowed(all(params, "discipline"), DISCIPLINES),
     companies: all(params, "company").filter((value) => UUID.test(value)).map((value) => value.toLowerCase()),
@@ -228,7 +243,12 @@ export function parseDashboardFilters(params: SearchParams): DashboardFilters {
     watchedOnly: first(params, "watched") === "1",
     sort,
     page: Number.isFinite(page) ? Math.min(10_000, Math.max(1, page)) : 1,
-  };
+  });
+}
+
+/** A withheld facet parses to its default, so neither a stale link nor a mistyped value can filter the list by it. */
+function withoutWithheldFacets(filters: DashboardFilters): DashboardFilters {
+  return FACETS_WITHHELD.reduce((next, key) => ({ ...next, ...CLEARED[key] }), filters);
 }
 
 /**
