@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import { BirdMark } from "@/components/brand/bird-mark";
+import { ProfileActivitySummary } from "@/components/profile-activity";
+import { ProfileCard } from "@/components/profile-card";
 import { Button } from "@/components/ui/button";
 import { Checkbox, RadioGroup } from "@/components/ui/choice";
 import { Combobox } from "@/components/ui/combobox";
@@ -161,6 +163,27 @@ export function DesignSystemGallery() {
             />
           </div>
         </div>
+      </Section>
+
+      <Section title="A person's own details">
+        <p className="mb-4 text-xs text-ink-subtle">
+          What settings leads with. The character is one of the drawings this site is made of, the two links are held
+          as handles and the address built from them, and every figure beside it counts records the account holds.
+          The example below is interface text: no account, and the form here has nothing to save to.
+        </p>
+        <ProfileCard
+          profile={{ displayName: "Example Person", avatar: "coffee", school: "University of Somewhere", githubHandle: "octocat", linkedinHandle: "example-person", graduationYear: 2028 }}
+          email="person@example.com"
+        />
+        <ProfileActivitySummary
+          activity={{
+            watchedRoles: 7,
+            withWindow: 5,
+            next: { date: "2027-02-18", label: "Start networking", company: "Example Company A", role: "Software Engineering Intern", semantics: "readiness", href: "/design-system" },
+            prepSteps: { total: 9, done: 4, overdue: 1 },
+          }}
+          memberSince="2026-04-02T00:00:00.000Z"
+        />
       </Section>
 
       <Section title="Evidence classes and date kinds">

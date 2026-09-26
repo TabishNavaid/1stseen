@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { AccountDataControls } from "@/components/account/account-data-controls";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FocusedShell } from "@/components/focused-shell";
+import { ProfileActivitySummary } from "@/components/profile-activity";
+import { ProfileCard } from "@/components/profile-card";
 import { Icon } from "@/components/ui/icon";
 import { loadGoogleConnectionSummary } from "@/lib/account/data";
 import { hasSupabaseConfig } from "@/lib/config";
@@ -12,6 +14,7 @@ import { hasGmailConfig } from "@/lib/email-digests/config";
 import { hasGoogleCalendarConfig } from "@/lib/google-calendar/config";
 import { FIELDS, SEASON_LABELS } from "@/lib/onboarding";
 import { loadOnboardingState } from "@/lib/onboarding-data";
+import { loadProfile, loadProfileActivity } from "@/lib/profile-data";
 import { hasServiceRoleConfig } from "@/lib/real-data";
 import { currentSession } from "@/lib/session";
 
@@ -42,7 +45,12 @@ export default async function SettingsPage() {
   }
   const session = await currentSession();
   if (!session) redirect("/signin?return_to=%2Fsettings");
-  const [state, google] = await Promise.all([loadOnboardingState(session.userId), loadGoogleConnectionSummary(session.userId)]);
+  const [state, google, profile, activity] = await Promise.all([
+    loadOnboardingState(session.userId),
+    loadGoogleConnectionSummary(session.userId),
+    loadProfile(session.userId),
+    loadProfileActivity(session.userId),
+  ]);
   const { answers, legacy } = state;
   const answered = state.completedAt !== null;
   const fields = FIELDS.filter((field) => answers.fields.includes(field.value)).map((field) => field.name);
@@ -51,9 +59,11 @@ export default async function SettingsPage() {
 
   return (
     <FocusedShell>
-      <h1 className="heading-display text-3xl">Settings</h1>
+      {/* Who you are comes first; what the account is set to follows it. */}
+      <ProfileCard profile={profile} email={session.email ?? null} />
+      <ProfileActivitySummary activity={activity} memberSince={profile.memberSince} />
 
-      <section className="mt-8" aria-labelledby="preparing-title">
+      <section className="mt-10" aria-labelledby="preparing-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 id="preparing-title" className="text-base font-semibold">What you are preparing for</h2>
@@ -68,8 +78,8 @@ export default async function SettingsPage() {
         {answered && (
           <dl className="panel mt-4 divide-y divide-line">
             <Row label="Fields">{fields.length ? fields.join(", ") : "Every field"}</Row>
-            {/* Answers an earlier version of the questions asked, shown while the account still holds them. */}
-            {legacy.graduationYear !== null && <Row label="Graduation">{legacy.graduationYear}</Row>}
+            {/* Answers an earlier version of the questions asked, shown while the account still holds them. The
+                graduation year is not among them any more: it is a field of your own, on the card above. */}
             {legacy.season && <Row label="Season">{SEASON_LABELS[legacy.season] ?? legacy.season}</Row>}
             {legacy.places.length > 0 && <Row label="Places">{legacy.places.join(" or ")}</Row>}
           </dl>
