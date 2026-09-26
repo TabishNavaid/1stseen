@@ -181,6 +181,7 @@ export const fixtureRoleViews: Record<string, RoleView> = {
       historyCount: 4,
       inputFingerprint: "f01de529a38345d05364a7518f04e193c78839db25b2bb3003cfed957009a6e5",
       forecastedAt: "2026-08-14T09:18:00Z",
+      lastVerifiedAt: "2026-08-14T09:18:00Z",
       calibratedProbability: 0.71,
       priorEffectiveSampleSize: 2.5,
       confidenceFactors: [

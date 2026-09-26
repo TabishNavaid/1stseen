@@ -29,7 +29,7 @@ export const PUBLIC_TABLE_COLUMNS = {
   role_aliases: ["id", "canonical_role_id", "alias_title", "last_seen_at"],
   forecasts: [
     "id", "canonical_role_id", "as_of", "point_date", "window_start", "window_end", "confidence", "confidence_factors",
-    "method", "model_version", "history_count", "input_fingerprint", "forecasted_at", "calibrated_probability",
+    "method", "model_version", "history_count", "input_fingerprint", "forecasted_at", "calibrated_probability", "last_verified_at",
     "prior_effective_sample_size",
   ],
   forecast_provenance: [
