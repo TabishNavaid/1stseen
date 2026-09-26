@@ -112,7 +112,8 @@ test("a role page reads top to bottom: the date and Save, History, Prep plan, As
   assert.ok(expander, "the expander is a details element");
   assert.doesNotMatch(expander, /\sopen(?:=|\s|>)/, "collapsed by default");
   const inside = html.slice(html.indexOf('id="how-made"'));
-  for (const detail of ["Sources and weights", "Model details", "Earlier versions of this forecast", "Forecasted ", "days until it starts", "Exact dates"]) {
+  // "Window set" and "Last checked" are two dates, not one: the second moves on its own when the model re-runs.
+  for (const detail of ["Sources and weights", "Model details", "Earlier versions of this forecast", "Window set", "Last checked", "days until it starts", "Exact dates"]) {
     assert.ok(inside.includes(detail), `${detail} is inside the expander`);
     assert.ok(!html.slice(0, html.indexOf('id="how-made"')).includes(detail), `${detail} is not outside it`);
   }

@@ -23,6 +23,7 @@
 // The explicit extension lets Node's test runner load this file directly; Vite resolves it either way.
 import { DASHBOARD_PARAMS, DASHBOARD_PATH, dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
 import { JUST_OPENED_PATH, justOpenedFilters, justOpenedHref } from "../lib/just-opened-filters.ts";
+import { EVIDENCE_PARAM, provenancePageFrom } from "../lib/role-page-params.ts";
 
 export const CACHE_STATUS_HEADER = "x-firstseen-cache";
 export const STORED_NONCE_HEADER = "x-firstseen-stored-nonce";
@@ -89,7 +90,13 @@ export function guestCachePath(request: Request): string | null {
     ) as typeof filters;
     return justOpenedHref(canonical, { page: canonical.page });
   }
-  return ROLE_PAGE.test(url.pathname) ? url.pathname : null;
+  // A role page reads which page of the forecast's contributions to show, so that is part of its key too: keyed on
+  // the address alone, the second page of the evidence was served whichever page a guest had asked for first.
+  if (ROLE_PAGE.test(url.pathname)) {
+    const evidence = provenancePageFrom(Object.fromEntries(url.searchParams));
+    return evidence > 1 ? `${url.pathname}?${EVIDENCE_PARAM}=${evidence}` : url.pathname;
+  }
+  return null;
 }
 
 /**

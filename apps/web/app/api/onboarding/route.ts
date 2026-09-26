@@ -7,6 +7,7 @@ import {
   MAX_COMPANIES,
   MAX_SEED_FOLLOWS,
   disciplinesForFields,
+  planError,
   planOutcome,
   type FieldValue,
 } from "@/lib/onboarding";
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
   if (!landing) {
     return json({ status: "completed", watching: chosen.length, plan: null, redirect: "/roles?watched=1&welcome=none" });
   }
-  const plan = planOutcome((await requestReadinessPlan(userId, landing)).status);
+  const planned = await requestReadinessPlan(userId, landing);
+  const plan = planOutcome(planned.status, planError(planned.payload));
   return json({ status: "completed", watching: chosen.length, plan, redirect: `/roles/${landing}?welcome=${plan}` });
 }

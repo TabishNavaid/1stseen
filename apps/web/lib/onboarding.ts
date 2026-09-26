@@ -195,12 +195,27 @@ export function legacyFromPreferences(row: StoredPreferences | null): LegacyPref
 export const PLAN_OUTCOMES = ["ready", "not_configured", "unreachable", "refused", "none"] as const;
 export type PlanOutcome = (typeof PLAN_OUTCOMES)[number];
 
-/** What happened when the first run asked for a readiness plan, from the worker's HTTP status (lib/readiness-plan.ts). */
-export function planOutcome(status: number): Exclude<PlanOutcome, "none"> {
+/**
+ * What happened when the first run asked for a readiness plan (lib/readiness-plan.ts).
+ *
+ * The status alone is not enough. `requestReadinessPlan` answers 503 in three situations — there is no planner
+ * configured, there is one and it did not answer, and there is one and it answered with something that was not its
+ * own verdict — and only the first of those is "not configured on this deployment". Reading the status alone told
+ * every reader whose planner was merely down that the product does not do preparation plans, which is both untrue
+ * and the one message that tells them not to try again.
+ */
+export function planOutcome(status: number, error?: string | null): Exclude<PlanOutcome, "none"> {
   if (status >= 200 && status < 300) return "ready";
-  if (status === 503) return "not_configured";
+  if (status === 503) return error === "readiness_api_unavailable" ? "not_configured" : "unreachable";
   if (status === 502) return "unreachable";
   return "refused";
+}
+
+/** The error code in a readiness-plan reply, when it carries one. */
+export function planError(payload: unknown): string | null {
+  return typeof payload === "object" && payload !== null && typeof (payload as { error?: unknown }).error === "string"
+    ? (payload as { error: string }).error
+    : null;
 }
 
 export function parsePlanOutcome(value: string | string[] | undefined): PlanOutcome | null {

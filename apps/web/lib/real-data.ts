@@ -174,7 +174,7 @@ function toForecastRole(row: DashboardPageRow, names: { company: string; role: s
       .slice(0, 6)
       .map(([key, value]) => ({
         label: factorLabel(key),
-        value: Number(value).toFixed(2),
+        value: Number(value).toFixed(1),
         tone: factorTone(key, Number(value)),
       })),
     evidence: cycles.slice(0, 6).map((item) => ({
@@ -1034,7 +1034,7 @@ function changeNoteFor(
           priorEffectiveSampleSize: Number(latest.prior_effective_sample_size),
           confidenceFactors: Object.entries(factors).map(([key, value]) => ({
             label: factorLabel(key),
-            value: Number(value).toFixed(2),
+            value: Number(value).toFixed(1),
             tone: factorTone(key, Number(value)),
           })),
           basis: versionBasis.get(latest.id as string) ?? null,

@@ -40,6 +40,7 @@ import {
   legacyFromPreferences,
   parseOnboardingAnswers,
   parsePlanOutcome,
+  planError,
   planOutcome,
   programTypesFor,
   welcomeHref,
@@ -264,10 +265,18 @@ test("the first run is offered only to an account that has not finished it, skip
 
 test("each readiness outcome maps from the worker's status and has a message", () => {
   assert.equal(planOutcome(200), "ready");
-  assert.equal(planOutcome(503), "not_configured");
+  // The planner answers 503 for three situations, and only one of them is "there is no planner here". A reader whose
+  // planner is merely down is told to try again, not that the product does not do this.
+  assert.equal(planOutcome(503, "readiness_api_unavailable"), "not_configured");
+  assert.equal(planOutcome(503, "readiness_api_unreachable"), "unreachable");
+  assert.equal(planOutcome(503, "readiness_api_failed"), "unreachable");
+  assert.equal(planOutcome(503), "unreachable", "an unlabelled 503 is a planner that did not answer, not an absent one");
   assert.equal(planOutcome(502), "unreachable");
   assert.equal(planOutcome(403), "refused");
   assert.equal(planOutcome(422), "refused");
+  assert.equal(planError({ error: "readiness_api_unreachable" }), "readiness_api_unreachable");
+  assert.equal(planError({ plan: [] }), null);
+  assert.equal(planError(null), null);
   assert.equal(parsePlanOutcome("ready"), "ready");
   assert.equal(parsePlanOutcome(["none", "ready"]), "none");
   assert.equal(parsePlanOutcome("<script>"), null);

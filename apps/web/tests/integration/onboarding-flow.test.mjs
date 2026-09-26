@@ -85,9 +85,19 @@ test("the first run against the local rig", async (t) => {
     assert.ok(process.env[name], `${name} is not set. Start the local rig first: scripts/local-rig.sh up`);
   }
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
-  const plannerUp = Boolean(process.env.FIRSTSEEN_AGENT_API_URL)
+  /*
+   * There are three states, not two, and the first run reports a different honest outcome in each: the planner
+   * answers and a plan is built, the planner is configured and cannot be reached, or no planner is configured at all.
+   * Treating the last two as one is what made this test red on every machine that has not set FIRSTSEEN_AGENT_API_URL,
+   * which is every machine running the local rig. It is not skipped: the outcome it asserts is simply the one that
+   * belongs to the state it is in.
+   */
+  // The same two variables lib/readiness-plan.ts calls "configured": a URL with no token is not a planner.
+  const plannerConfigured = Boolean(process.env.FIRSTSEEN_AGENT_API_URL && process.env.AGENT_API_BEARER_TOKEN);
+  const plannerUp = plannerConfigured
     && await fetch(new URL("/health", process.env.FIRSTSEEN_AGENT_API_URL)).then((r) => r.ok).catch(() => false);
-  t.diagnostic(plannerUp ? "readiness planner is running: a real plan is required" : "readiness planner is not running: the honest outcome is required");
+  const expectedPlan = plannerUp ? "ready" : plannerConfigured ? "unreachable" : "not_configured";
+  t.diagnostic(`readiness planner ${plannerUp ? "is running" : plannerConfigured ? "is configured but unreachable" : "is not configured (FIRSTSEEN_AGENT_API_URL and AGENT_API_BEARER_TOKEN)"}: the first run must report "${expectedPlan}"`);
 
   const password = `Correct-horse-${RUN}`;
   const created = [];
@@ -191,7 +201,7 @@ test("the first run against the local rig", async (t) => {
       const result = await response.json();
       assert.equal(result.status, "completed");
       assert.equal(result.watching, 3);
-      assert.equal(result.plan, plannerUp ? "ready" : "unreachable");
+      assert.equal(result.plan, expectedPlan);
       assert.equal(result.redirect, `/roles/${chosen[0]}?welcome=${result.plan}`);
 
       const preferences = await admin.from("recruiting_preferences").select("*").eq("user_id", finisherId).single();

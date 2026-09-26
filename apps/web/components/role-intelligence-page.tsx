@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
+import { freshnessNote } from "@/lib/forecast-freshness";
 import { PROVENANCE_PAGE_SIZE } from "@/lib/role-view";
 import type { DatePrecision, RoleView } from "@/lib/role-view";
 import { AgentInvestigation } from "@/components/agent-investigation";
@@ -271,7 +272,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
             </summary>
 
             {forecast ? (
-              <Detail id="forecast" title="The likely window" note={`Forecasted ${stamp(forecast.forecastedAt)}.`}>
+              <Detail id="forecast" title="The likely window" note={freshnessNote(forecast) ?? undefined}>
                 <WindowVisualization view={view} />
                 {basis && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -490,8 +491,14 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
                 {[
                   ["Model version", forecast?.modelVersion ?? "None", true],
                   ["Method", forecast?.method ? humanize(forecast.method) : "None", false],
-                  ["Forecasted", forecast ? stamp(forecast.forecastedAt) : "None", false],
-                  ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(3) : "None", false],
+                  // Two timestamps, not one: when this window was written, and when it was last recomputed and
+                  // found to be the same. The second moves on its own, which is why the page says which is which.
+                  ["Window set", forecast ? stamp(forecast.forecastedAt) : "None", false],
+                  ["Last checked", forecast ? stamp(forecast.lastVerifiedAt) : "None", false],
+                  // Two decimals, not three: a probability built from a handful of recruiting cycles has no thousandth
+                  // in it. Not written as a percentage, because the confidence score above is this number times a
+                  // hundred, and "33%" beside "33.4 / 100" is exactly the reading of confidence the product avoids.
+                  ["Probability (not yet calibrated)", forecast ? forecast.calibratedProbability.toFixed(2) : "None", false],
                   ["Recruiting cycles", forecast ? String(forecast.historyCount) : "None", false],
                   ["Similar-program sample", forecast ? forecast.priorEffectiveSampleSize.toFixed(1) : "None", false],
                   ["Location", place, false],

@@ -3,6 +3,7 @@ import { MissingPage } from "@/components/missing-page";
 import { RoleIntelligencePage } from "@/components/role-intelligence-page";
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
+import { provenancePageFrom } from "@/lib/role-page-params";
 import { fixtureRoleViews } from "@/lib/demo-data";
 import { parsePlanOutcome } from "@/lib/onboarding";
 import { hasServiceRoleConfig, loadMissingRoleCompany, loadRealRoleIdentity, loadRealRoleView } from "@/lib/real-data";
@@ -22,13 +23,6 @@ async function resolveView(roleId: string, userId: string | null, provenancePage
   if (hasServiceRoleConfig()) return loadRealRoleView(roleId, userId, provenancePage);
   if (process.env.FIRSTSEEN_DEMO_MODE === "true") return fixtureRoleViews[roleId] ?? null;
   return null;
-}
-
-/** Which page of the forecast's contributions to render. Out-of-range values are clamped by the loader. */
-function provenancePageFrom(params: Record<string, string | string[] | undefined>): number {
-  const raw = Array.isArray(params.evidence) ? params.evidence[0] : params.evidence;
-  const value = Number.parseInt(raw ?? "", 10);
-  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 /** The role's name only: one row, not the whole role view, which the page itself loads. */

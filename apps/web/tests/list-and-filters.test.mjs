@@ -143,3 +143,60 @@ test("a guest page is stored under the filters it was rendered with, on both lis
   assert.notEqual(page("http://localhost/roles?page=2"), page("http://localhost/roles"));
   assert.notEqual(page("http://localhost/roles?discipline=data"), page("http://localhost/roles"));
 });
+
+test("nothing hides itself with sr-only and then gives itself a box to paint", async () => {
+  const { readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) walk(path);
+      else if (entry.endsWith(".tsx")) files.push(path);
+    }
+  };
+  const web = fileURLToPath(new URL("..", import.meta.url));
+  for (const dir of ["app", "components"]) walk(join(web, dir));
+  assert.ok(files.length > 30, "the walk found the components");
+
+  /*
+   * `sr-only` sets padding to zero and the box to one pixel; a padding or size utility in the same string wins, and
+   * what is left is a real box whose text only `clip-path` is holding back. That is how "Skip to content" came to sit
+   * over the wordmark. A ternary is fine — the branches are separate strings — so this reads one string at a time.
+   */
+  const LAYOUT = /\b(?:[a-z-]+:)?(?:p[xytrbl]?-\d|size-\d|[wh]-\d|min-[wh]-|max-[wh]-|absolute|fixed|sticky|top-\d|bottom-\d|left-\d|right-\d|inset-|m[xytrbl]?-\d|border-\d|bg-[a-z]|rounded)/;
+  const offenders = [];
+  for (const file of files) {
+    for (const literal of readFileSync(file, "utf8").matchAll(/"([^"\n]*\bsr-only\b[^"\n]*)"/g)) {
+      const value = literal[1];
+      // `not-sr-only` under a variant is the reveal, which is allowed to place and pad itself.
+      if (/\bnot-sr-only\b/.test(value)) continue;
+      if (LAYOUT.test(value)) offenders.push(`${file.slice(web.length)}: ${value}`);
+    }
+  }
+  assert.deepEqual(offenders, [], "hide a thing by where it is, not by clipping a box other utilities can grow");
+});
+
+test("a window says when it was last checked and when it last moved, which are not the same date", async () => {
+  const { checkedWhen, freshnessNote } = await import("../lib/forecast-freshness.ts");
+  const now = new Date("2026-09-26T09:00:00Z");
+  assert.equal(checkedWhen("2026-09-26T02:00:00Z", now), "today");
+  assert.equal(checkedWhen("2026-09-25T23:00:00Z", now), "yesterday");
+  assert.equal(checkedWhen("2026-09-23T04:00:00Z", now), "3 days ago");
+  // Past a month, "44 days ago" is arithmetic the reader has to undo; the date is the shorter way to say it.
+  assert.match(checkedWhen("2026-08-12T04:00:00Z", now), /^on /);
+
+  // The case this exists for: recomputed last night, unchanged since August.
+  assert.equal(
+    freshnessNote({ lastVerifiedAt: "2026-09-26T02:00:00Z", forecastedAt: "2026-08-12T04:00:00Z" }, now),
+    "Checked today, unchanged since Aug 12, 2026.",
+  );
+  // A window written at this very check does not claim to be unchanged since itself.
+  assert.match(freshnessNote({ lastVerifiedAt: "2026-09-26T02:00:00Z", forecastedAt: "2026-09-26T02:00:00Z" }, now), /which is when this window was set/);
+  assert.equal(freshnessNote(null, now), null);
+  // No em dashes, no snake case, nothing from inside the machine.
+  for (const note of [freshnessNote({ lastVerifiedAt: "2026-09-20T02:00:00Z", forecastedAt: "2026-08-12T04:00:00Z" }, now)]) {
+    assert.doesNotMatch(note, /—|_|verified|fingerprint/);
+  }
+});
