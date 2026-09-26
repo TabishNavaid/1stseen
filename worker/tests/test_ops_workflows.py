@@ -97,6 +97,51 @@ class OpsWorkflowTests(unittest.TestCase):
         self.assertIn("sources?select=id,url,adapter,enabled,companies(name)", health)
         self.assertIn(".filter((entry) => entry.source?.enabled)", health)
 
+    def test_the_report_counts_every_table_in_one_request(self) -> None:
+        """Migration 202608140054: nineteen tables, two numbers each, one read.
+
+        This was thirty-eight `count=exact` requests inside one `Promise.all`. The filtered half of each pair is cheap
+        once indexed (migrations 052 and 053); the unfiltered half is a whole-table scan that no index helps, and
+        nineteen of those at once crossed PostgREST's eight-second timeout. The regeneration workflow's last step died
+        with `read of raw_job_observations failed with HTTP 500` on three consecutive nights, and the 4.8 GB database
+        tripwire went dark with it. Indexing could not have fixed it, so the counting moved into one function that
+        scans each table once for both numbers, on one connection.
+        """
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("rpc/counted_table_totals", health)
+        # The code form, not the comment that explains why it is gone.
+        self.assertNotIn('prefer: "count=exact"', health, "a per-table count is back; the fan-out is what failed")
+        # The size tripwire rides on the same read rather than costing a second one.
+        self.assertNotIn("rpc/corpus_text_sizes", health)
+        self.assertIn("row.database_bytes", health)
+
+        migration = (ROOT / "supabase/migrations/202608140054_counted_tables_in_one_read.sql").read_text()
+        body = migration[migration.index("create or replace function public.counted_table_totals") :]
+        # Each table names the column the report actually filters on, which is not always created_at.
+        counted = {
+            "companies": "created_at", "sources": "created_at", "source_fetches": "fetched_at",
+            "raw_job_observations": "created_at", "archive_captures": "created_at",
+            "canonical_roles": "created_at", "observation_role_matches": "created_at",
+            "role_aliases": "created_at", "historical_opening_events": "created_at",
+            "signals": "created_at", "forecasts": "created_at", "forecast_evidence": "created_at",
+            "forecast_changes": "created_at", "readiness_milestones": "created_at",
+            "inference_decisions": "decided_at", "model_usage": "created_at",
+            "agent_runs": "started_at", "agent_tool_calls": "started_at", "backtest_runs": "created_at",
+        }
+        tables = _migration_tables()
+        for table, column in counted.items():
+            with self.subTest(table=table):
+                self.assertIn(table, tables, "the counted table is one a migration creates")
+                self.assertIn(f"count(*) filter (where {column} >= p_since), count(*) from public.{table}", body)
+        # The totals are exact. `reltuples` is not usable for them: on the rig it reports 59 forecasts against a real
+        # 577, and -1 for a table that has never been analysed, and a health report may not understate a table tenfold.
+        self.assertNotIn("reltuples", body)
+        for signature in ("public.counted_table_totals(timestamptz)", "public.counted_table_daily_rows(integer)"):
+            self.assertIn(f"revoke all on function {signature} from public, anon, authenticated;", migration)
+            self.assertIn(f"grant execute on function {signature} to service_role;", migration)
+        # Per-day growth is derived from history, not sampled once a day, and its window stays bounded.
+        self.assertIn("least(greatest(coalesce(p_days, 14), 1), 90)", migration)
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")
