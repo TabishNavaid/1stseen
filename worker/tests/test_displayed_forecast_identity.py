@@ -19,7 +19,6 @@ from firstseen.forecasting import (
     BASIS_SHARE_DISPLAYED_DECIMALS,
     CONFIDENCE_DISPLAYED_DECIMALS,
     FACTOR_DISPLAYED_DECIMALS,
-    MAX_HALF_WIDTH_DAYS,
     PROBABILITY_DISPLAYED_DECIMALS,
     HistoricalOpening,
     SeasonalityPrior,
@@ -125,10 +124,17 @@ class DisplayedIdentityTests(unittest.TestCase):
         just_after = forecast(HISTORY, window.point_date + timedelta(days=1))
         self.assertEqual(just_after.point_date, window.point_date)
 
-    def test_the_window_moves_on_once_the_cycle_can_no_longer_be_open(self) -> None:
-        """Past the widest window the model states, the reader is waiting on next year, and that is a new version."""
+    def test_the_window_moves_on_once_its_own_window_has_closed(self) -> None:
+        """Once today is past this window's end, the reader is waiting on next year, and that is a new version.
+
+        The test is the role's own half-width, not a flat number, so a forecast is never in the state of having a
+        passed centre, a closed window, and no named next cycle -- which the model could not render, publishing
+        one date.
+        """
         window = forecast(HISTORY, date(2026, 6, 1))
-        after = forecast(HISTORY, window.point_date + timedelta(days=MAX_HALF_WIDTH_DAYS + 1))
+        inside = forecast(HISTORY, window.window_end)
+        self.assertEqual(inside.point_date, window.point_date, "while its window covers today the date holds")
+        after = forecast(HISTORY, window.window_end + timedelta(days=1))
         self.assertGreater(after.point_date, window.point_date)
         self.assertEqual((after.point_date - window.point_date).days, 365)
         self.assertNotEqual(displayed_forecast_identity(window), displayed_forecast_identity(after))

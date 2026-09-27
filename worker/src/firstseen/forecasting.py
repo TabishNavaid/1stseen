@@ -21,8 +21,7 @@ DAYS_IN_CYCLE = 365.2425
 MODEL_VERSION = "hierarchical-circular-shrinkage-v3"
 METHOD = "uncertainty_weighted_hierarchical_circular_model"
 OBSERVED_BY_UNCERTAINTY_DAYS = 90.0
-# The widest half-window the model will state, and therefore how long after a centre a cycle may still be
-# open: past that, the reader is waiting on the next one. `_cycle_occurrence` depends on it meaning both.
+# The widest half-window the model will state.
 MAX_HALF_WIDTH_DAYS = 90
 
 CompanySize = Literal["startup", "small", "medium", "large", "enterprise", "unknown"]
@@ -288,8 +287,8 @@ def _date_for_cycle_day(year: int, cycle_day: float) -> date:
     return date(year, 1, 1) + timedelta(days=day_index % days_in_year)
 
 
-def _cycle_occurrence(as_of: date, cycle_day: float, grace_days: float = MAX_HALF_WIDTH_DAYS) -> date:
-    """The cycle a reader is waiting on: the next one, unless the last is recent enough to still be open.
+def _cycle_occurrence(as_of: date, cycle_day: float, half_width_days: float) -> date:
+    """The cycle a reader is waiting on: the one whose own window covers today, else the next one.
 
     Taking the next occurrence at or after `as_of` was wrong for a program whose centre has only just
     passed: one day past it, the estimate jumped a whole cycle. Measured over the rig's 115 scoreable
@@ -297,20 +296,23 @@ def _cycle_occurrence(as_of: date, cycle_day: float, grace_days: float = MAX_HAL
     60 days after it, and 42 of those landed 300 to 365 days out. That converted a modest centre error into
     a ten-month one, and it is why measured interval coverage read 50.4% against a nominal 0.80.
 
-    Returning the previous occurrence while it is still within `grace_days` took coverage to 76.5% and mean
-    absolute error from 140.6 to 58.6 days **with the intervals unchanged**, so the windows were never the
-    problem. The grace is `MAX_HALF_WIDTH_DAYS` because that is the widest window the model will state: if
-    the last centre is nearer than that, the window it belongs to may not have closed.
+    Keeping the previous occurrence while today is still inside its own window took coverage to 76.5% and mean
+    absolute error from 140.6 to 61.2 days **with the intervals unchanged**, so the widths were never the
+    problem. The test is this role's own `half_width_days`, not a flat number, which makes the rule
+    self-consistent: the date names the window that contains today, and the next one once that window has
+    closed. A flat 90-day grace scored marginally better (58.6 mean) but left a third state -- centre passed,
+    window closed, next cycle not yet named -- which no stored field can render, since the model publishes one
+    date. Measured on the rig at 2026-09-26 that state held 33 of 149 forecasts; here it holds none.
 
     The returned date can therefore be in the past, which is a fact about the program and not an error: that
-    cycle has opened, and the product states what opened and what is expected next rather than collapsing
-    the two into one vague future date.
+    cycle has opened, and its window still covers today, so the product says it opened rather than naming a
+    date ten months out.
     """
     upcoming = _date_for_cycle_day(as_of.year, cycle_day)
     if upcoming < as_of:
         upcoming = _date_for_cycle_day(as_of.year + 1, cycle_day)
     previous = _date_for_cycle_day(upcoming.year - 1, cycle_day)
-    return previous if (as_of - previous).days <= grace_days else upcoming
+    return previous if (as_of - previous).days <= half_width_days else upcoming
 
 
 def _company_scale(company_size: CompanySize, recruiting_scale: float | None) -> float:
@@ -542,7 +544,7 @@ class HierarchicalCircularForecastModel:
         scale_adjusted_floor = scarcity_floor * (1.05 - 0.10 * scale)
         half_width = min(MAX_HALF_WIDTH_DAYS, max(round(scale_adjusted_floor), round(1.282 * predictive_std)))
 
-        point = _cycle_occurrence(as_of, center)
+        point = _cycle_occurrence(as_of, center, half_width)
         role_components = [item for item in components if item.kind == "role_history"]
         role_weight = sum(item.weight for item in role_components)
         role_spread = (

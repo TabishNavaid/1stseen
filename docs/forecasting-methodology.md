@@ -29,26 +29,31 @@ date a median 353 days after the cutoff when the held-out opening was 60 days af
 300 to 365 days out. A modest centre error was being converted into a ten-month one, and that, not the width of
 the intervals, is why measured coverage read 50.4% against the nominal 0.80.
 
-Version 3 keeps the previous occurrence while it is still within `MAX_HALF_WIDTH_DAYS` (90) of `as_of`, which is
-the widest window the model will state: if the last centre is nearer than that, the window it belongs to may not
-have closed. Measured, intervals unchanged:
+Version 3 names the cycle whose own window covers `as_of`, and the next one once that window has closed. The test
+is the role's own half-width, which makes the rule self-consistent. Measured, intervals unchanged:
 
 | | v2 | v3 |
 |---|---|---|
 | interval coverage | 50.4% | **76.5%** |
-| mean absolute error | 140.6 d | **58.6 d** |
+| mean absolute error | 140.6 d | **61.2 d** |
 | median absolute error | 59.0 d | 59.0 d |
 | p80 absolute error | 298 d | 87 d |
 | average interval width | 162 d | 162 d |
 
 So the intervals were never the defect, and widening them was the wrong fix: 73 of the 115 cases already sat at
 the 90-day cap, and reaching 80% coverage by widening alone required a 3.5× multiplier and a median 630-day
-window. Grace windows of 75, 90, 105 and 120 days all reached 76.5% coverage; 90 and above minimised mean error.
+window. Grace windows of 75, 90, 105 and 120 days all reached 76.5% coverage, and a flat 90 scored marginally better on
+mean error (58.6 d). It was not chosen: a flat grace wider than a role's own window leaves a third state — centre
+passed, window closed, next cycle not yet named — which no stored field can render, because the model publishes one
+date. On the rig at 2026-09-26 that state held 33 of 149 forecasts. Tying the grace to the half-width holds coverage
+at 76.5%, costs 2.6 days of mean error, and leaves none.
 
-Two consequences are deliberate. The point date can now be in the past, which is a fact about the program rather
-than an error — that cycle has opened — and the product states what opened and what is expected next instead of
-collapsing both into one vague future date. And confidence does not move: `interval_precision` reads the
-half-width, which is unchanged, and the sparse cap binds 118 of 149 forecasts regardless.
+Two consequences are deliberate. The point date can be in the past whenever its window still covers today, which is
+a fact about the program rather than an error: that cycle has opened. So a forecast is in one of exactly two states,
+both derivable from stored fields — `window_start > today` (ahead) or `window_start <= today <= window_end` (open
+now) — and the product says which. Measured on the rig: 37 ahead and 112 open now at 2026-09-26, 149 ahead and none
+open at 2026-12-15, so neither state is an edge case and the mix is seasonal. And confidence does not move:
+`interval_precision` reads the half-width, which is unchanged, and the sparse cap binds 118 of 149 regardless.
 
 **This is measured under a content-availability assumption**, because the production backtest completes zero
 cases: every event's availability is when 1stSeen collected it, so nothing is admissible before a cutoff that
@@ -116,8 +121,8 @@ many observations. With no direct history and no compatible sourced prior, the m
 The model combines each component's measurement or historical spread with its circular distance from the
 posterior center. It applies the normal 80% multiplier `1.282` and a sparse-data half-width floor of 42, 32,
 22, 12, or 7 days for zero through four-plus direct cycles. Recruiting scale can adjust that floor by at most
-five percent in either direction. Half-width is capped at `MAX_HALF_WIDTH_DAYS`, 90 days, which is also the grace
-window in which a just-passed cycle still counts as open (see version 3 above); the two must stay the same number.
+five percent in either direction. Half-width is capped at `MAX_HALF_WIDTH_DAYS`, 90 days. The same half-width decides
+which cycle the estimate names (see version 3 above), so a window is open exactly while it contains `as_of`.
 
 `prediction_interval_coverage = 0.80` is the nominal construction target, not a claim of demonstrated 80%
 coverage. Empirical coverage is reported only by backtests and is never improved by narrowing intervals.
