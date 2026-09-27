@@ -3,7 +3,7 @@
 ## Scope and model contract
 
 1stSeen models recurring recruiting openings as annual temporal events. The production model is
-`hierarchical-circular-shrinkage-v2`. It is deterministic, interpretable, and replaceable through the
+`hierarchical-circular-shrinkage-v3`. It is deterministic, interpretable, and replaceable through the
 `OpeningWindowModel` protocol. No LLM chooses dates, weights, intervals, confidence, or readiness dates.
 
 The forecast is conditional on the sourced role identity and recurrence assumption. It estimates the next
@@ -20,6 +20,40 @@ The ML audit corrected four material version-1 assumptions:
 
 The model version changed because identical legacy inputs can now produce wider intervals and lower
 confidence. Stored version-1 forecasts remain immutable.
+
+## Version 3: which cycle the estimate names
+
+Version 2 took the next occurrence of the posterior centre at or after `as_of`, so one day past the centre the
+estimate jumped a whole cycle. Measured over the rig's 115 scoreable backtest cases, 50 of them — 43% — named a
+date a median 353 days after the cutoff when the held-out opening was 60 days after it, and 42 of those landed
+300 to 365 days out. A modest centre error was being converted into a ten-month one, and that, not the width of
+the intervals, is why measured coverage read 50.4% against the nominal 0.80.
+
+Version 3 keeps the previous occurrence while it is still within `MAX_HALF_WIDTH_DAYS` (90) of `as_of`, which is
+the widest window the model will state: if the last centre is nearer than that, the window it belongs to may not
+have closed. Measured, intervals unchanged:
+
+| | v2 | v3 |
+|---|---|---|
+| interval coverage | 50.4% | **76.5%** |
+| mean absolute error | 140.6 d | **58.6 d** |
+| median absolute error | 59.0 d | 59.0 d |
+| p80 absolute error | 298 d | 87 d |
+| average interval width | 162 d | 162 d |
+
+So the intervals were never the defect, and widening them was the wrong fix: 73 of the 115 cases already sat at
+the 90-day cap, and reaching 80% coverage by widening alone required a 3.5× multiplier and a median 630-day
+window. Grace windows of 75, 90, 105 and 120 days all reached 76.5% coverage; 90 and above minimised mean error.
+
+Two consequences are deliberate. The point date can now be in the past, which is a fact about the program rather
+than an error — that cycle has opened — and the product states what opened and what is expected next instead of
+collapsing both into one vague future date. And confidence does not move: `interval_precision` reads the
+half-width, which is unchanged, and the sparse cap binds 118 of 149 forecasts regardless.
+
+**This is measured under a content-availability assumption**, because the production backtest completes zero
+cases: every event's availability is when 1stSeen collected it, so nothing is admissible before a cutoff that
+precedes collection. The assumption treats an opening's own date as when it was publicly visible. It measures the
+model, never what the product would have known, and no accuracy figure is published from it.
 
 ## Inputs and uncertain dates
 
@@ -82,7 +116,8 @@ many observations. With no direct history and no compatible sourced prior, the m
 The model combines each component's measurement or historical spread with its circular distance from the
 posterior center. It applies the normal 80% multiplier `1.282` and a sparse-data half-width floor of 42, 32,
 22, 12, or 7 days for zero through four-plus direct cycles. Recruiting scale can adjust that floor by at most
-five percent in either direction. Half-width is capped at 90 days.
+five percent in either direction. Half-width is capped at `MAX_HALF_WIDTH_DAYS`, 90 days, which is also the grace
+window in which a just-passed cycle still counts as open (see version 3 above); the two must stay the same number.
 
 `prediction_interval_coverage = 0.80` is the nominal construction target, not a claim of demonstrated 80%
 coverage. Empirical coverage is reported only by backtests and is never improved by narrowing intervals.
