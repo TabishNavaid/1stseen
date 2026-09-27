@@ -22,6 +22,7 @@
     "verify:supabase": "node scripts/verify-supabase.mjs",
     "metrics:corpus": "node scripts/corpus-metrics.mjs",
     "health:collection": "node scripts/collection-health.mjs",
+    "measure:growth": "node scripts/measure-growth.mjs",
     "measure:render": "node scripts/measure-render.mjs",
     "measure:workerd": "node scripts/measure-workerd-cpu.mjs",
     "deploy:web": "bash scripts/deploy-web.sh",

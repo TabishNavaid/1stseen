@@ -42,29 +42,6 @@ const FAILURE_STREAK = Math.max(1, Number(process.env.COLLECTION_HEALTH_FAILURE_
 // Longer than the longest workflow timeout (historical enrichment, 90 minutes).
 const ABANDONED_AFTER_HOURS = 3;
 
-/** Tables with an insertion timestamp. Column names verified against supabase/migrations. */
-const TABLES = [
-  ["companies", "created_at"],
-  ["sources", "created_at"],
-  ["source_fetches", "fetched_at"],
-  ["raw_job_observations", "created_at"],
-  ["archive_captures", "created_at"],
-  ["canonical_roles", "created_at"],
-  ["observation_role_matches", "created_at"],
-  ["role_aliases", "created_at"],
-  ["historical_opening_events", "created_at"],
-  ["signals", "created_at"],
-  ["forecasts", "created_at"],
-  ["forecast_evidence", "created_at"],
-  ["forecast_changes", "created_at"],
-  ["readiness_milestones", "created_at"],
-  ["inference_decisions", "decided_at"],
-  ["model_usage", "created_at"],
-  ["agent_runs", "started_at"],
-  ["agent_tool_calls", "started_at"],
-  ["backtest_runs", "created_at"],
-];
-
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
  * it counts as dead: twice the schedule interval. Backtest is manual, so never stale.
@@ -102,15 +79,6 @@ async function rest(path, { method = "GET", prefer } = {}) {
     throw new Error(`read of ${path.split("?")[0]} failed with HTTP ${response.status}`);
   }
   return response;
-}
-
-async function count(table, filter) {
-  const response = await rest(`${table}?select=*${filter ? `&${filter}` : ""}&limit=1`, {
-    method: "HEAD",
-    prefer: "count=exact",
-  });
-  const total = response.headers.get("content-range")?.split("/")[1];
-  return total === undefined || total === "*" ? null : Number(total);
 }
 
 /**
@@ -174,26 +142,29 @@ const cell = (value) => String(value ?? "—").replace(/\|/g, "\\|");
 
 // Supabase Pro allows 8 GB and the database goes read-only at the ceiling, which stops collection and every write the
 // site makes. 60% is the line: at the growth this corpus has seen that is weeks of warning, not hours, and the check
-// costs one catalogue read. `corpus_text_sizes` already reports the database's own size (migration 202608140050).
+// costs nothing extra: `counted_table_totals` reports the database's own size beside the table counts.
 const DATABASE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
 const DATABASE_WARN_FRACTION = 0.6;
 
-async function databaseSize() {
-  const response = await rest("rpc/corpus_text_sizes", { method: "POST" });
-  const rows = await response.json();
-  const bytes = Number(rows?.[0]?.database_bytes ?? 0);
-  return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
-}
-
+/**
+ * Every counted table's 24h growth, exact total, and size, in one request (migration 202608140054).
+ *
+ * This was thirty-eight `count=exact` requests fired together, and it is what took the report down for three nights:
+ * the unfiltered half of each pair is a whole-table scan that no index helps, and nineteen of them at once crossed
+ * PostgREST's eight seconds. The function scans each table once for both numbers, on one connection, in a fixed order.
+ * The database's own size rides along, so the storage tripwire costs no second call.
+ */
 async function rowsAdded() {
   const since = iso(now - WINDOW_HOURS * HOUR);
-  return Promise.all(
-    TABLES.map(async ([table, column]) => ({
-      table,
-      added: await count(table, `${column}=gte.${since}`),
-      total: await count(table),
-    })),
-  );
+  // A GET, not a POST: the function is `stable`, so PostgREST takes its argument in the query string.
+  const response = await rest(`rpc/counted_table_totals?p_since=${encodeURIComponent(since)}`);
+  const rows = await response.json();
+  return rows.map((row) => ({
+    table: row.table_name,
+    added: Number(row.added),
+    total: Number(row.total),
+    databaseBytes: Number(row.database_bytes),
+  }));
 }
 
 async function pipelineRuns() {
@@ -353,9 +324,10 @@ async function main() {
     warn("No source fetches in 24h", "source_fetches gained no rows; current collection did not run or reached no source");
   }
 
-  const sizeBytes = await databaseSize().catch(() => null);
+  const reported = tables.find((row) => Number.isFinite(row.databaseBytes) && row.databaseBytes > 0);
+  const sizeBytes = reported ? reported.databaseBytes : null;
   if (sizeBytes === null) {
-    warn("Database size unknown", "corpus_text_sizes did not answer, so the storage ceiling is unwatched");
+    warn("Database size unknown", "counted_table_totals reported no database size, so the storage ceiling is unwatched");
   } else {
     const gib = (sizeBytes / 1024 / 1024 / 1024).toFixed(2);
     const share = Math.round((sizeBytes / DATABASE_CEILING_BYTES) * 100);

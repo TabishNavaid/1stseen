@@ -52,6 +52,10 @@ class _Query:
         self._rows = [row for row in self._rows if _value(row, column) in values]
         return self
 
+    def lte(self, column: str, value: Any) -> _Query:
+        self._rows = [row for row in self._rows if str(_value(row, column)) <= str(value)]
+        return self
+
     def order(self, column: str, *, desc: bool = False) -> _Query:
         self._rows = sorted(self._rows, key=lambda row: str(_value(row, column)), reverse=desc)
         return self
@@ -72,6 +76,14 @@ class _Client:
 
     def table(self, name: str) -> _Query:
         return _Query(list(self._tables[name]))
+
+    def rpc(self, name: str, params: dict[str, Any]) -> _Query:
+        # forecast_basis_for_forecasts: one row per forecast id, its own and borrowed date weight.
+        del name
+        return _Query([
+            {"forecast_id": forecast_id, "own_weight": 0.8, "borrowed_weight": 0.2}
+            for forecast_id in params["p_forecast_ids"]
+        ])
 
 
 def _event(
@@ -106,6 +118,107 @@ def _earliest(events: list[dict[str, Any]]) -> dict[str, int]:
         date(2026, 9, 17)
     )
     return {item.company: item.historical_cycle_count for item in result.items}
+
+
+FRESH_CO = "00000000-0000-4000-8000-0000000000d4"
+
+
+def _forecast(
+    forecast_id: str,
+    *,
+    verified: str | None,
+    forecasted_at: str,
+    as_of: str,
+    role: str = "00000000-0000-4000-8000-0000000000f1",
+    company: str = FRESH_CO,
+    name: str = "Fresh Co",
+) -> dict[str, Any]:
+    """One stored forecast version, with the columns `_latest_forecasts` selects."""
+    return {
+        "id": forecast_id,
+        "canonical_role_id": role,
+        "as_of": as_of,
+        "point_date": "2026-10-01",
+        "window_start": "2026-09-20",
+        "window_end": "2026-10-12",
+        "confidence": 61.0,
+        "model_version": "hierarchical-circular-shrinkage-v2",
+        "forecasted_at": forecasted_at,
+        "last_verified_at": verified,
+        "canonical_roles": {
+            "canonical_title": "Software Engineer Intern",
+            "track": "internship",
+            "company_id": company,
+            "scope_status": "in_scope",
+            "active": True,
+            "forecast_refused_at": None,
+            "companies": {"name": name},
+        },
+    }
+
+
+class FreshnessIsWhenItWasRecheckedTest(unittest.TestCase):
+    """Freshness is the last recheck, and the item still reports the forecast's own as_of.
+
+    `as_of` is a forecast input, so before migration 202608140053 a forecast was rewritten every night whether or not
+    anything had been learned, and a seven-day window on the row's own date worked only because of that. An identical
+    recompute now updates `last_verified_at` instead of storing a duplicate, so measuring the row's age would call a
+    forecast confirmed this morning stale. Both of these went untested: a linter, not a test, caught the reported
+    `as_of` being dropped while this was rewritten.
+    """
+
+    TODAY = date(2026, 9, 26)
+
+    def _openings(self, rows: list[dict[str, Any]]) -> Any:
+        return SupabasePortfolioQueries(_Client({"forecasts": rows})).upcoming_openings(self.TODAY, horizon_days=60)
+
+    def test_a_forecast_rechecked_today_is_current_however_old_the_row_is(self) -> None:
+        result = self._openings([
+            _forecast(
+                "00000000-0000-4000-8000-000000000f01",
+                verified=f"{self.TODAY.isoformat()}T06:00:00+00:00",
+                forecasted_at="2026-08-12T09:00:00+00:00",
+                as_of="2026-08-12",
+            )
+        ])
+        self.assertEqual(len(result.items), 1, "an identical recompute corroborates a forecast rather than ageing it")
+        self.assertEqual(result.limitations, ())
+        self.assertEqual(result.stale_role_count, 0)
+        # The item reports the forecast's own as_of, not the day it was rechecked. Dropping this broke nothing a test
+        # could see; ruff found the name was gone.
+        self.assertEqual(result.items[0].as_of, date(2026, 8, 12))
+
+    def test_a_forecast_not_rechecked_for_longer_than_the_window_is_excluded_and_counted(self) -> None:
+        result = self._openings([
+            _forecast(
+                "00000000-0000-4000-8000-000000000f02",
+                verified=(self.TODAY - timedelta(days=10)).isoformat() + "T06:00:00+00:00",
+                forecasted_at=(self.TODAY - timedelta(days=10)).isoformat() + "T06:00:00+00:00",
+                as_of=(self.TODAY - timedelta(days=10)).isoformat(),
+            )
+        ])
+        self.assertEqual(result.items, [])
+        self.assertEqual(result.stale_role_count, 1)
+        self.assertTrue(
+            any("has not been rechecked" in limitation for limitation in result.limitations),
+            f"the limitation must say what stale now means: {result.limitations}",
+        )
+
+    def test_a_row_written_before_the_column_existed_falls_back_to_when_it_was_written(self) -> None:
+        """Nothing was backfilled, so a null must read as fresh as its forecasted_at, not as missing."""
+        fresh, stale = (
+            _forecast("00000000-0000-4000-8000-000000000f03", verified=None, forecasted_at=f"{self.TODAY.isoformat()}T06:00:00+00:00", as_of=self.TODAY.isoformat()),
+            _forecast(
+                "00000000-0000-4000-8000-000000000f04",
+                verified=None,
+                forecasted_at="2026-01-02T06:00:00+00:00",
+                as_of="2026-01-02",
+                role="00000000-0000-4000-8000-0000000000f2",
+                name="Older Co",
+            ),
+        )
+        self.assertEqual(len(self._openings([fresh]).items), 1)
+        self.assertEqual(self._openings([stale]).items, [])
 
 
 class InProductRoleTest(unittest.TestCase):
