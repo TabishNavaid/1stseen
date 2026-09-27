@@ -88,6 +88,12 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(published.ats_categories.department, "Software Engineering")
         self.assertIsNone(unpublished.ats_categories)
 
+        # Greenhouse answers `location: {"name": ...}`, which `location_text` read as nothing: it looked only at
+        # the six schema.org address keys. Every one of the rig's 7,803 Greenhouse observations had no location,
+        # and this fixture always carried the shape that caused it -- nothing asserted on it.
+        self.assertEqual(published.location, "New York, NY")
+        self.assertEqual(unpublished.location, "New York, NY")
+
     def test_invalid_structured_job_url_does_not_discard_valid_sibling(self):
         url = "https://boards-api.greenhouse.io/v1/boards/fixture/jobs?content=true"
         result = GreenhouseAdapter().collect(
