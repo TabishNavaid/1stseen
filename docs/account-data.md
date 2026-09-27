@@ -35,7 +35,8 @@ route answers only fixed codes and never passes on a message from Google or Supa
 
 - **`account`**: the account id, email, when it was created, when the email was confirmed, and the last sign-in.
 - **`tables`**, one key per database table, each a list of rows:
-  - `profiles`: display name and time zone.
+  - `profiles`: display name, time zone, and the details a person set about themselves (their character, where they
+    study, and their GitHub and LinkedIn handles).
   - `recruiting_preferences`: the first-run answers (disciplines, graduation year, season, places) and preferences,
     with when the first run was finished or skipped.
   - `watchlist_items` and the legacy read-only `watchlists`: every follow.

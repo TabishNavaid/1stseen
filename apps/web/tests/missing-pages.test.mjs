@@ -33,6 +33,9 @@ async function render(pathname, env = {}) {
 }
 
 const DEMO = { FIRSTSEEN_DEMO_MODE: "true" };
+
+/** A drawn character, and which drawing it is: a painted background rather than an <img> (components/doodle.tsx). */
+const DRAWN_ART = /<span[^>]*--art:url\(&quot;\/illustrations\/([a-z-]+)\.svg[^>]*>/;
 // A deployment whose database cannot be reached: every read fails, as on a real outage.
 const OUTAGE = { SUPABASE_URL: "http://127.0.0.1:9", SUPABASE_SERVICE_ROLE_KEY: "an-unused-test-value", FIRSTSEEN_DEMO_MODE: "" };
 
@@ -158,15 +161,17 @@ test("the guest edge cache stores neither a 404 nor a 500", async () => {
 
 test("the character leads the page, large and decorative, and bobs once unless motion is reduced", async () => {
   const { html } = await render("/this-page-does-not-exist", DEMO);
-  const image = /<img[^>]*src="\/illustrations\/([a-z-]+)\.svg"[^>]*>/.exec(column(html));
-  assert.ok(image, "the page draws an illustration");
-  assert.match(image[0], /alt=""/, "the headline carries the meaning");
-  assert.match(image[0], /class="[^"]*\bbob-once\b/);
+  const drawing = DRAWN_ART.exec(column(html));
+  assert.ok(drawing, "the page draws an illustration");
+  assert.match(drawing[0], /aria-hidden="true"/, "the headline carries the meaning");
+  assert.match(drawing[0], /class="[^"]*\bbob-once\b/);
+  // Both copies are named, so the theme picks one without a request going out for the other (lib/appearance.ts).
+  assert.match(drawing[0], new RegExp(`--art-dark:url\\(&quot;/illustrations/${drawing[1]}-dark\\.svg`));
   // 240px tall on a phone and 360px from md up, ahead of the headline.
   assert.match(column(html), /class="[^"]*\bh-60\b[^"]*md:h-\[360px\]/);
-  assert.ok(column(html).indexOf("<img") < column(html).indexOf("<h1"), "the illustration comes first");
+  assert.ok(column(html).indexOf("drawn-art") < column(html).indexOf("<h1"), "the illustration comes first");
   const credits = readFileSync(new URL("../../../docs/credits.md", import.meta.url), "utf8");
-  assert.match(credits, new RegExp(`illustrations/${image[1]}\\.svg`));
+  assert.match(credits, new RegExp(`illustrations/${drawing[1]}\\.svg`));
 
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
   assert.match(css, /@utility bob-once \{[^}]*animation: bob-once [^;]* 1 both;/, "it plays once");
@@ -184,7 +189,7 @@ test("each visit to a not-found page gets one of the three characters, at random
   for (let visit = 0; visit < 24; visit += 1) {
     const { status, html } = await render("/this-page-does-not-exist", DEMO);
     assert.equal(status, 404);
-    seen.add(/<img[^>]*src="\/illustrations\/([a-z-]+)\.svg"/.exec(column(html))?.[1]);
+    seen.add(DRAWN_ART.exec(column(html))?.[1]);
   }
   assert.ok([...seen].every((name) => NOT_FOUND_ROTATION.includes(name)), [...seen].join(", "));
   // Twenty-four visits showing one character only would happen about once in 10^11 runs.

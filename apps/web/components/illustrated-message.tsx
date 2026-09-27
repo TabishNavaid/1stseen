@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
+import { drawnArt } from "@/components/doodle";
 
 /**
  * The not-found and error pages' one layout: a large hand-drawn character first, then a headline, one sentence, one
  * primary action, and one small link, in a single centered column that fills the space between header and footer.
  *
- * The characters are Open Doodles recoloured to the palette (docs/credits.md). Each is decorative: the headline says
- * what happened. The character bobs once when the page appears, and not at all under reduced motion (`bob-once`).
+ * The characters are Open Doodles recoloured to the palette (docs/credits.md), and each is drawn twice, once for a
+ * dark page (`drawn-art`, components/doodle.tsx). Each is decorative: the headline says what happened. The character
+ * bobs once when the page appears, and not at all under reduced motion (`bob-once`).
  */
 
 export type Illustration = {
@@ -38,8 +40,7 @@ function Character({ art }: { art: Illustration }) {
       {art.backdrop === "ground" && (
         <span aria-hidden="true" className="absolute -bottom-1 left-1/2 h-4 w-3/5 -translate-x-1/2 rounded-[50%] bg-line" />
       )}
-      {/* eslint-disable-next-line @next/next/no-img-element -- a self-hosted SVG, drawn at its own size */}
-      <img src={art.src} alt="" width={art.width} height={art.height} className="bob-once relative h-full w-auto max-w-full" />
+      <span aria-hidden="true" style={drawnArt(art)} className="drawn-art bob-once relative block h-full w-auto max-w-full" />
     </div>
   );
 }

@@ -18,7 +18,7 @@ type Row = Record<string, unknown>;
 
 /** The tables whose rows carry the owner's id directly, the columns exported from each, and a stable paging order. */
 const OWNED_TABLES = {
-  profiles: { owner: "id", order: "id", columns: "display_name,timezone,created_at,updated_at" },
+  profiles: { owner: "id", order: "id", columns: "display_name,timezone,avatar,school,github_handle,linkedin_handle,created_at,updated_at" },
   recruiting_preferences: {
     owner: "user_id",
     order: "user_id",

@@ -31,6 +31,7 @@ import {
   type DashboardSummary,
 } from "@/lib/dashboard-query";
 import { dashboardTiles } from "@/lib/dashboard-tiles";
+import { cn } from "@/lib/utils";
 import { bandRoles } from "@/lib/list-groups";
 import { formatShortDay } from "@/lib/dates";
 import { PLAN_OUTCOME_MESSAGES } from "@/lib/onboarding";
@@ -105,20 +106,28 @@ function ViewStatement({ filters, summary }: { filters: DashboardFilters; summar
  * A count worth stating. A tile is drawn only when its number is not zero: an empty tile reads as a broken one. With an
  * href, the whole tile is the link to what it counts.
  */
+/**
+ * A count worth stating. A tile is drawn only when its number is not zero: an empty tile reads as a broken one.
+ *
+ * They are figures in a band rather than cards: three white rounded shadowed boxes above a list of hairline rows were
+ * the last of the old language left on the page, and read as left over rather than as anything meant. The band is
+ * divided the way the list is, and a figure that links says so with its arrow.
+ */
 function StatTile({ icon, label, value, detail, tone = "accent", href }: { icon: IconName; label: string; value: number; detail: ReactNode; tone?: "accent" | "warm"; href?: string }) {
   const body = (
     <>
-      <p className="flex items-center gap-2 text-caption font-semibold text-ink-muted">
-        <span className={`grid size-7 place-items-center rounded-full ${tone === "warm" ? "bg-warm-soft text-warm-ink" : "bg-accent-soft text-accent-ink"}`}><Icon name={icon} size={14} /></span>
+      <p className="flex items-center gap-2 text-micro font-semibold uppercase tracking-label text-ink-subtle">
+        <Icon name={icon} size={13} className={tone === "warm" ? "text-warm-ink" : "text-accent-ink"} />
         {label}
-        {href && <Icon name="arrow-right" size={14} className="ml-auto text-accent-ink" />}
+        {href && <Icon name="arrow-right" size={13} className="text-accent-ink" />}
       </p>
-      <div className="mt-3 flex items-baseline gap-2"><strong className="heading-display text-3xl tabular"><CountUp value={value} /></strong><span className="text-caption text-ink-subtle">{detail}</span></div>
+      <div className="mt-2 flex flex-wrap items-baseline gap-x-2"><strong className="heading-display text-3xl leading-none tabular text-ink"><CountUp value={value} /></strong><span className="text-caption text-ink-subtle">{detail}</span></div>
     </>
   );
+  const shell = "block py-4 sm:px-6 sm:first:pl-0 sm:[&+*]:border-l sm:[&+*]:border-line";
   return href
-    ? <Link href={href} className="card lift focus-ring block p-5" data-stat-tile>{body}</Link>
-    : <div className="card p-5" data-stat-tile>{body}</div>;
+    ? <Link href={href} className={cn(shell, "focus-ring rounded-sm hover:bg-surface-hover")} data-stat-tile>{body}</Link>
+    : <div className={shell} data-stat-tile>{body}</div>;
 }
 
 export function ForecastDashboard({
@@ -209,7 +218,7 @@ export function ForecastDashboard({
           </p>
         </header>
 
-        {tiles.length > 0 && <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="At a glance">{tiles}</section>}
+        {tiles.length > 0 && <section className="mt-8 grid divide-y divide-line border-y border-line sm:flex sm:divide-y-0" aria-label="At a glance">{tiles}</section>}
 
         {firstRun && mode === "real" && (
           <section className="card mt-8 flex flex-col gap-4 border-accent p-6 md:flex-row md:items-center md:justify-between" aria-labelledby="first-run-title">
@@ -282,7 +291,7 @@ export function ForecastDashboard({
             </section>
           ))}
           {items.length === 0 && mode !== "unconfigured" && emptyWatchlist && (
-            <div className="card mt-4">
+            <div className="mt-4 border-y border-line">
               <EmptyState
                 doodle="plant"
                 title="Your watchlist is empty"
@@ -303,7 +312,7 @@ export function ForecastDashboard({
             </div>
           )}
           {items.length === 0 && mode !== "unconfigured" && !emptyWatchlist && (
-            <div className="card mt-4">
+            <div className="mt-4 border-y border-line">
               <EmptyState
                 doodle="readingSide"
                 bird="confused"
@@ -319,7 +328,7 @@ export function ForecastDashboard({
                   pastLastPage ? (
                     <Link href={dashboardHref(filters, { page: 1 })} className="link-accent focus-ring text-xs">Return to the first page</Link>
                   ) : relax ? (
-                    <Link href={relax.href} className="link-accent focus-ring text-xs">Remove the {relax.name} filter to see {plural(relax.roles, "role")}</Link>
+                    <Link href={relax.href} className="link-accent focus-ring text-xs">Remove the {relax.name} filter to see {plural(relax.roles, "program")}</Link>
                   ) : undefined
                 }
               />

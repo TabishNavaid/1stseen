@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { guestCachePath } from "../cloudflare/guest-cache.ts";
 import { JUST_OPENED_FACETS, justOpenedFilters, justOpenedHref } from "../lib/just-opened-filters.ts";
-import { dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
+import { FACETS_WITHHELD, activeFilters, appliedFilterKeys, dashboardHref, parseDashboardFilters } from "../lib/dashboard-query.ts";
 import { pageCount, pageNumbers, pageRangeLabel } from "../lib/pagination.ts";
 
 const css = () => readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
@@ -76,7 +76,6 @@ test("every page link carries the whole view: the tab, each filter and the sort"
     assert.equal(params.get("cycles"), "3");
     assert.equal(params.get("precision"), "exact");
     assert.equal(params.get("listed"), "1");
-    assert.equal(params.get("location"), "remote");
     assert.equal(params.get("q"), "intern");
     assert.equal(params.get("page"), page === 1 ? null : String(page));
   }
@@ -117,7 +116,6 @@ test("Just opened reads the filters that describe a program and ignores the ones
   assert.deepEqual(filters.disciplines, ["software_engineering"]);
   assert.deepEqual(filters.types, ["internship"]);
   assert.deepEqual(filters.seasons, ["summer"]);
-  assert.deepEqual(filters.locations, ["remote"]);
   assert.equal(filters.windowDays, null);
   assert.deepEqual(filters.confidence, []);
   assert.equal(filters.minCycles, null);
@@ -126,9 +124,28 @@ test("Just opened reads the filters that describe a program and ignores the ones
   assert.equal(filters.watchedOnly, false);
   assert.deepEqual(filters.years, []);
   assert.equal(filters.sort, "window", "the feed is newest first and offers no sort");
-  // What it does read is what its bar offers, and nothing else.
+  // What it does read is what its bar offers, and nothing else. Location is in that set and withheld from both
+  // lists, so the feed keeps the key it would read while its bar offers no place to choose one.
   assert.deepEqual([...JUST_OPENED_FACETS], ["query", "discipline", "type", "season", "company", "location"]);
+  assert.deepEqual(filters.locations, []);
   assert.equal(justOpenedHref(filters, { page: 2 }).startsWith("/opened?"), true);
+});
+
+test("the location facet is withheld, on both lists, and a link still carrying one filters nothing", async () => {
+  assert.deepEqual([...FACETS_WITHHELD], ["location"]);
+  // The key parses to nothing, so a stale link or a mistyped place shows the list rather than an empty one.
+  const stale = parseDashboardFilters({ location: "sf ofice", discipline: "data" });
+  assert.deepEqual(stale.locations, []);
+  assert.deepEqual(stale.disciplines, ["data"]);
+  // Nothing downstream of the parse has a location to state: no chip to remove, no exclusion to explain.
+  assert.deepEqual(activeFilters(stale).map((chip) => chip.key), ["discipline"]);
+  assert.deepEqual(appliedFilterKeys(stale), ["discipline"]);
+  // And the panel offers no place to pick one, on either list.
+  for (const [path, control] of [["/roles", "dashboard-company"], ["/opened", "dashboard-company"]]) {
+    const html = await render(path, { FIRSTSEEN_DEMO_MODE: "true" });
+    assert.match(html, new RegExp(control), `${path} still draws the facets it keeps`);
+    assert.doesNotMatch(html, /dashboard-location|Any location/, `${path} offers no location facet`);
+  }
 });
 
 test("a guest page is stored under the filters it was rendered with, on both lists", () => {

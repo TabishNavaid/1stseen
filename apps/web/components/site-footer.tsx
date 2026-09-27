@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppearanceControl } from "@/components/appearance-control";
 import { BrandMark } from "@/components/brand-mark";
 import { getContactEmail } from "@/lib/config";
 import { publishedSitePages, sitePage } from "@/lib/site-links";
@@ -21,15 +22,20 @@ export function SiteFooter() {
             <Link href={methodology.href} className="link-accent focus-ring">How forecasts are made, and how accurate they are</Link>
           </p>
         </div>
-        <nav aria-label="About 1stSeen">
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 md:max-w-[340px] md:justify-end">
-            {publishedSitePages(getContactEmail() !== null).map((page) => (
-              <li key={page.key}>
-                <Link href={page.href} className="focus-ring inline-flex min-h-touch items-center text-caption text-ink-muted hover:text-ink sm:min-h-0">{page.label}</Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <div className="grid gap-3 md:justify-items-end">
+          <nav aria-label="About 1stSeen">
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 md:max-w-[340px] md:justify-end">
+              {publishedSitePages(getContactEmail() !== null).map((page) => (
+                <li key={page.key}>
+                  <Link href={page.href} className="focus-ring inline-flex min-h-touch items-center text-caption text-ink-muted hover:text-ink sm:min-h-0">{page.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          {/* In the footer rather than the bar: it is on every page here, including the first run and sign-in, and
+              the bar is where a page's own actions go. */}
+          <AppearanceControl />
+        </div>
       </div>
     </footer>
   );

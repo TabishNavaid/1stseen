@@ -70,7 +70,6 @@ test("every filter round-trips through the URL, and malformed values are dropped
     confidence: ["strong", "none"],
     minCycles: 3,
     precision: "exact_or_bounded",
-    locations: ["new york ny"],
     listedNow: true,
     watchedOnly: true,
     sort: "evidence",
@@ -78,6 +77,11 @@ test("every filter round-trips through the URL, and malformed values are dropped
   };
   const href = dashboardHref(filters, { page: 3 });
   assert.deepEqual(parseDashboardFilters(paramsOf(href)), filters);
+  // A withheld facet is the exception, and deliberately: its key parses to nothing while the panel does not offer it,
+  // so the same view comes back without it rather than filtered by a place nobody could have chosen (FACETS_WITHHELD).
+  const withPlace = dashboardHref({ ...filters, locations: ["new york ny"] }, { page: 3 });
+  assert.match(withPlace, /location=new\+york\+ny/, "the builder still writes the key it is given");
+  assert.deepEqual(parseDashboardFilters(paramsOf(withPlace)), filters);
 
   const parsed = parseDashboardFilters({
     discipline: ["quantitative", "astrology"],

@@ -21,7 +21,8 @@ const source = (file) => readFileSync(new URL(`../app/${file}`, import.meta.url)
 
 /**
  * Every route the guest cache stores, what it reads, and a value that must change its key. `ignored` is a parameter
- * the route reads but cannot render differently for a guest; each one carries the reason it is safe.
+ * the route reads but cannot render differently for a guest; each one carries the reason it is safe, and `same` is
+ * the request that proves the reason — a key that stops sharing is a parameter that started mattering.
  */
 const ROUTES = [
   {
@@ -40,8 +41,12 @@ const ROUTES = [
     reads: DASHBOARD_PARAMS,
     varies: ["?q=intern", "?discipline=data", "?company=1f6881fa-2e9e-5b71-ae8f-625c14c3dfb2", "?type=internship",
       "?season=summer", "?year=2027", "?window=30", "?confidence=strong", "?cycles=3", "?precision=exact",
-      "?location=remote", "?listed=1", "?watched=1", "?sort=confidence", "?page=2"],
-    ignored: { welcome: "only rendered for a signed-in reader, and a request with a session is never stored" },
+      "?listed=1", "?watched=1", "?sort=confidence", "?page=2"],
+    same: ["?location=remote"],
+    ignored: {
+      welcome: "only rendered for a signed-in reader, and a request with a session is never stored",
+      location: "withheld from both panels and parsed to its default, so a link carrying one renders the same list",
+    },
   },
   {
     name: "methodology",
@@ -56,7 +61,9 @@ const ROUTES = [
     url: "http://localhost/opened",
     reads: JUST_OPENED_PARAMS,
     varies: ["?q=waymo", "?discipline=data", "?type=internship", "?season=summer",
-      "?company=1f6881fa-2e9e-5b71-ae8f-625c14c3dfb2", "?location=remote", "?page=2"],
+      "?company=1f6881fa-2e9e-5b71-ae8f-625c14c3dfb2", "?page=2"],
+    same: ["?location=remote"],
+    ignored: { location: "withheld from both panels and parsed to its default, so a link carrying one renders the same list" },
   },
   {
     name: "role page",
@@ -74,6 +81,9 @@ test("every cached route is stored under each parameter it reads", () => {
     assert.ok(base, `${route.name} is cached`);
     for (const query of route.varies) {
       assert.notEqual(key(route.url + query), base, `${route.name}${query} must not share ${route.name}'s key`);
+    }
+    for (const query of route.same ?? []) {
+      assert.equal(key(route.url + query), base, `${route.name}${query} renders ${route.name}, so it shares its key`);
     }
     for (const query of route.refuses ?? []) {
       assert.equal(key(route.url + query), null, `${route.name}${query} must not be stored at all`);

@@ -19,6 +19,7 @@ import {
   SORTS,
   WINDOWS,
   DASHBOARD_PATH,
+  FACETS_WITHHELD,
   FILTER_KEYS,
   activeFilters,
   dashboardHref,
@@ -99,7 +100,9 @@ export function DashboardFiltersForm({
   /** Just opened is newest first and nothing else, so it offers no sort. */
   sortShown?: boolean;
 }) {
-  const shows = (key: FilterKey) => facetsShown.includes(key);
+  // A facet this list would offer, minus the ones the product withholds until the field behind them is worth
+  // filtering on (`FACETS_WITHHELD`). Withholding is one gate in one place rather than an edit to each list's own set.
+  const shows = (key: FilterKey) => facetsShown.includes(key) && !FACETS_WITHHELD.includes(key);
   const chips = activeFilters(filters, options, action).filter((chip) => shows(chip.key));
   const timing = (shows("window") && filters.windowDays ? 1 : 0) + (shows("season") ? filters.seasons.length : 0) + (shows("year") ? filters.years.length : 0);
   const evidence = shows("confidence") ? filters.confidence.length + (filters.minCycles ? 1 : 0) + (filters.precision ? 1 : 0) + (filters.listedNow ? 1 : 0) : 0;
@@ -126,7 +129,11 @@ export function DashboardFiltersForm({
         }
       }}
     >
-      <div className="card flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
+            {/*
+        No card around the bar. Its controls carry their own borders, which is where a thing you can type in or press
+        should say so; a shadowed white box around them was one more box on a page that is trying to have fewer.
+      */}
+      <div className="flex flex-col gap-2 border-b border-line pb-4 sm:flex-row sm:items-center">
         <Field id="dashboard-query" label={searchLabel} hideLabel className="min-w-0 flex-1">
           {(control) => (
             <div className="relative">
@@ -180,6 +187,7 @@ export function DashboardFiltersForm({
                   emptyMessage="No company matches"
                 />
                 {filters.companies.slice(1).map((value) => <input key={value} type="hidden" name="company" value={value} />)}
+                {shows("location") && (
                 <Field id="dashboard-location" label="Location">
                   {(control) => (
                     <Select {...control} name="location" defaultValue={filters.locations[0] ?? ""}>
@@ -190,7 +198,8 @@ export function DashboardFiltersForm({
                     </Select>
                   )}
                 </Field>
-                {filters.locations.slice(1).map((value) => <input key={value} type="hidden" name="location" value={value} />)}
+                )}
+                {shows("location") && filters.locations.slice(1).map((value) => <input key={value} type="hidden" name="location" value={value} />)}
               </div>
             </div>
             {shows("confidence") && (

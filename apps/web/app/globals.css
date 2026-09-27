@@ -28,38 +28,41 @@
 
 @theme {
   /* Surfaces */
-  --color-canvas: #f3f1eb;
-  --color-surface: #fffefa;
-  --color-surface-sunken: #f4f4f0;
-  --color-surface-hover: #f6f6f1;
-  --color-surface-selected: #eaf1ec;
-  --color-scrim: rgb(16 33 27 / 0.32);
+  --color-canvas: light-dark(#f3f1eb, #1d1610);
+  --color-surface: light-dark(#fffefa, #281f17);
+  --color-surface-sunken: light-dark(#f4f4f0, #16100b);
+  --color-surface-hover: light-dark(#f6f6f1, #34281f);
+  --color-surface-selected: light-dark(#eaf1ec, #18342b);
+  --color-scrim: light-dark(rgb(16 33 27 / 0.32), rgb(3 7 5 / 0.62));
 
   /* Text */
-  --color-ink: #18221f;
-  --color-ink-muted: #52605a;
-  --color-ink-subtle: #5f6b65;
+  --color-ink: light-dark(#18221f, #f7eee0);
+  --color-ink-muted: light-dark(#52605a, #c6b9af);
+  --color-ink-subtle: light-dark(#5f6b65, #b1a194);
   --color-ink-inverse: #ffffff;
 
   /* Lines */
-  --color-line: #d9ddd7;
-  --color-line-strong: #7c8781;
+  --color-line: light-dark(#d9ddd7, #3f3329);
+  --color-line-strong: light-dark(#7c8781, #887d73);
 
   /* Brand and interaction */
-  --color-accent: #183f35;
-  --color-accent-hover: #102f28;
-  --color-accent-ink: #235b4b;
-  --color-accent-soft: #dcebe4;
-  --color-focus: #2e7764;
+  --color-accent: light-dark(#183f35, #05755b);
+  --color-accent-hover: light-dark(#102f28, #048568);
+  --color-accent-ink: light-dark(#235b4b, #42b593);
+  --color-accent-soft: light-dark(#dcebe4, #14342a);
+  --color-focus: light-dark(#2e7764, #139e7c);
 
   /*
    * The warm accent: highlights and celebration moments, never an evidence class or a status.
    * warm is a fill that only ever sits behind ink; warm-line marks a boundary; warm-ink is text.
+   *
+   * On a dark page nothing sits on the fill — it is the underline under a word, a pinging dot, a glow — so there it
+   * stays the coral itself and only has to hold against the page. The words that were coral are warm-ink either way.
    */
-  --color-warm: #f28b6b;
-  --color-warm-soft: #fdebe3;
-  --color-warm-line: #d0603c;
-  --color-warm-ink: #a3401f;
+  --color-warm: light-dark(#f28b6b, #e28061);
+  --color-warm-soft: light-dark(#fdebe3, #3c1d13);
+  --color-warm-line: light-dark(#d0603c, #c86140);
+  --color-warm-ink: light-dark(#a3401f, #e48c71);
 
   /*
    * The drawn palette: the five colours the bird is inked in, kept as the drawing has them so a pose cannot drift
@@ -67,19 +70,19 @@
    * illustration, never text and never a boundary, so they carry no contrast duty of their own.
    */
   --color-drawn-ink: #23332c;
-  --color-drawn-paper: #fffdf8;
+  --color-drawn-paper: light-dark(#fffdf8, #e7ded1);
   --color-drawn-beak: #e8826a;
-  --color-drawn-sage: #b9d4be;
-  --color-drawn-cool: #6fb1cf;
+  --color-drawn-sage: light-dark(#b9d4be, #91bda8);
+  --color-drawn-cool: light-dark(#6fb1cf, #70a7c2);
 
   /*
    * The bands the landing page changes colour with. Each is a page-level fill that only ever sits behind ink, and
    * each is checked against ink in apps/web/tests/design-tokens.test.mjs.
    */
-  --color-butter: #fbf3d9;
-  --color-butter-deep: #f7e7b4;
-  --color-sage: #e6efe7;
-  --color-sage-deep: #cfe0d3;
+  --color-butter: light-dark(#fbf3d9, #3e290f);
+  --color-butter-deep: light-dark(#f7e7b4, #4e3411);
+  --color-sage: light-dark(#e6efe7, #152e23);
+  --color-sage-deep: light-dark(#cfe0d3, #193a2c);
 
   /* Workspace navigation, a dark surface */
   --color-nav: #162720;
@@ -92,71 +95,71 @@
   --color-nav-accent: #72b59e;
 
   /* Status */
-  --color-success-ink: #1f5c4a;
-  --color-success-surface: #e9f4ee;
-  --color-success-line: #3f8a70;
-  --color-warning-ink: #7a4d17;
-  --color-warning-surface: #fbf3e6;
-  --color-warning-line: #b0762f;
-  --color-danger-ink: #8a2f2f;
-  --color-danger-surface: #f9ecec;
-  --color-danger-line: #b35c5c;
-  --color-info-ink: #44525f;
-  --color-info-surface: #eef2f5;
-  --color-info-line: #6f7f8e;
+  --color-success-ink: light-dark(#1f5c4a, #46a487);
+  --color-success-surface: light-dark(#e9f4ee, #083226);
+  --color-success-line: light-dark(#3f8a70, #348e73);
+  --color-warning-ink: light-dark(#7a4d17, #ba884a);
+  --color-warning-surface: light-dark(#fbf3e6, #3c2403);
+  --color-warning-line: light-dark(#b0762f, #a67537);
+  --color-danger-ink: light-dark(#8a2f2f, #d27770);
+  --color-danger-surface: light-dark(#f9ecec, #411e1c);
+  --color-danger-line: light-dark(#b35c5c, #c1645e);
+  --color-info-ink: light-dark(#44525f, #8195a7);
+  --color-info-surface: light-dark(#eef2f5, #1f2c37);
+  --color-info-line: light-dark(#6f7f8e, #698298);
 
   /* Evidence classes: the date precision of an opening event */
-  --color-evidence-exact-ink: #1f5c4a;
-  --color-evidence-exact-surface: #e9f4ee;
-  --color-evidence-exact-line: #3f8a70;
-  --color-evidence-bounded-ink: #7a4d17;
-  --color-evidence-bounded-surface: #fbf3e6;
-  --color-evidence-bounded-line: #b0762f;
-  --color-evidence-observed-ink: #44525f;
-  --color-evidence-observed-surface: #eef2f5;
-  --color-evidence-observed-line: #6f7f8e;
+  --color-evidence-exact-ink: light-dark(#1f5c4a, #46a487);
+  --color-evidence-exact-surface: light-dark(#e9f4ee, #083226);
+  --color-evidence-exact-line: light-dark(#3f8a70, #348e73);
+  --color-evidence-bounded-ink: light-dark(#7a4d17, #ba884a);
+  --color-evidence-bounded-surface: light-dark(#fbf3e6, #3c2403);
+  --color-evidence-bounded-line: light-dark(#b0762f, #a67537);
+  --color-evidence-observed-ink: light-dark(#44525f, #8195a7);
+  --color-evidence-observed-surface: light-dark(#eef2f5, #1f2c37);
+  --color-evidence-observed-line: light-dark(#6f7f8e, #698298);
 
   /* Forecast basis: which evidence a forecast's window mainly rests on */
-  --color-basis-own-ink: #1d4e6b;
-  --color-basis-own-surface: #ebf3f8;
-  --color-basis-own-line: #4a82a6;
-  --color-basis-borrowed-ink: #5b3b74;
-  --color-basis-borrowed-surface: #f4eff8;
-  --color-basis-borrowed-line: #8b6aa7;
+  --color-basis-own-ink: light-dark(#1d4e6b, #5c99bf);
+  --color-basis-own-surface: light-dark(#ebf3f8, #102d3f);
+  --color-basis-own-line: light-dark(#4a82a6, #4485ad);
+  --color-basis-borrowed-ink: light-dark(#5b3b74, #a484c1);
+  --color-basis-borrowed-surface: light-dark(#f4eff8, #31233c);
+  --color-basis-borrowed-line: light-dark(#8b6aa7, #9271b0);
 
   /* Calendar date kinds */
-  --color-date-confirmed-ink: #1f5c4a;
-  --color-date-confirmed-surface: #e9f4ee;
-  --color-date-confirmed-line: #3f8a70;
-  --color-date-confirmed-mark: #2d7964;
-  --color-date-predicted-ink: #3f5f54;
-  --color-date-predicted-surface: #f4f7f3;
-  --color-date-predicted-line: #5d8f7d;
-  --color-date-predicted-mark: #5d8f7d;
-  --color-date-preparation-ink: #7a4d17;
-  --color-date-preparation-surface: #fbf3e6;
-  --color-date-preparation-line: #b0762f;
-  --color-date-preparation-mark: #b0762f;
+  --color-date-confirmed-ink: light-dark(#1f5c4a, #46a487);
+  --color-date-confirmed-surface: light-dark(#e9f4ee, #083226);
+  --color-date-confirmed-line: light-dark(#3f8a70, #348e73);
+  --color-date-confirmed-mark: light-dark(#2d7964, #348e73);
+  --color-date-predicted-ink: light-dark(#3f5f54, #759c8a);
+  --color-date-predicted-surface: light-dark(#f4f7f3, #193026);
+  --color-date-predicted-line: light-dark(#5d8f7d, #5e8875);
+  --color-date-predicted-mark: light-dark(#5d8f7d, #5e8875);
+  --color-date-preparation-ink: light-dark(#7a4d17, #ba884a);
+  --color-date-preparation-surface: light-dark(#fbf3e6, #3c2403);
+  --color-date-preparation-line: light-dark(#b0762f, #a67537);
+  --color-date-preparation-mark: light-dark(#b0762f, #a67537);
 
   /* Sources */
-  --color-source-official-ink: #205847;
-  --color-source-official-surface: #edf6f1;
-  --color-source-official-line: #5b9a82;
-  --color-source-archive-ink: #4f5a54;
-  --color-source-archive-surface: #f1f2ee;
-  --color-source-archive-line: #879089;
-  --color-source-signal-ink: #7a4e1d;
-  --color-source-signal-surface: #fbf5e9;
-  --color-source-signal-line: #b3844a;
-  --color-source-community-ink: #6f5845;
-  --color-source-community-surface: #f7f2ed;
-  --color-source-community-line: #9c8570;
+  --color-source-official-ink: light-dark(#205847, #4ba387);
+  --color-source-official-surface: light-dark(#edf6f1, #083226);
+  --color-source-official-line: light-dark(#5b9a82, #348e73);
+  --color-source-archive-ink: light-dark(#4f5a54, #8b9690);
+  --color-source-archive-surface: light-dark(#f1f2ee, #232d28);
+  --color-source-archive-line: light-dark(#879089, #74827a);
+  --color-source-signal-ink: light-dark(#7a4e1d, #bc8752);
+  --color-source-signal-surface: light-dark(#fbf5e9, #3d2408);
+  --color-source-signal-line: light-dark(#b3844a, #a9733a);
+  --color-source-community-ink: light-dark(#6f5845, #a98c73);
+  --color-source-community-surface: light-dark(#f7f2ed, #392515);
+  --color-source-community-line: light-dark(#9c8570, #99795f);
 
   /* Confidence: forecasting.py's number, always described in words beside its ring */
-  --color-confidence-strong: #246d59;
-  --color-confidence-moderate: #9a6120;
-  --color-confidence-limited: #8a4a3b;
-  --color-confidence-track: #e1e5df;
+  --color-confidence-strong: light-dark(#246d59, #349c7e);
+  --color-confidence-moderate: light-dark(#9a6120, #b7803a);
+  --color-confidence-limited: light-dark(#8a4a3b, #cc726b);
+  --color-confidence-track: light-dark(#e1e5df, #352c24);
 
   /* Type scale: Tailwind's xs (12px) and up stay; two smaller steps for dense evidence tables */
   --text-micro: 0.625rem;
@@ -180,12 +183,17 @@
   --radius-overlay: 1rem;
   --radius-chip: 9999px;
 
-  /* Elevation: soft and low, so a card reads as a card without a heavy frame */
-  --shadow-raised: 0 1px 2px rgb(16 33 27 / 0.05);
-  --shadow-card: 0 1px 2px rgb(16 33 27 / 0.04), 0 6px 20px rgb(16 33 27 / 0.06);
-  --shadow-lift: 0 2px 4px rgb(16 33 27 / 0.05), 0 14px 36px rgb(16 33 27 / 0.1);
-  --shadow-popover: 0 1px 2px rgb(16 33 27 / 0.08), 0 8px 24px rgb(16 33 27 / 0.12);
-  --shadow-dialog: 0 24px 64px rgb(16 33 27 / 0.24);
+  /*
+   * Elevation: soft and low, so a card reads as a card without a heavy frame. A shadow has almost no page left to
+   * darken on a dark one, so each is deeper there and still does less work; what sets a raised thing apart in the
+   * dark is its own lighter surface, which is why the dark surfaces step up from the canvas where the light ones
+   * step down.
+   */
+  --shadow-raised: 0 1px 2px light-dark(rgb(16 33 27 / 0.05), rgb(0 0 0 / 0.4));
+  --shadow-card: 0 1px 2px light-dark(rgb(16 33 27 / 0.04), rgb(0 0 0 / 0.36)), 0 6px 20px light-dark(rgb(16 33 27 / 0.06), rgb(0 0 0 / 0.44));
+  --shadow-lift: 0 2px 4px light-dark(rgb(16 33 27 / 0.05), rgb(0 0 0 / 0.4)), 0 14px 36px light-dark(rgb(16 33 27 / 0.1), rgb(0 0 0 / 0.52));
+  --shadow-popover: 0 1px 2px light-dark(rgb(16 33 27 / 0.08), rgb(0 0 0 / 0.5)), 0 8px 24px light-dark(rgb(16 33 27 / 0.12), rgb(0 0 0 / 0.56));
+  --shadow-dialog: 0 24px 64px light-dark(rgb(16 33 27 / 0.24), rgb(0 0 0 / 0.68));
 
   --animate-skeleton: skeleton 1.4s ease-in-out infinite;
   --animate-step-in: step-in 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
@@ -245,6 +253,22 @@
     box-shadow: var(--shadow-lift);
     border-color: var(--color-line-strong);
   }
+}
+
+/*
+ * A drawn character, painted rather than fetched as an <img>, because the theme has to choose between two files and
+ * an SVG inside an <img> cannot see the page it is drawn on. The element is aria-hidden and carries no alt either
+ * way: the words beside it say what happened, and nothing is lost when it is not drawn.
+ *
+ * This is the one place in the theme that is not `light-dark()`. That function takes colours, not URLs, so the
+ * switch is written out here: the reader's system setting first, then the appearance control's data-theme holding
+ * one of them. `--art` and `--art-dark` come from the element (components/doodle.tsx).
+ */
+@utility drawn-art {
+  background-image: var(--art);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
 }
 
 /* Display headings: the serif, optically sized and set a little tight. `font-display` alone only sets the family. */
@@ -600,6 +624,22 @@
  */
 @layer base {
   * { box-sizing: border-box; }
+
+  /*
+   * Light and dark.
+   *
+   * Every colour above is `light-dark(light, dark)`, so which theme a page is in is one inherited property rather
+   * than a second copy of the palette under a media query: the root follows the reader's system setting, and the
+   * appearance control writes `data-theme` on the document to hold one of them instead. Nothing here waits on
+   * script, so the server's first byte is already in the right theme and there is no flash to correct.
+   *
+   * `color-scheme` also tells the browser what the page is, so its own furniture — form controls, scrollbars, the
+   * space beyond the page — is drawn dark too, rather than a white frame around a dark page.
+   */
+  :root { color-scheme: light dark; }
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+
   html { background: var(--color-canvas); scroll-behavior: smooth; }
   body {
     margin: 0;
@@ -610,7 +650,7 @@
   }
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
-  ::selection { background: #c9ded3; color: #102b24; }
+  ::selection { background: light-dark(#c9ded3, #2f5a4b); color: light-dark(#102b24, #f0f5f2); }
 
   /*
    * A little paper grain over the page, so large flat areas are not perfectly flat. It is one inline SVG turbulence,
@@ -627,6 +667,14 @@
   }
 }
 
+/*
+ * The drawn characters' other half, deliberately outside a layer so it outranks the utility that names the light one.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .drawn-art { background-image: var(--art-dark); }
+}
+:root[data-theme="dark"] .drawn-art { background-image: var(--art-dark); }
+
 /* Between pages, where the browser supports it: a short cross-fade instead of a white flash. */
 @view-transition { navigation: auto; }
 
@@ -640,7 +688,7 @@
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: #bfc6c0; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: light-dark(#bfc6c0, #3c4a44); background-clip: padding-box; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
