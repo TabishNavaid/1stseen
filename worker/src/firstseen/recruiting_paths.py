@@ -97,6 +97,28 @@ def not_a_posting_page(url: str) -> bool:
     return False
 
 
+# One job posting, not a page that lists them. Discovery registered fifteen of these as recurring page sources --
+# ten at IMC, three at Vercel, two at Canonical -- because a job detail page linked from a careers page passes every
+# other test for a "related" page: it is on the company's own site, under a recruiting path, and named for a job. A
+# single posting is never a source. It is one row of a board we already poll directly, it stops existing when the
+# posting closes, and on a listing page its anchor text carries the row's facet columns, which is where titles like
+# "Hardware Engineer Intern Intern Technology Amsterdam" come from.
+#
+# The id is the tell: a trailing run of six or more digits, alone or after a slug (`/careers/4981249`,
+# `/careers/jobs/4751729101`, `/careers/software-engineering-intern-summer-27-6181759004`), or a bare UUID as Lever
+# and Ashby write one. Six digits and not four, so a cohort year (`/careers/emerging-talent-2026`) is not a posting.
+_JOB_ID_SEGMENT = re.compile(r"^(?:[a-z0-9-]*-)?\d{6,}$")
+_UUID_SEGMENT = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def single_job_page(url: str) -> bool:
+    """Whether this address is one job posting rather than a page listing them."""
+    segments = [item for item in urlparse(url).path.casefold().split("/") if item]
+    if not segments:
+        return False
+    return bool(_JOB_ID_SEGMENT.match(segments[-1]) or _UUID_SEGMENT.match(segments[-1]))
+
+
 def recruiting_host(url: str) -> bool:
     """careers.example.com or jobs.example.com: a host whose labels, other than the registrable domain, name recruiting."""
     labels = (urlparse(url).hostname or "").casefold().split(".")
@@ -105,7 +127,7 @@ def recruiting_host(url: str) -> bool:
 
 def recruiting_page(url: str) -> bool:
     """Whether a generic career page or an archive of one may be collected."""
-    if not_a_posting_page(url):
+    if not_a_posting_page(url) or single_job_page(url):
         return False
     return recruiting_host(url) or _names_recruiting(urlparse(url).path)
 

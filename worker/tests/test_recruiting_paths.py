@@ -17,6 +17,7 @@ from firstseen.recruiting_paths import (
     page_source_allowed,
     recruiting_page,
     recruiting_sitemap,
+    single_job_page,
     sitemap_children,
     sitemap_job_page,
 )
@@ -57,6 +58,45 @@ class RecruitingPageTests(unittest.TestCase):
         ):
             with self.subTest(url=url):
                 self.assertFalse(recruiting_page(url))
+
+    def test_one_job_posting_is_never_a_recurring_source(self) -> None:
+        """Discovery registered fifteen job detail pages as recurring page sources.
+
+        Ten at IMC, three at Vercel, two at Canonical, all as `related_career_page`, because a posting linked
+        from a careers page is on the company's own site under a recruiting path and named for a job -- it
+        passes every other test. It is still one row of a board we already poll: it stops existing when the
+        posting closes, and its anchor text on the listing carries the row's facet columns, which is where
+        "Hardware Engineer Intern Intern Technology Amsterdam" came from. The guard runs in
+        `page_source_allowed`, so it keeps discovery from registering one and stops collection fetching the
+        ones already registered.
+        """
+        for url in (
+            # IMC and Canonical: a bare numeric board id as the last segment.
+            "https://www.imc.com/us/careers/jobs/4751729101",
+            "https://canonical.com/careers/4981249",
+            # Vercel: a slug with the id on the end.
+            "https://vercel.com/careers/software-engineering-intern-summer-27-6181759004",
+            # Lever and Ashby write a UUID.
+            "https://jobs.example.com/careers/3f1c2b4a-5d6e-7f80-9a1b-2c3d4e5f6071",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(single_job_page(url))
+                self.assertFalse(recruiting_page(url))
+                self.assertFalse(page_source_allowed("generic", url))
+                self.assertFalse(page_source_allowed("wayback", url))
+
+    def test_a_page_that_lists_jobs_is_not_mistaken_for_one(self) -> None:
+        """Six digits and not four, so a cohort year in a slug is not read as a posting id."""
+        for url in (
+            "https://canonical.com/careers",
+            "https://www.imc.com/us/careers/students-graduates",
+            "https://example.com/careers/emerging-talent-2026",
+            "https://example.com/careers/2027-internships",
+            "https://example.com/careers/class-of-2027",
+            "https://example.com/careers/university/programs",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(single_job_page(url))
 
     def test_story_blog_news_and_benefit_sections_are_not_postings_even_on_recruiting_paths(self) -> None:
         for url in (
