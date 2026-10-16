@@ -111,12 +111,42 @@ _JOB_ID_SEGMENT = re.compile(r"^(?:[a-z0-9-]*-)?\d{6,}$")
 _UUID_SEGMENT = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
+# A role named in a posting's own slug. `generic.py` keeps a shorter list of the same idea for admitting anchors;
+# this one is for paths and is deliberately wider, and the two are not merged because changing which anchors become
+# jobs is a separate change that needs its own measurement.
+_ROLE_SLUG_WORDS = frozenset(
+    {
+        "analyst", "apprentice", "apprenticeship", "architect", "associate", "designer", "developer", "engineer",
+        "engineering", "graduate", "intern", "interns", "internship", "internships", "manager", "research",
+        "researcher", "scientist", "specialist", "technician", "trader",
+    }
+)
+
+
 def single_job_page(url: str) -> bool:
-    """Whether this address is one job posting rather than a page listing them."""
+    """Whether this address is one job posting rather than a page listing them.
+
+    Two tests, because the first one alone was less than half the category. Keying on an id in the address found 15
+    of the rig's page sources; a rule that does not need one found 17 more it could not see --
+    `careers.withwaymo.com/jobs/2027-summer-intern-bs-ms-software-engineer-san-francisco-california-united-states`,
+    `hudsonrivertrading.com/hrt-job/hardware-engineer-internship-summer-2027`,
+    `optiver.com/join-us/jobs/technology/london/graduate-software-engineer`. Two earlier rules had agreed on 15 and
+    I read that as corroboration; both keyed on the id, so it was one test run twice.
+
+    The second test reuses `_POSTING_PARENT_WORDS`, which already existed for the sitemap path and already excludes
+    `careers` for exactly this reason: a segment under `jobs` or `hrt-job` is a posting's slug, a segment under
+    `careers` may be a listing. The slug must also name a role, which is what separates a posting from a department
+    index: `/join-us/jobs/technology` and `/jobs/search` stay listings.
+    """
     segments = [item for item in urlparse(url).path.casefold().split("/") if item]
     if not segments:
         return False
-    return bool(_JOB_ID_SEGMENT.match(segments[-1]) or _UUID_SEGMENT.match(segments[-1]))
+    if _JOB_ID_SEGMENT.match(segments[-1]) or _UUID_SEGMENT.match(segments[-1]):
+        return True
+    if len(segments) < 2:
+        return False
+    under_postings = any(word in _POSTING_PARENT_WORDS for item in segments[:-1] for word in _words(item))
+    return under_postings and any(word in _ROLE_SLUG_WORDS for word in _words(segments[-1]))
 
 
 def recruiting_host(url: str) -> bool:
@@ -126,8 +156,13 @@ def recruiting_host(url: str) -> bool:
 
 
 def recruiting_page(url: str) -> bool:
-    """Whether a generic career page or an archive of one may be collected."""
-    if not_a_posting_page(url) or single_job_page(url):
+    """Whether this address is on a recruiting path at all.
+
+    A single posting is: `/jobs/legal-intern` is as much a recruiting address as `/careers`. Whether it may be a
+    *source* is a different question and lives in `page_source_allowed`, which is where `single_job_page` belongs.
+    Putting it here conflated the two and claimed a posting was off the recruiting path, which it is not.
+    """
+    if not_a_posting_page(url):
         return False
     return recruiting_host(url) or _names_recruiting(urlparse(url).path)
 
@@ -165,9 +200,13 @@ PAGE_ADAPTERS = frozenset({"generic", "sitemap", "wayback"})
 
 
 def page_source_allowed(adapter: str, url: str) -> bool:
-    """Whether a source of this adapter may collect this address. Non-page adapters are always allowed."""
+    """Whether a source of this adapter may collect this address. Non-page adapters are always allowed.
+
+    A single posting is on a recruiting path and is still not a source, so both tests run here: discovery cannot
+    register one, and collection skips the ones already registered before making a request.
+    """
     if adapter == "sitemap":
         return recruiting_sitemap(url)
     if adapter in {"generic", "wayback"}:
-        return recruiting_page(url)
+        return recruiting_page(url) and not single_job_page(url)
     return True

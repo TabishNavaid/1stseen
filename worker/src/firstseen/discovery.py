@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from .adapters.base import AdapterName, HttpTransport, SourceConfig
 from .providers import CompletionClient, CompletionResult, ModelRoutingError, ProviderFailure
-from .recruiting_paths import recruiting_page, recruiting_sitemap
+from .recruiting_paths import recruiting_page, recruiting_sitemap, single_job_page
 from .robots import RobotsDisallowedError
 
 DiscoveryMethod = Literal[
@@ -910,9 +910,11 @@ class DiscoverRecruitingSources:
             ats_match = _ats_match(absolute)
             if ats_match:
                 add_ats(*ats_match, absolute, homepage, f"{text or href} -> {absolute}")
-            elif _not_a_page(absolute) or not recruiting_page(absolute):
+            elif _not_a_page(absolute) or not recruiting_page(absolute) or single_job_page(absolute):
                 # A dated post, an archive, an API endpoint, or a page off a recruiting path, however its link reads:
-                # Canonical's "Careers" menu once registered its homepage and its navigation fragment.
+                # Canonical's "Careers" menu once registered its homepage and its navigation fragment. A single
+                # posting is skipped too: it is one row of a board, it stops existing when the posting closes, and
+                # thirty-two of the rig's page sources were postings registered this way.
                 continue
             elif self._campus_label.search(label):
                 candidate_pages.append((absolute, "campus_page", text or href))
@@ -965,6 +967,7 @@ class DiscoverRecruitingSources:
                 elif (
                     not _not_a_page(absolute)
                     and recruiting_page(absolute)
+                    and not single_job_page(absolute)
                     # A related page stays on the company's site or on the host of the page linking it (Waymo's
                     # careers.withwaymo.com): a Canva design on Belvedere's campus page, Bosch's LinkedIn share
                     # buttons, and Optiver's map links are not recruiting sources.

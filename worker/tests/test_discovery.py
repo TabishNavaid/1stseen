@@ -522,9 +522,14 @@ class RefusedSourceTests(unittest.TestCase):
         )
         result = discover(transport, domain)
 
-        self.assertIn(
-            "https://careers.prop-desk.example/job-post/2025-summer-internship-software-developer",
+        # The posting is not registered at all now, which is stronger than ranking it last among archive candidates:
+        # a single posting is one row of a board, it stops existing when the posting closes, and discovery had made
+        # thirty-two of the rig's page sources out of them. Measured first: no company's archive sat on a posting, so
+        # none loses its history to this.
+        self.assertEqual(
             [str(source.url) for source in result.sources if source.category == "related_career_page"],
+            [],
+            "a job posting is on a recruiting path and is still not a source",
         )
         archive = next(source for source in result.sources if source.adapter == "wayback")
         self.assertEqual(str(archive.url), "https://careers.prop-desk.example/")

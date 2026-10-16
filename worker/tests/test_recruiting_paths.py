@@ -78,15 +78,27 @@ class RecruitingPageTests(unittest.TestCase):
             "https://vercel.com/careers/software-engineering-intern-summer-27-6181759004",
             # Lever and Ashby write a UUID.
             "https://jobs.example.com/careers/3f1c2b4a-5d6e-7f80-9a1b-2c3d4e5f6071",
+            # No id anywhere, which the first version of this rule could not see at all. Keying on an id found 15 of
+            # the rig's 286 page sources; these found 17 more, so the id rule was less than half the category.
+            "https://careers.withwaymo.com/jobs/2027-summer-intern-bs-ms-software-engineer-san-francisco-california-united-states",
+            "https://www.hudsonrivertrading.com/hrt-job/hardware-engineer-internship-summer-2027",
+            "https://dvtrading.co/job-post/2025-summer-internship-software-developer-dv-commodities-london",
+            "https://www.optiver.com/join-us/jobs/technology/london/graduate-software-engineer",
+            "https://www.optiver.com/join-us/jobs/institutional-sales-and-trading/austin/quantitative-intern-summer-2027",
         ):
             with self.subTest(url=url):
                 self.assertTrue(single_job_page(url))
-                self.assertFalse(recruiting_page(url))
+                # It is on a recruiting path -- that is what `recruiting_page` answers -- and is still not a source.
+                self.assertTrue(recruiting_page(url))
                 self.assertFalse(page_source_allowed("generic", url))
                 self.assertFalse(page_source_allowed("wayback", url))
 
     def test_a_page_that_lists_jobs_is_not_mistaken_for_one(self) -> None:
-        """Six digits and not four, so a cohort year in a slug is not read as a posting id."""
+        """Six digits and not four, and a slug under `jobs` must name a role before it is a posting.
+
+        The second test is what keeps a department index from being swept up with the postings beneath it:
+        `/join-us/jobs/technology` and `/jobs/search` sit under a posting parent and name no role.
+        """
         for url in (
             "https://canonical.com/careers",
             "https://www.imc.com/us/careers/students-graduates",
@@ -94,6 +106,11 @@ class RecruitingPageTests(unittest.TestCase):
             "https://example.com/careers/2027-internships",
             "https://example.com/careers/class-of-2027",
             "https://example.com/careers/university/programs",
+            # Under a posting parent, but a department index and a search page, not postings.
+            "https://www.optiver.com/join-us/jobs/technology",
+            "https://www.optiver.com/join-us/jobs/institutional-sales-and-trading",
+            "https://careers.withwaymo.com/jobs/search",
+            "https://example.com/jobs",
         ):
             with self.subTest(url=url):
                 self.assertFalse(single_job_page(url))
