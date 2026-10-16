@@ -72,7 +72,8 @@ export default async function RolesPage({
     );
   }
   if (demoAllowed()) {
-    const view = fixtureDashboardView(fixtureRoles, filters, fixtureBasis, fixtureListFacts);
+    const now = new Date();
+    const view = fixtureDashboardView(fixtureRoles(now), filters, fixtureBasis, fixtureListFacts, now);
     return (
       <>
         <SiteHeader active={active} contentId="dashboard-content" status={fixtureBadge} />

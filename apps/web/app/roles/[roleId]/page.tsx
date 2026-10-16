@@ -21,14 +21,14 @@ export const dynamic = "force-dynamic";
  */
 async function resolveView(roleId: string, userId: string | null, provenancePage = 1): Promise<RoleView | null> {
   if (hasServiceRoleConfig()) return loadRealRoleView(roleId, userId, provenancePage);
-  if (process.env.FIRSTSEEN_DEMO_MODE === "true") return fixtureRoleViews[roleId] ?? null;
+  if (process.env.FIRSTSEEN_DEMO_MODE === "true") return fixtureRoleViews(new Date())[roleId] ?? null;
   return null;
 }
 
 /** The role's name only: one row, not the whole role view, which the page itself loads. */
 async function resolveIdentity(roleId: string): Promise<{ company: string; role: string } | null> {
   if (hasServiceRoleConfig()) return loadRealRoleIdentity(roleId);
-  const fixture = process.env.FIRSTSEEN_DEMO_MODE === "true" ? fixtureRoleViews[roleId] : undefined;
+  const fixture = process.env.FIRSTSEEN_DEMO_MODE === "true" ? fixtureRoleViews(new Date())[roleId] : undefined;
   return fixture ? { company: fixture.company, role: fixture.role } : null;
 }
 

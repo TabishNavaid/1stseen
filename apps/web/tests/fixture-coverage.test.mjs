@@ -25,13 +25,13 @@ const TODAY = "2027-05-20";
 
 function items(now = NOW) {
   // Page size is 20 and the per-company cap does not bite on one role per company, so this is the whole set.
-  return fixtureDashboardView(forecastRoles, defaultDashboardFilters, () => null, fixtureListFacts, now).items;
+  return fixtureDashboardView(forecastRoles(now), defaultDashboardFilters, () => null, fixtureListFacts, now).items;
 }
 
 test("every fixture role is described: a new one cannot inherit the old single branch by omission", () => {
-  const missing = forecastRoles.filter((role) => !(role.id in fixtureListFacts)).map((role) => role.id);
+  const missing = forecastRoles(NOW).filter((role) => !(role.id in fixtureListFacts)).map((role) => role.id);
   assert.deepEqual(missing, [], "each fixture role needs an entry in fixtureListFacts");
-  const extra = Object.keys(fixtureListFacts).filter((id) => !forecastRoles.some((role) => role.id === id));
+  const extra = Object.keys(fixtureListFacts).filter((id) => !forecastRoles(NOW).some((role) => role.id === id));
   assert.deepEqual(extra, [], "fixtureListFacts names a role that no longer exists");
 });
 
@@ -89,7 +89,7 @@ test("a fixture carries a discipline, a season and a program year, and one carri
 test("the first row carries an archived sighting, because the drawer opens on it", () => {
   // The drawer draws its archive caveat only for a role with archive evidence, and it opens on the first row of the
   // default sort. Without this the caveat silently stops being rendered the next time the sort or the set changes.
-  const first = forecastRoles.find((role) => role.id === items()[0].id);
+  const first = forecastRoles(NOW).find((role) => role.id === items()[0].id);
   assert.ok(first, "the first row is a fixture role");
   assert.ok(first.evidence.some((item) => item.kind === "archive"), `${first.id} is drawn first and has no archived sighting`);
 });
