@@ -33,7 +33,7 @@ import {
 import { dashboardTiles } from "@/lib/dashboard-tiles";
 import { cn } from "@/lib/utils";
 import { bandRoles } from "@/lib/list-groups";
-import { formatShortDay } from "@/lib/dates";
+import { todayIso, formatShortDay } from "@/lib/dates";
 import { PLAN_OUTCOME_MESSAGES } from "@/lib/onboarding";
 import type { RealForecastChange, RealOpening } from "@/lib/real-data";
 
@@ -189,6 +189,7 @@ export function ForecastDashboard({
   }, [filters.page]);
   // Headings over the list rather than boxes around each row, and only where the order makes them true.
   const bands = bandRoles(items, filters.sort, now);
+  const today = todayIso(now);
   const relax = relaxSuggestion(filters, summary);
   const applied = appliedFilterKeys(filters);
   const emptyWatchlist = watchedOnly && summary.followedRoles === 0;
@@ -277,7 +278,7 @@ export function ForecastDashboard({
                 {band.items.map((item) => (
                   <li key={item.id}>
                     {item.forecast
-                      ? <ForecastRow role={item.forecast} item={item} active={drawerOpen && item.id === (selected?.id ?? "")} onSelect={() => { setSelectedId(item.id); setDrawerOpen(true); }} />
+                      ? <ForecastRow role={item.forecast} item={item} today={today} active={drawerOpen && item.id === (selected?.id ?? "")} onSelect={() => { setSelectedId(item.id); setDrawerOpen(true); }} />
                       : <InsufficientRoleRow item={item} />}
                     {cap > 0 && item.companyRank === cap && item.companyTotal > cap && (
                       <Link href={dashboardHref(filters, { companies: [item.companyId] })} className="focus-ring flex min-h-touch items-center gap-1.5 border-b border-line py-2.5 pl-[3.75rem] text-caption font-semibold text-accent-ink hover:bg-surface-hover">
@@ -357,7 +358,7 @@ export function ForecastDashboard({
         )}
       </main>
       {/* The shared contract's track knows only Internship and New grad, so the role's own program type names it. */}
-      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} outlook={selectedItem.outlook} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} outlook={selectedItem.outlook} today={today} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }

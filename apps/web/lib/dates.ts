@@ -12,6 +12,11 @@
  * loops that run over hundreds of roles and calendar events.
  */
 
+/** Today as a calendar day, for the comparisons in lib/forecast-window.ts. UTC, like every other date here. */
+export function todayIso(now: Date = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 /** Anchor a bare `YYYY-MM-DD` at midday UTC; pass full ISO timestamps through. */
 export function utcDate(value: string): Date {
   return new Date(value.length === 10 ? `${value}T12:00:00Z` : value);

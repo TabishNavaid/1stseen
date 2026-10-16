@@ -8,7 +8,7 @@ import type { OpeningSoonRole } from "@/lib/landing-data";
  * One upcoming window. The title's link covers the whole card, so the card is one click target and lifts on hover,
  * while the confidence word above it stays its own control for its explanation.
  */
-export function OpeningSoonCard({ role }: { role: OpeningSoonRole }) {
+export function OpeningSoonCard({ role, today }: { role: OpeningSoonRole; today: string }) {
   const { forecast } = role;
   return (
     <li className="card lift relative flex h-full flex-col p-5">
@@ -23,7 +23,7 @@ export function OpeningSoonCard({ role }: { role: OpeningSoonRole }) {
         <Link href={`/roles/${role.roleId}`} className="focus-ring rounded-sm after:absolute after:inset-0 after:rounded-card after:content-['']">{role.role}</Link>
       </h3>
       <div className="mt-auto flex flex-wrap items-end justify-between gap-3 pt-5">
-        <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} />
+        <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} today={today} />
         <span className="relative z-10"><ConfidenceWord value={forecast.confidence} align="end" /></span>
       </div>
     </li>

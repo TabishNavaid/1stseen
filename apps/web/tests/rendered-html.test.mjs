@@ -98,9 +98,10 @@ test("a role page reads top to bottom: the date and Save, History, Prep plan, As
   const text = visible(html);
   // No tab bar.
   assert.doesNotMatch(html, /aria-label="Role intelligence sections"/);
-  // The hero holds the likely date, the confidence word, and Save.
+  // The hero holds the forecast, the confidence word, and Save. Which label the date carries depends on where today
+  // falls in the fixture's window, so the assertion is that it carries one of them, not which (forecast-copy-cases).
   const hero = html.slice(html.indexOf('aria-labelledby="role-title"'), html.indexOf('id="history"'));
-  assert.match(hero, /Likely around/);
+  assert.match(hero, /Likely around|Expected around/);
   assert.match(hero, /confidence/);
   assert.match(hero, /Save to my watchlist/);
   // The sections, in order, then everything the model used behind one closed expander.
