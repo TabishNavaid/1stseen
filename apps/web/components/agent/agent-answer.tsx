@@ -5,6 +5,7 @@ import { ConfidenceWord } from "@/components/confidence-word";
 import { LikelyWindow } from "@/components/likely-window";
 import { Icon } from "@/components/ui/icon";
 import type { useAgentQuestion } from "@/components/agent/use-agent-question";
+import { todayIso } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type Run = ReturnType<typeof useAgentQuestion>;
@@ -29,7 +30,7 @@ export function AgentAnswer({ run, steps = "taken" }: { run: Run; steps?: "taken
       )}
       {run.outlook && run.confidence !== null && (
         <div className="flex flex-wrap items-end justify-between gap-4 rounded-card border border-line bg-surface p-5">
-          <LikelyWindow outlook={run.outlook} />
+          <LikelyWindow outlook={run.outlook} today={todayIso()} />
           <ConfidenceWord value={run.confidence} align="end" />
         </div>
       )}

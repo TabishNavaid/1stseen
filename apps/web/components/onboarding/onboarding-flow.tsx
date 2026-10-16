@@ -40,6 +40,7 @@ import {
   type OnboardingAnswers,
 } from "@/lib/onboarding";
 import type { CompanyChoice, OnboardingPayoff } from "@/lib/onboarding-data";
+import { todayIso } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type Step = 1 | 2 | 3 | 4;
@@ -190,7 +191,7 @@ function PayoffRoleRow({ role }: { role: OnboardingPayoff["roles"][number] }) {
         <p className="mt-0.5 text-caption text-ink-subtle">{[role.programType, role.discipline, role.location].filter(Boolean).join(" · ")}</p>
         {role.window ? (
           <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-            <LikelyWindow outlook={role.window} size="sm" />
+            <LikelyWindow outlook={role.window} today={todayIso()} size="sm" />
             <ConfidenceWord value={role.window.confidence} align="end" />
           </div>
         ) : (

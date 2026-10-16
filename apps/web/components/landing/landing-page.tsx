@@ -9,7 +9,7 @@ import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { StatusLine } from "@/components/landing/status-line";
 import { ReturningGuestNote } from "@/components/onboarding/returning-guest-note";
 import { Icon } from "@/components/ui/icon";
-import { formatShortDay } from "@/lib/dates";
+import { formatShortDay, todayIso } from "@/lib/dates";
 import type { LandingData } from "@/lib/landing-data";
 import type { RealOpening } from "@/lib/real-data";
 import { sitePage } from "@/lib/site-links";
@@ -193,7 +193,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
               </Link>
             </div>
             <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {soon.map((role) => <OpeningSoonCard key={role.roleId} role={role} />)}
+              {soon.map((role) => <OpeningSoonCard key={role.roleId} role={role} today={todayIso(now)} />)}
             </ul>
           </section>
         )}

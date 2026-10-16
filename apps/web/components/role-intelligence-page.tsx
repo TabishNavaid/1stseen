@@ -14,7 +14,7 @@ import { ForecastBasisChip } from "@/components/forecast-basis-chip";
 import { GenerateReadinessButton } from "@/components/generate-readiness-button";
 import { SourceBadge } from "@/components/source-badge";
 import { confidenceOutOf, formatConfidence } from "@/lib/confidence";
-import { formatDay, formatStamp } from "@/lib/dates";
+import { todayIso, formatDay, formatStamp } from "@/lib/dates";
 import { BASIS } from "@/lib/forecast-basis";
 import { PLAN_OUTCOME_MESSAGES, type PlanOutcome } from "@/lib/onboarding";
 import { contributionLabel, humanize, locationLabel, uncertaintyReason } from "@/lib/presentation";
@@ -185,7 +185,7 @@ export function RoleIntelligencePage({ view, welcome = null }: { view: RoleView;
           <div className="rounded-card bg-surface-sunken p-4 sm:p-5 lg:min-w-[320px]">
             {forecast ? (
               <>
-                <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} size="lg" />
+                <LikelyWindow outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }} today={todayIso()} size="lg" />
                 {/* How long that is from today, which is the thing a reader actually wants from a date in the future. */}
                 {countdown !== null && <WindowCountdown days={countdown} className="mt-3" />}
                 {/*

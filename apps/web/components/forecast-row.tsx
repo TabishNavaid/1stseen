@@ -3,6 +3,7 @@ import { CompanyMark } from "@/components/brand/company-mark";
 import { ConfidenceWord } from "@/components/confidence-word";
 import { Icon } from "@/components/ui/icon";
 import { windowRange } from "@/components/likely-window";
+import { outlookNote, windowState } from "@/lib/forecast-window";
 import { roleMeta } from "@/components/role-meta";
 import { formatDay } from "@/lib/dates";
 import { locationLabel } from "@/lib/presentation";
@@ -25,16 +26,22 @@ import { cn } from "@/lib/utils";
 export function ForecastRow({
   role,
   item,
+  today,
   active,
   onSelect,
 }: {
   role: ForecastRole;
   /** The role's dashboard facts, when the row is listed on the dashboard. */
   item?: DashboardListItem;
+  /** Today as `YYYY-MM-DD`, for which of its states the window is in (lib/forecast-window.ts). */
+  today: string;
   active: boolean;
   onSelect: () => void;
 }) {
   const outlook = item?.outlook ?? null;
+  // The row carries no label over its date, so a window still ahead and one that has begun read the same here. The
+  // one state it has to say is the last: the date has gone by and nothing has been seen open.
+  const note = outlook ? outlookNote(windowState(outlook, today)) : null;
   return (
     <article
       className={cn(
@@ -68,7 +75,8 @@ export function ForecastRow({
           <p className="tabular text-base font-semibold text-ink">{role.window}</p>
         )}
         <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption tabular text-ink-muted sm:justify-end">
-          {outlook && windowRange(outlook.start, outlook.end)}
+          {note && <span className="font-semibold text-warm-ink">{note} ·</span>}
+          {outlook && (note ? `window ${windowRange(outlook.start, outlook.end)}` : windowRange(outlook.start, outlook.end))}
           <ConfidenceWord value={role.confidence} align="end" variant="plain" />
         </p>
       </div>

@@ -15,7 +15,7 @@ import { locationLabel } from "@/lib/presentation";
  * A forecast's evidence, behind a click: the drawer slides over the list at every width, so the list stays clean and
  * the detail (the interval, why this confidence, the signal, the work-back plan, and the evidence) is one tap away.
  */
-export function EvidenceDrawer({ role, basis = null, programType, outlook = null, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; programType?: string; outlook?: Outlook | null; open: boolean; onClose: () => void }) {
+export function EvidenceDrawer({ role, basis = null, programType, outlook = null, today, open, onClose }: { role: ForecastRole; basis?: ForecastBasis | null; programType?: string; outlook?: Outlook | null; today: string; open: boolean; onClose: () => void }) {
   const panelRef = useOffCanvas<HTMLElement>(open, onClose, "all");
   return (
     <>
@@ -28,7 +28,7 @@ export function EvidenceDrawer({ role, basis = null, programType, outlook = null
         <div className="space-y-7 p-5">
           <Link href={`/roles/${role.id}`} className="focus-ring flex min-h-touch items-center justify-between rounded-control border border-line bg-surface-selected px-4 py-2.5 text-xs font-semibold text-accent-ink hover:border-accent">Open the full program page <Icon name="arrow-up-right" size={14} /></Link>
           <section className="rounded-card border border-line bg-surface-sunken p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4"><LikelyWindow outlook={outlook} window={role.window} /><ConfidenceWord value={role.confidence} align="end" /></div>
+            <div className="flex flex-wrap items-start justify-between gap-4"><LikelyWindow outlook={outlook} today={today} window={role.window} /><ConfidenceWord value={role.confidence} align="end" /></div>
             {basis && <div className="mt-4 flex flex-wrap items-center gap-2"><ForecastBasisChip basis={basis} /><span className="text-micro text-ink-subtle">{BASIS[basis.kind].meaning}</span></div>}
             <p className="mt-5 label-caps text-ink-subtle">Past openings</p>
             <div className="mt-2 grid grid-cols-4 gap-1" aria-label="Past openings behind this prediction">
