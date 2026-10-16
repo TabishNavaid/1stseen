@@ -12,7 +12,7 @@
  * The object is written against the plain Durable Object interface (a class with `fetch`), with no `cloudflare:workers`
  * import, so the built Worker still loads in the Node test harness, which never constructs it.
  */
-import type { GuestAgentLimits } from "./guest-agent";
+import type { GuestAgentLimits } from "./guest-agent.ts";
 
 type Storage = {
   get<T>(key: string): Promise<T | undefined>;
