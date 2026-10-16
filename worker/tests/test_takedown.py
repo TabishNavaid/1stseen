@@ -378,6 +378,15 @@ class Store:
     def takedown_history(self, company_id: UUID) -> list[dict[str, Any]]:
         return []
 
+    # None stands for "the database has no such function", which the repository returns rather than raising.
+    streaks: ClassVar[list[dict[str, Any]] | None] = [
+        {"source_id": SOURCE_A, "family": "collection", "consecutive_failures": 21,
+         "last_error": "access_challenged", "last_attempt": "2026-10-16T04:31:00Z"},
+    ]
+
+    def source_failure_streaks(self, company_id: UUID | None = None) -> list[dict[str, Any]] | None:
+        return Store.streaks
+
     def withdrawal_preview(self, company_id: UUID) -> dict[str, int]:
         return {"roles_to_deactivate": 12, "in_scope_roles_to_deactivate": 3, "users_following_them": 1,
                 "observations_retained": 40, "other_forecasts_to_regenerate": 1}
@@ -470,6 +479,49 @@ def run_cli(*args: str) -> tuple[int, dict[str, Any]]:
     with patch.object(sys, "argv", ["firstseen", *args]), redirect_stdout(StringIO()) as output:
         code = cli.main()
     return code, json.loads(output.getvalue())
+
+
+class ShowAnswersWhenPartOfTheSystemIsMissingTests(unittest.TestCase):
+    """`sources show` is reached for when production is misbehaving, so it must answer then.
+
+    Teaching it to read failure streaks made it require a function that existed only in an unapplied migration, and
+    for an hour the command used to see what production is doing answered nothing but
+    `database_refused: Could not find the function public.source_failure_streaks`. That is the third time a thing
+    whose job is to report trouble has failed because of trouble: the health report died on the load it measured,
+    and its error message suppressed the body it existed to show. Degraded is exactly when someone reaches for it.
+    """
+
+    def setUp(self) -> None:
+        Store.streaks = [
+            {"source_id": SOURCE_A, "family": "collection", "consecutive_failures": 21,
+             "last_error": "access_challenged", "last_attempt": "2026-10-16T04:31:00Z"},
+        ]
+
+    def tearDown(self) -> None:
+        Store.streaks = [
+            {"source_id": SOURCE_A, "family": "collection", "consecutive_failures": 21,
+             "last_error": "access_challenged", "last_attempt": "2026-10-16T04:31:00Z"},
+        ]
+
+    def test_streaks_are_reported_per_source_when_the_function_is_there(self) -> None:
+        result = TakedownService(Store()).show("takedown-fixture.example")
+        by_id = {source["id"]: source for source in result["sources"]}
+        self.assertEqual(by_id[SOURCE_A]["failing"][0]["consecutive_failures"], 21)
+        self.assertEqual(by_id[SOURCE_A]["failing"][0]["last_error"], "access_challenged")
+        # A source with no streak is clean, which is an empty list and not null.
+        self.assertEqual(by_id[SOURCE_B]["failing"], [])
+        self.assertEqual(result["failure_streaks"], "per source, under `failing`")
+
+    def test_a_missing_streak_function_still_lists_the_sources(self) -> None:
+        Store.streaks = None
+        result = TakedownService(Store()).show("takedown-fixture.example")
+        self.assertEqual(len(result["sources"]), 2, "the sources are still listed")
+        self.assertEqual(result["company"]["domain"], "takedown-fixture.example")
+        # Null, not an empty list: absent and clean must not look the same.
+        for source in result["sources"]:
+            self.assertIsNone(source["failing"])
+        self.assertIn("unavailable", result["failure_streaks"])
+        self.assertIn("202608140056", result["failure_streaks"])
 
 
 class StoreRepository(Store):

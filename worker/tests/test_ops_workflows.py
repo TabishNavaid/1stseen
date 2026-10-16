@@ -98,26 +98,26 @@ class OpsWorkflowTests(unittest.TestCase):
         self.assertIn(".filter((entry) => entry.source?.enabled)", health)
 
     def test_the_report_counts_every_table_in_one_request(self) -> None:
-        """Migration 202608140054: nineteen tables, two numbers each, one read.
+        """Migration 202608140056: nineteen tables in one read, none of it a whole-table count.
 
-        This was thirty-eight `count=exact` requests inside one `Promise.all`. The filtered half of each pair is cheap
-        once indexed (migrations 052 and 053); the unfiltered half is a whole-table scan that no index helps, and
-        nineteen of those at once crossed PostgREST's eight-second timeout. The regeneration workflow's last step died
-        with `read of raw_job_observations failed with HTTP 500` on three consecutive nights, and the 4.8 GB database
-        tripwire went dark with it. Indexing could not have fixed it, so the counting moved into one function that
-        scans each table once for both numbers, on one connection.
+        054 replaced thirty-eight concurrent counts with nineteen sequential exact ones. That ended the concurrency
+        failure and bought a slower one: an exact count is O(all rows), so it had no headroom, and once the corpus
+        tripled the function answered HTTP 500 on every run from 2026-10-03 for thirteen days. The 24-hour `added`
+        figure stays exact because a timestamp index bounds it; the row count is the catalogue's estimate, and the
+        report says which is which. Accurate-until-it-dies is worse than a labelled estimate.
         """
         health = (ROOT / "scripts/collection-health.mjs").read_text()
         self.assertIn("rpc/counted_table_totals", health)
-        # The code form, not the comment that explains why it is gone.
+        # The code form, not the comments that explain why they are gone.
         self.assertNotIn('prefer: "count=exact"', health, "a per-table count is back; the fan-out is what failed")
-        # The size tripwire rides on the same read rather than costing a second one.
         self.assertNotIn("rpc/corpus_text_sizes", health)
-        self.assertIn("row.database_bytes", health)
+        # The estimate is labelled wherever a reader sees it, and never the thing a warning turns on.
+        self.assertIn("Rows (estimate)", health)
+        self.assertIn("not analysed", health)
+        self.assertIn("fetches.estimate !== 0 && fetches.added === 0", health)
 
-        migration = (ROOT / "supabase/migrations/202608140054_counted_tables_in_one_read.sql").read_text()
+        migration = (ROOT / "supabase/migrations/202608140056_bounded_health_reads_and_failure_streaks.sql").read_text()
         body = migration[migration.index("create or replace function public.counted_table_totals") :]
-        # Each table names the column the report actually filters on, which is not always created_at.
         counted = {
             "companies": "created_at", "sources": "created_at", "source_fetches": "fetched_at",
             "raw_job_observations": "created_at", "archive_captures": "created_at",
@@ -132,15 +132,71 @@ class OpsWorkflowTests(unittest.TestCase):
         for table, column in counted.items():
             with self.subTest(table=table):
                 self.assertIn(table, tables, "the counted table is one a migration creates")
-                self.assertIn(f"count(*) filter (where {column} >= p_since), count(*) from public.{table}", body)
-        # The totals are exact. `reltuples` is not usable for them: on the rig it reports 59 forecasts against a real
-        # 577, and -1 for a table that has never been analysed, and a health report may not understate a table tenfold.
-        self.assertNotIn("reltuples", body)
-        for signature in ("public.counted_table_totals(timestamptz)", "public.counted_table_daily_rows(integer)"):
+                # The filtered count only. A bare `count(*) from public.<table>` is the thing that timed out.
+                self.assertIn(f"count(*) filter (where {column} >= p_since) from public.{table}", body)
+                self.assertNotIn(f"count(*) from public.{table}", body)
+        self.assertIn("reltuples", body, "the total is the catalogue's estimate now")
+        # Null, not zero, for a table that has never been analysed: zero would read as an empty table.
+        self.assertIn("case when t.reltuples < 0 then null else t.reltuples::bigint end", body)
+
+    def test_the_size_tripwire_cannot_be_slowed_by_anything_else(self) -> None:
+        """The storage ceiling is read on its own, because it is the one number that must never be unavailable.
+
+        The database goes read-only at 8 GiB, which stops collection and every write the site makes. 054 folded the
+        size into the table-count read to save a request, so when that read started timing out the tripwire went dark
+        with it for thirteen days. It is its own argumentless catalogue read now.
+        """
+        migration = (ROOT / "supabase/migrations/202608140056_bounded_health_reads_and_failure_streaks.sql").read_text()
+        self.assertIn("create or replace function public.database_size_bytes()", migration)
+        size = migration[migration.index("create or replace function public.database_size_bytes") :]
+        self.assertIn("pg_database_size(current_database())", size)
+        for forbidden in ("count(", "join", "public."):
+            self.assertNotIn(forbidden, size.split("$$;")[0].split("as $$")[1], f"the tripwire reads {forbidden}")
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("rpc/database_size_bytes", health)
+        self.assertNotIn("row.database_bytes", health, "the tripwire is back on the table read")
+
+    def test_a_failed_read_says_which_sqlstate(self) -> None:
+        """A 500 with no code cost two weeks of inferring a timeout we could never confirm.
+
+        The body stays out, because a PostgREST error body can quote the query and the data. The five-character
+        SQLSTATE goes in: 57014 is a statement timeout and says so in one run.
+        """
+        for script in ("scripts/collection-health.mjs", "scripts/measure-growth.mjs"):
+            with self.subTest(script=script):
+                source = (ROOT / script).read_text()
+                self.assertIn("SQLSTATE", source)
+                self.assertIn("[0-9A-Z]{5}", source)
+
+    def test_a_failure_streak_is_defined_once(self) -> None:
+        """`sources show` and the health report must not disagree about what a streak is.
+
+        The definition lived only inside `collection-health.mjs`, so when that died on 2026-10-03 nothing could
+        answer "which sources are failing and why": `sources show` listed a company's sources without their streaks,
+        and the alert named a company and an adapter but no id. It is one SQL function now.
+        """
+        migration = (ROOT / "supabase/migrations/202608140056_bounded_health_reads_and_failure_streaks.sql").read_text()
+        self.assertIn("create or replace function public.source_failure_streaks(", migration)
+        streaks = migration[migration.index("create or replace function public.source_failure_streaks") :]
+        # The report's semantics, unchanged: running ignored, newest first, the run before the first non-failure.
+        self.assertIn("c.status <> 'running'", streaks)
+        self.assertIn("order by c.started_at desc, c.id desc", streaks)
+        self.assertIn("min(rn) as first_success", streaks)
+        self.assertIn("least(greatest(coalesce(p_days, 14), 1), 90)", streaks)
+        for signature in (
+            "public.counted_table_totals(timestamptz)",
+            "public.database_size_bytes()",
+            "public.source_failure_streaks(uuid, integer)",
+        ):
             self.assertIn(f"revoke all on function {signature} from public, anon, authenticated;", migration)
             self.assertIn(f"grant execute on function {signature} to service_role;", migration)
-        # Per-day growth is derived from history, not sampled once a day, and its window stays bounded.
-        self.assertIn("least(greatest(coalesce(p_days, 14), 1), 90)", migration)
+        # The command that asks the question reports it per source.
+        takedown = (ROOT / "worker/src/firstseen/takedown.py").read_text()
+        self.assertIn("source_failure_streaks", takedown)
+        # Null when the function is not deployed, an empty list when it is and the source is clean: a diagnostic
+        # must answer while part of what it reads is missing, and absent must not look like fine.
+        self.assertIn('"failing": None if streaks is None else streaks.get(str(row["id"]), [])', takedown)
+        self.assertIn("PGRST202", (ROOT / "worker/src/firstseen/repository.py").read_text())
 
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")

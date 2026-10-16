@@ -3041,6 +3041,30 @@ class IntelligenceRepository:
             key="id",
         )
 
+    def source_failure_streaks(self, company_id: UUID | None = None) -> list[dict[str, Any]] | None:
+        """Consecutive failed collection and signal attempts per source (migration 202608140056).
+
+        One definition, in SQL, shared with the health report: a streak is the run of `failed` attempts before the
+        first non-failure, newest first, `running` ignored. Keeping it in two places is how the report and this
+        command would drift.
+
+        `None` when the database has no such function yet, which is not an error here: `sources show` is the command
+        reached for when production is misbehaving, and it answered nothing but a refusal for an hour because it had
+        learned to want a function that existed only in an unapplied migration. A diagnostic that needs the whole
+        system healthy before it will speak is no diagnostic. Any other API error still raises.
+        """
+        try:
+            # bounded: the function's own SQL clamps its window to 90 days and returns one row per source and family.
+            response = self.client.rpc(
+                "source_failure_streaks", {"p_company_id": str(company_id) if company_id else None}
+            ).execute()
+        except APIError as error:
+            missing = error.code == "PGRST202" or "could not find the function" in (error.message or "").casefold()
+            if missing:
+                return None
+            raise
+        return cast(list[dict[str, Any]], response.data or [])
+
     def takedown_history(self, company_id: UUID) -> list[dict[str, Any]]:
         return fetch_all_rows(
             lambda: self.client.table("collection_takedowns")

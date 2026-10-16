@@ -65,6 +65,16 @@ const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 
+/** The five-character SQLSTATE from a PostgREST error body, and nothing else from it. 57014 is a statement timeout. */
+async function sqlState(response) {
+  try {
+    const code = (await response.json())?.code;
+    return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
+}
+
 async function rest(path, { method = "GET", prefer } = {}) {
   const response = await fetch(`${restBase}/${path}`, {
     method,
@@ -75,8 +85,11 @@ async function rest(path, { method = "GET", prefer } = {}) {
     },
   });
   if (!response.ok) {
-    // The table name is enough to act on; the URL and any response body are not echoed.
-    throw new Error(`read of ${path.split("?")[0]} failed with HTTP ${response.status}`);
+    // The URL and the response body stay out: a PostgREST error body can quote the query and the data. The
+    // SQLSTATE goes in, because without it a 500 is unreadable -- `counted_table_totals` answered 500 for
+    // thirteen days and the timeout could only be inferred, never confirmed.
+    const code = await sqlState(response);
+    throw new Error(`read of ${path.split("?")[0]} failed with HTTP ${response.status}${code ? ` (SQLSTATE ${code})` : ""}`);
   }
   return response;
 }
@@ -142,9 +155,22 @@ const cell = (value) => String(value ?? "—").replace(/\|/g, "\\|");
 
 // Supabase Pro allows 8 GB and the database goes read-only at the ceiling, which stops collection and every write the
 // site makes. 60% is the line: at the growth this corpus has seen that is weeks of warning, not hours, and the check
-// costs nothing extra: `counted_table_totals` reports the database's own size beside the table counts.
+// costs one catalogue read: `database_size_bytes` is its own function and cannot be slowed by anything else.
 const DATABASE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
 const DATABASE_WARN_FRACTION = 0.6;
+
+/**
+ * The storage ceiling, read on its own (migration 202608140056).
+ *
+ * Deliberately not folded into the table counts: the database going read-only stops collection and every write the
+ * site makes, so the number that watches for it must not be reachable by anything that can be slow. This is one
+ * catalogue read and takes no arguments.
+ */
+async function databaseSize() {
+  const rows = await (await rest("rpc/database_size_bytes")).json();
+  const bytes = Number(Array.isArray(rows) ? rows[0] : rows);
+  return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
 
 /**
  * Every counted table's 24h growth, exact total, and size, in one request (migration 202608140054).
@@ -162,8 +188,8 @@ async function rowsAdded() {
   return rows.map((row) => ({
     table: row.table_name,
     added: Number(row.added),
-    total: Number(row.total),
-    databaseBytes: Number(row.database_bytes),
+    // The catalogue's estimate, null where the table has never been analysed. Never presented as a count.
+    estimate: row.total === null ? null : Number(row.total),
   }));
 }
 
@@ -314,20 +340,24 @@ async function main() {
 
   out(`### Rows added in the last ${WINDOW_HOURS}h`);
   out();
-  out("| Table | Added | Total |");
+  out("| Table | Added | Rows (estimate) |");
   out("|---|---:|---:|");
-  for (const row of tables) out(`| ${row.table} | ${row.added ?? "?"} | ${row.total ?? "?"} |`);
+  for (const row of tables) out(`| ${row.table} | ${row.added ?? "?"} | ${row.estimate === null ? "not analysed" : `~${row.estimate}`} |`);
+  out();
+  out("Rows added is exact, from each table's timestamp index. The row count is the catalogue's estimate: an exact");
+  out("count of a growing table crossed PostgREST's statement timeout and took this report down for thirteen days");
+  out("(migration 202608140056).");
   out();
   const fetches = tables.find((row) => row.table === "source_fetches");
-  // Every ingestion records a fetch row, unchanged pages included, so zero means nothing ran.
-  if (fetches && fetches.total > 0 && fetches.added === 0) {
+  // Every ingestion records a fetch row, unchanged pages included, so zero added means nothing ran. Judged on the
+  // exact `added` figure and a non-empty table; the estimate is never the thing a warning turns on.
+  if (fetches && fetches.estimate !== 0 && fetches.added === 0) {
     warn("No source fetches in 24h", "source_fetches gained no rows; current collection did not run or reached no source");
   }
 
-  const reported = tables.find((row) => Number.isFinite(row.databaseBytes) && row.databaseBytes > 0);
-  const sizeBytes = reported ? reported.databaseBytes : null;
+  const sizeBytes = await databaseSize().catch(() => null);
   if (sizeBytes === null) {
-    warn("Database size unknown", "counted_table_totals reported no database size, so the storage ceiling is unwatched");
+    warn("Database size unknown", "database_size_bytes did not answer, so the storage ceiling is unwatched");
   } else {
     const gib = (sizeBytes / 1024 / 1024 / 1024).toFixed(2);
     const share = Math.round((sizeBytes / DATABASE_CEILING_BYTES) * 100);

@@ -38,7 +38,15 @@ async function rpc(name, params) {
     headers: { apikey: serviceKey, authorization: `Bearer ${serviceKey}` },
   });
   // The function name is enough to act on; the URL and any response body are not echoed.
-  if (!response.ok) throw new Error(`read of rpc/${name} failed with HTTP ${response.status}`);
+  if (!response.ok) {
+    // The SQLSTATE, never the body: an error body can quote the query and the data. 57014 is a statement timeout.
+    let code = null;
+    try {
+      const reported = (await response.json())?.code;
+      code = typeof reported === "string" && /^[0-9A-Z]{5}$/.test(reported) ? reported : null;
+    } catch { /* no JSON body */ }
+    throw new Error(`read of rpc/${name} failed with HTTP ${response.status}${code ? ` (SQLSTATE ${code})` : ""}`);
+  }
   return response.json();
 }
 
@@ -46,13 +54,15 @@ const mib = (bytes) => bytes / 1024 / 1024;
 const round = (value, digits = 2) => Number(value.toFixed(digits));
 
 async function main() {
-  const [daily, totals] = await Promise.all([
+  const [daily, totals, databaseBytes] = await Promise.all([
     rpc("counted_table_daily_rows", { p_days: String(DAYS) }),
     rpc("counted_table_totals", { p_since: new Date().toISOString() }),
+    rpc("database_size_bytes").then((rows) => Number(Array.isArray(rows) ? rows[0] : rows)),
   ]);
 
-  const size = new Map(totals.map((row) => [row.table_name, { total: Number(row.total), bytes: Number(row.total_bytes) }]));
-  const databaseBytes = Number(totals[0]?.database_bytes ?? 0);
+  // `total` is the catalogue's row estimate since migration 202608140056, so bytes per row is an estimate twice over:
+  // once in the row count and once in applying today's average backwards. The report already says so.
+  const size = new Map(totals.map((row) => [row.table_name, { total: Number(row.total ?? 0), bytes: Number(row.total_bytes) }]));
 
   // Which days the window actually observed, so partial ends can be dropped by date rather than by assumption.
   const days = [...new Set(daily.map((row) => row.day))].sort();
@@ -119,7 +129,8 @@ async function main() {
   }
 
   process.stdout.write(`Growth derived from ${complete.length} complete day(s), ${summary.first_complete_day} to ${summary.last_complete_day}.\n`);
-  process.stdout.write(`Rows per day are measured; megabytes per day is derived from today's bytes per row.\n\n`);
+  process.stdout.write(`Rows per day are measured exactly. Megabytes per day is derived: today's bytes per row, from a\n`);
+  process.stdout.write(`catalogue row estimate, applied backwards over the window.\n\n`);
   const pad = (value, width, left = false) => (left ? String(value).padEnd(width) : String(value).padStart(width));
   process.stdout.write(`${pad("table", 26, true)} ${pad("rows", 9)} ${pad("B/row", 8)} ${pad("days", 5)} ${pad("rows/day", 9)} ${pad("MiB/day", 9)}\n`);
   process.stdout.write(`${"-".repeat(26)} ${"-".repeat(9)} ${"-".repeat(8)} ${"-".repeat(5)} ${"-".repeat(9)} ${"-".repeat(9)}\n`);
