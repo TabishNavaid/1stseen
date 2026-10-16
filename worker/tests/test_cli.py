@@ -87,6 +87,79 @@ class Repository:
 COMPANY_ID = UUID("00000000-0000-4000-8000-000000000001")
 
 
+class IncrementalKeyRepository(Repository):
+    """Records every save, so a save-per-company is distinguishable from one save at the end."""
+
+    saves: ClassVar[list[dict[str, str]]] = []
+    fingerprints: ClassVar[dict] = {}
+
+    def __init__(self) -> None:
+        IncrementalKeyRepository.saves = []
+
+    def company_enrichment_fingerprints(self, company_ids):
+        return {company_id: "stable" for company_id in company_ids}
+
+    def enrichment_noop_keys(self):
+        return {}
+
+    def save_enrichment_noop_keys(self, keys, *, run_id):
+        IncrementalKeyRepository.saves.append(dict(keys))
+
+    def record_tool_call(self, run_id, **kwargs):
+        return None
+
+
+class EnrichmentKeysSurviveAKilledRunTests(unittest.TestCase):
+    """A collection run killed at its 45-minute timeout must keep the keys it had already learned.
+
+    The single save after the loop was never reached when the job was killed from outside, so a cancelled run had
+    moved every company's fingerprint by enriching it and recorded none of the stabilisation. That destroys
+    convergence rather than pausing it, and the skip needs three consecutive completed passes to converge: measured
+    on the rig, 0 then 21 then 58 of 58 companies skipped, with the pass going from 165.6 s to 1.1 s. Six of the
+    eight collection runs to 2026-10-16 were cancelled, which is why `companies_unchanged` read 0 for weeks.
+    """
+
+    def test_a_key_is_saved_as_each_company_stabilises(self) -> None:
+        repository = IncrementalKeyRepository()
+        companies = [UUID(int=index) for index in range(1, 5)]
+
+        from firstseen.enrichment import EnrichmentSummary
+
+        class Service:
+            def enrich_company(self, company_id):
+                return EnrichmentSummary(
+                    company_id=company_id,
+                    observations_considered=0,
+                    roles_matched=0,
+                    roles_created=0,
+                    resolution_failures=0,
+                    roles_reconstructed=0,
+                    events_persisted=0,
+                    reconstruction_failures=0,
+                    degraded_capture_sources=0,
+                )
+
+        with (
+            patch.object(cli, "EvidenceEnrichmentService", lambda *args, **kwargs: Service()),
+            patch.object(cli, "worker_fingerprint", lambda settings: "worker"),
+            patch.object(cli, "get_settings", lambda: SimpleNamespace()),
+            patch.object(cli, "RoleResolver", lambda **kwargs: None),
+            patch.object(cli, "RoleScopeService", lambda *args, **kwargs: None),
+            patch.object(cli, "RoleScopeClassifier", lambda *args, **kwargs: None),
+            patch.object(cli, "LlmRoleClassifier", lambda *args, **kwargs: None),
+            patch.object(cli, "LlmScopeClassifier", lambda *args, **kwargs: None),
+        ):
+            cli._enrich_companies(
+                repository, companies, run_id=UUID(int=99), router=SimpleNamespace(client=lambda *a, **k: None)
+            )
+
+        # One save per company that stabilised, not one at the end: a run killed after the second company keeps two.
+        self.assertGreater(len(IncrementalKeyRepository.saves), 1, "the keys are still saved only once, at the end")
+        self.assertEqual(len(IncrementalKeyRepository.saves), len(companies))
+        for index, saved in enumerate(IncrementalKeyRepository.saves, start=1):
+            self.assertEqual(len(saved), index, "each save carries every key learned so far")
+
+
 class EnrichmentRepository(Repository):
     """Reports one configured company so enrichment scope can be asserted."""
 

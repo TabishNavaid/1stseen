@@ -261,6 +261,25 @@ def _enrich_companies(
         # The fingerprint function (migration 202608140046) is not in this database yet: enrich every company.
         before = {}
     noop_keys = repository.enrichment_noop_keys()
+    # Saved as each key is learned, not once at the end. A collection run that runs out of its 45 minutes is killed
+    # from outside, mid-loop, so the single save after the loop was never reached: the run had moved every company's
+    # fingerprint by enriching it and recorded none of the stabilisation, which destroys convergence rather than
+    # pausing it. Six of the eight runs to 2026-10-16 were cancelled, and the skip needs three consecutive completed
+    # passes to converge (measured on the rig: 0, then 21, then 58 of 58, and 165.6 s down to 1.1 s). Saving as we go
+    # means a killed run keeps what it learned and the next one carries on from there.
+    saved_keys = dict(noop_keys)
+
+    def persist_keys() -> None:
+        nonlocal saved_keys
+        if noop_keys == saved_keys:
+            return
+        try:
+            repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+        except APIError:
+            # The skip is an optimisation: failing to record it costs a future pass, never this company's evidence.
+            return
+        saved_keys = dict(noop_keys)
+
     for company_id in company_ids:
         started_at = datetime.now(UTC)
         key = skip_key(before[company_id], worker) if company_id in before else None
@@ -303,6 +322,7 @@ def _enrich_companies(
                 unchanged_inputs = False
             if unchanged_inputs:
                 noop_keys[str(company_id)] = key
+        persist_keys()
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",
@@ -311,7 +331,7 @@ def _enrich_companies(
             output_redacted=summary.as_dict(),
             started_at=started_at,
         )
-    repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+    persist_keys()
     return summaries, failures, unchanged
 
 
