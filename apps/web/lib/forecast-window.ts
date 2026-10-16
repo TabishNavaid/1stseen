@@ -15,13 +15,10 @@
 
 export type Outlook = { expected: string; start: string; end: string };
 
-export type WindowState =
-  /** The window has not begun: `start` is still ahead. */
-  | "ahead"
-  /** The window has begun and the expected date is still ahead of it. */
-  | "expected_ahead"
-  /** The expected date has passed and no posting has been seen. */
-  | "expected_passed";
+/** Every state a stored forecast can be in today. A state added here needs a fixture in it (fixture-coverage). */
+export const WINDOW_STATES = ["ahead", "expected_ahead", "expected_passed"] as const;
+
+export type WindowState = (typeof WINDOW_STATES)[number];
 
 /**
  * `today` is a calendar day, `YYYY-MM-DD`.

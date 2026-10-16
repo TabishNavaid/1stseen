@@ -1,6 +1,7 @@
+import type { FixtureListFacts } from "@/lib/dashboard-query";
 import { forecastRolesSchema } from "@firstseen/shared";
-import { forecastBasis, type ForecastBasis } from "@/lib/forecast-basis";
-import { noForecastExplanation } from "@/lib/forecast-gap";
+import { forecastBasis, type ForecastBasis } from "./forecast-basis.ts";
+import { noForecastExplanation } from "./forecast-gap.ts";
 import type { RoleView } from "@/lib/role-view";
 export type { ForecastRole } from "@firstseen/shared";
 
@@ -102,6 +103,76 @@ export const forecastRoles = forecastRolesSchema.parse([
     evidence: [
       { label: "ATS taxonomy", detail: "Role category added without a posting", date: "Aug 12, 2026", kind: "signal" },
       { label: "Archived job posting", detail: "Role title normalized to this family", date: "Aug 27, 2025", kind: "archive" },
+    ],
+  },
+  {
+    id: "harbor-mech-intern",
+    company: "Harbor",
+    companyMark: "H",
+    role: "Mechanical Engineering Intern",
+    track: "Internship",
+    location: "Seattle, WA",
+    window: "Mar 2 – Mar 20",
+    daysUntil: 0,
+    confidence: 54,
+    readiness: 40,
+    status: "quiet",
+    historicalCycles: ["Mar 9", "Mar 4"],
+    signalSummary: "No change on the campus page since the last cycle.",
+    nextDeadline: "Resume lock · Feb 16",
+    deadlines: [{ label: "Resume lock", date: "Feb 16" }],
+    confidenceFactors: [
+      { label: "2 observed cycles", value: "+ fair", tone: "neutral" },
+      { label: "Window width", value: "18 days", tone: "neutral" },
+    ],
+    evidence: [
+      { label: "Archived job posting", detail: "Matched on role family and location", date: "Mar 9, 2025", kind: "archive" },
+    ],
+  },
+  {
+    id: "beacon-quant-newgrad",
+    company: "Beacon",
+    companyMark: "B",
+    role: "Quantitative Researcher, New Grad",
+    track: "New grad",
+    location: "Chicago, IL",
+    window: "Jan 8 – Jan 26",
+    daysUntil: 0,
+    confidence: 63,
+    readiness: 72,
+    status: "signal",
+    historicalCycles: ["Jan 14", "Jan 9", "Jan 20"],
+    signalSummary: "Campus page listed a new application deadline this week.",
+    nextDeadline: "Referral asks · Dec 20",
+    deadlines: [{ label: "Referral asks", date: "Dec 20" }],
+    confidenceFactors: [
+      { label: "3 observed cycles", value: "+ strong", tone: "positive" },
+      { label: "Signal freshness", value: "2 days", tone: "positive" },
+    ],
+    evidence: [
+      { label: "Posting on the career page", detail: "Seen on the company's own careers page", date: "Jan 9, 2026", kind: "posting" },
+      { label: "Campus page change", detail: "Deadline text added", date: "Dec 2, 2025", kind: "signal" },
+    ],
+  },
+  {
+    id: "cedar-design-intern",
+    company: "Cedar",
+    companyMark: "C",
+    role: "Product Design Intern",
+    track: "Internship",
+    location: "Remote · US",
+    window: "No window yet",
+    daysUntil: 0,
+    confidence: 0,
+    readiness: 0,
+    status: "quiet",
+    historicalCycles: [],
+    signalSummary: "One sighting, and nothing since.",
+    nextDeadline: "Nothing scheduled",
+    deadlines: [],
+    confidenceFactors: [],
+    evidence: [
+      { label: "Archived job posting", detail: "Seen once in an archived capture", date: "Jun 2, 2024", kind: "archive" },
     ],
   },
 ]);
@@ -274,9 +345,57 @@ const fixtureWeights: Record<string, [own: number, borrowed: number]> = {
   "northstar-swe-intern": [0.74, 0.26],
   "meridian-apm": [0.31, 0.69],
   "atlas-data-science": [0.42, 0.58],
+  "harbor-mech-intern": [0.18, 0.82],
+  "beacon-quant-newgrad": [0.88, 0.12],
 };
 
 export function fixtureBasis(roleId: string): ForecastBasis | null {
   const weights = fixtureWeights[roleId];
   return weights ? forecastBasis(weights[0], weights[1]) : null;
 }
+
+/**
+ * What each fixture role looks like to the roles list, beyond what `ForecastRole` carries.
+ *
+ * The shared fixture type describes one program's detail card: a display window like "Sep 4 – Sep 22", a
+ * non-negative `daysUntil`, and evidence by source rather than by date precision. The list needs other things — an
+ * expected date with a real interval, the precision counts behind it, and whether the reader follows it — and none
+ * of them can be bent out of the shared schema without changing a contract that exists for a different purpose.
+ *
+ * The window is held as offsets in days rather than as dates on purpose. A fixture with fixed dates is only
+ * honest on the day it was written: every one of them drifts into the same state as the calendar moves, which is
+ * how the list came to have no dated forecast in it at all. Offsets mean the set spans the three window states
+ * (lib/forecast-window.ts) on every day it is ever rendered, and `apps/web/tests/fixture-coverage.test.mjs` fails
+ * if it stops.
+ */
+export const fixtureListFacts: Record<string, FixtureListFacts> = {
+  // A window still ahead: the ordinary "Likely around" case.
+  "northstar-swe-intern": {
+    discipline: "software_engineering", season: "fall", targetYear: 2027, followed: true, forecastable: true,
+    outlook: { startsIn: 24, expectedIn: 38, endsIn: 52 }, exactEvents: 2, boundedEvents: 1, observedEvents: 1,
+  },
+  // A window that has begun, with the expected date still to come.
+  "meridian-apm": {
+    discipline: "product_management", season: "summer", targetYear: 2027, followed: false, forecastable: true,
+    outlook: { startsIn: -9, expectedIn: 11, endsIn: 27 }, exactEvents: 1, boundedEvents: 0, observedEvents: 2,
+  },
+  // The expected date has gone by and nothing has been seen open.
+  "atlas-data-science": {
+    discipline: "data", season: "summer", targetYear: null, followed: false, forecastable: true,
+    outlook: { startsIn: -30, expectedIn: -6, endsIn: 8 }, exactEvents: 0, boundedEvents: 2, observedEvents: 0,
+  },
+  "harbor-mech-intern": {
+    discipline: "mechanical_engineering", season: "spring", targetYear: 2027, followed: false, forecastable: true,
+    outlook: { startsIn: 96, expectedIn: 110, endsIn: 124 }, exactEvents: 0, boundedEvents: 0, observedEvents: 2,
+  },
+  "beacon-quant-newgrad": {
+    discipline: "quantitative", season: "winter", targetYear: 2027, followed: true, forecastable: true,
+    outlook: { startsIn: -4, expectedIn: 14, endsIn: 30 }, exactEvents: 3, boundedEvents: 0, observedEvents: 0,
+  },
+  // A role the model refused a window: it is listed and counted like any other, with the reason in place of a date.
+  "cedar-design-intern": {
+    discipline: null, season: "unknown", targetYear: null, followed: false, forecastable: false,
+    // No dated opening at all, which is both the "none" precision and the reason this role has no window.
+    outlook: null, exactEvents: 0, boundedEvents: 0, observedEvents: 0,
+  },
+};

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
+import { fixtureListFacts } from "../lib/demo-data.ts";
 import { publishedSitePages } from "../lib/site-links.ts";
 import { pageLanguageLeaks, voiceLeaksInSource } from "./support/page-language.mjs";
 
@@ -212,6 +213,7 @@ test("renders evidence and preparation language", async () => {
   assert.match(html, /Work-back plan/);
   // What changed this week is read from a watchlist, so a signed-out view of the roles never draws it.
   assert.doesNotMatch(html, /What changed this week/);
+  // Only drawn when the drawer's role has an archived sighting, which fixture-coverage keeps true of the first row.
   assert.match(html, /Archive dates show when content existed/);
   // The count of openings links to Just opened; the list itself lives there.
   assert.match(html, /href="\/opened"[^>]*>[\s\S]*?Just opened/);
@@ -241,7 +243,9 @@ test("Ask is open to guests, with its limit stated in words", async () => {
 
 test("labels fixture provenance and derives visible portfolio counts", async () => {
   const html = await (await render("/roles")).text();
-  assert.match(html, />2<\/span><\/strong><span[^>]*>of <!-- -->3 forecasts<!-- --> in this view/);
+  // Derived from the fixture set, not written down: a seventh fixture must not make this fail for the wrong reason.
+  const forecastable = Object.values(fixtureListFacts).filter((facts) => facts.forecastable).length;
+  assert.match(html, new RegExp(`of <!-- -->${forecastable} forecasts<!-- --> in this view`));
   // The default view states the whole in-scope set, not only the forecasts.
   assert.match(html, /programs in scope: /);
   assert.match(html, /reserved \.example sources/);

@@ -4,7 +4,7 @@ import { ReturningGuestNote } from "@/components/onboarding/returning-guest-note
 import { SiteHeader } from "@/components/site-header";
 import { Badge } from "@/components/ui/badge";
 import { appliedFilterKeys, fixtureDashboardView, parseDashboardFilters } from "@/lib/dashboard-query";
-import { fixtureBasis, forecastRoles as fixtureRoles } from "@/lib/demo-data";
+import { fixtureBasis, fixtureListFacts, forecastRoles as fixtureRoles } from "@/lib/demo-data";
 import { firstRunPending, parsePlanOutcome } from "@/lib/onboarding";
 import { loadOnboardingState } from "@/lib/onboarding-data";
 import { hasServiceRoleConfig, loadRealDashboard } from "@/lib/real-data";
@@ -72,7 +72,7 @@ export default async function RolesPage({
     );
   }
   if (demoAllowed()) {
-    const view = fixtureDashboardView(fixtureRoles, filters, fixtureBasis);
+    const view = fixtureDashboardView(fixtureRoles, filters, fixtureBasis, fixtureListFacts);
     return (
       <>
         <SiteHeader active={active} contentId="dashboard-content" status={fixtureBadge} />

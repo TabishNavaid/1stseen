@@ -35,9 +35,10 @@ async function render(pathname, env = { FIRSTSEEN_DEMO_MODE: "true" }) {
   }
 }
 
-/** Each row of the list, as words. */
+/** Each row of the list, as words. An <article> without a link to a role page is drawer evidence, not a row. */
 function rows(html) {
   return [...html.matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)]
+    .filter(([, inner]) => /href="\/roles\/[a-z0-9-]+"/.test(inner))
     .map(([, inner]) => inner.replace(/<!--.*?-->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
 
@@ -60,7 +61,8 @@ test("a live posting outranks the forecast: an open programme says so and does n
 
 test("a programme with no posting keeps its forecast as the loud thing", async () => {
   const html = await render("/roles");
-  const quiet = rows(html).filter((row) => row.includes("Discipline not classified") && !row.includes("Open now"));
+  // Rows with a forecast and no posting: a role the model refused has no confidence to carry and is not one of these.
+  const quiet = rows(html).filter((row) => !row.includes("Open now") && !row.includes("No date yet"));
   assert.ok(quiet.length > 0, "not every fixture is open");
   for (const row of quiet) assert.match(row, /confidence/i, row.slice(0, 90));
 });

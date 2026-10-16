@@ -422,6 +422,24 @@ export function programTypeLabel(value: string | null): string {
 }
 
 /** What the dashboard knows about one in-scope role, as `dashboard_role_facts` returns it. */
+/**
+ * What a fixture role looks like to the list, beyond what `ForecastRole` carries. The values are in
+ * lib/demo-data.ts and are passed in, because this module stays free of path aliases so the tests can run it
+ * directly under `node --experimental-strip-types`.
+ */
+export type FixtureListFacts = {
+  discipline: string | null;
+  season: string;
+  targetYear: number | null;
+  followed: boolean;
+  forecastable: boolean;
+  /** Days from the day it is rendered. Negative is in the past. Null is a role the model gave no window. */
+  outlook: { startsIn: number; expectedIn: number; endsIn: number } | null;
+  exactEvents: number;
+  boundedEvents: number;
+  observedEvents: number;
+};
+
 export type DashboardRoleFacts = {
   id: string;
   companyId: string;
@@ -514,6 +532,7 @@ export function buildDashboardView(
   roles: DashboardRoleFacts[],
   filters: DashboardFilters,
   forecastFor: (role: DashboardRoleFacts) => ForecastRole | null,
+  outlookFor: (role: DashboardRoleFacts) => DashboardListItem["outlook"] = () => null,
 ): { items: DashboardListItem[]; summary: DashboardSummary } {
   const cap = perCompanyLimit(filters);
   const flagged = roles.map((role) => {
@@ -534,8 +553,7 @@ export function buildDashboardView(
     const { searchText: _searchText, confidence, daysUntil: _daysUntil, ...facts } = role;
     void _searchText;
     void _daysUntil;
-    // Fixtures carry a window but no expected date, so they have no "likely around" date to show.
-    return { ...facts, companyRank: rank, companyTotal: totals.get(role.companyId) ?? 0, forecast: role.forecastable ? forecastFor(role) : null, outlook: null, confidence: role.forecastable ? confidence : null, basis: null };
+    return { ...facts, companyRank: rank, companyTotal: totals.get(role.companyId) ?? 0, forecast: role.forecastable ? forecastFor(role) : null, outlook: role.forecastable ? outlookFor(role) : null, confidence: role.forecastable ? confidence : null, basis: null };
   });
   const exclusions = Object.fromEntries(
     FILTER_KEYS.map((key) => [
@@ -572,33 +590,57 @@ export function buildDashboardView(
  * Demo mode only: fixture roles through the same view semantics. Fixtures carry no discipline, program year,
  * follows, or date precision, so filters on those match nothing, which is what the fixtures can honestly say.
  */
-export function fixtureDashboardView(roles: ForecastRole[], filters: DashboardFilters, basisFor: (roleId: string) => ForecastBasis | null = () => null) {
+/**
+ * The fixture roles as the list sees them.
+ *
+ * Everything a row can branch on is read from the fixture rather than fixed here. It used to be the other way
+ * round — `listedNow: false`, `outlook: null`, `forecastable: true`, `followed: false`, no discipline, no season,
+ * no program year, every evidence count zero — which meant demo mode and every rendered-HTML test drew one branch
+ * of each and the others were never seen. The card spent weeks leading with a guessed date for programmes that
+ * were open, and the suite stayed green throughout, because no fixture was ever open.
+ *
+ * `now` is the day the list is rendered on; the fixture windows are offsets from it (lib/demo-data.ts), so the set
+ * keeps spanning the three window states instead of ageing into one of them.
+ */
+export function fixtureDashboardView(
+  roles: ForecastRole[],
+  filters: DashboardFilters,
+  basisFor: (roleId: string) => ForecastBasis | null = () => null,
+  listFacts: Record<string, FixtureListFacts>,
+  now: Date = new Date(),
+) {
+  const day = (offset: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset)).toISOString().slice(0, 10);
+  const outlooks = new Map<string, DashboardListItem["outlook"]>();
   const facts: DashboardRoleFacts[] = roles.map((role) => ({
     id: role.id,
     companyId: `fixture-${role.company.toLowerCase()}`,
     company: role.company,
     role: role.role,
-    discipline: null,
+    discipline: listFacts[role.id]?.discipline ?? null,
     programType: role.track === "New grad" ? "new_grad" : "internship",
-    season: "unknown",
-    targetYear: null,
+    season: listFacts[role.id]?.season ?? "unknown",
+    targetYear: listFacts[role.id]?.targetYear ?? null,
     location: role.location,
     // The corpus is overwhelmingly listed (144 of 149), so a fixture set where nothing is open renders the rarest
     // case and never the dominant one. A fixture is open when its evidence holds a posting.
     listedNow: role.evidence.some((item) => item.kind === "posting"),
-    followed: false,
-    // Every fixture role is a stored forecast, and a stored forecast is shown whatever its history (migration 202608140035).
-    forecastable: true,
+    followed: listFacts[role.id]?.followed ?? false,
+    forecastable: listFacts[role.id]?.forecastable ?? true,
     confidence: role.confidence,
-    daysUntil: role.daysUntil,
+    // From the window above, not the fixture's own display field, or the list sorts by a number nothing shows.
+    daysUntil: listFacts[role.id]?.outlook?.startsIn ?? null,
     historyCount: role.historicalCycles.length,
-    exactEvents: 0,
-    boundedEvents: 0,
-    observedEvents: 0,
+    exactEvents: listFacts[role.id]?.exactEvents ?? 0,
+    boundedEvents: listFacts[role.id]?.boundedEvents ?? 0,
+    observedEvents: listFacts[role.id]?.observedEvents ?? 0,
     searchText: `${role.company} ${role.role} ${role.location}`,
   }));
+  for (const role of roles) {
+    const window = listFacts[role.id]?.outlook;
+    if (window) outlooks.set(role.id, { expected: day(window.expectedIn), start: day(window.startsIn), end: day(window.endsIn) });
+  }
   const byId = new Map(roles.map((role) => [role.id, role]));
-  const built = buildDashboardView(facts, filters, (role) => byId.get(role.id) ?? null);
+  const built = buildDashboardView(facts, filters, (role) => byId.get(role.id) ?? null, (role) => outlooks.get(role.id) ?? null);
   const view = { ...built, items: built.items.map((item) => ({ ...item, basis: item.forecast ? basisFor(item.id) : null })) };
   const count = (values: string[]) => [...new Set(values)].map((value) => ({ value, label: value, roles: values.filter((item) => item === value).length }));
   const options: DashboardFilterOptions = {
