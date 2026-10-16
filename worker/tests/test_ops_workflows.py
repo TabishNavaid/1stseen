@@ -267,6 +267,28 @@ class OpsWorkflowTests(unittest.TestCase):
         self.assertIn("revoke all on function public.source_yield() from public, anon, authenticated;", migration)
         self.assertIn("grant execute on function public.source_yield() to service_role;", migration)
 
+    def test_discovery_refusals_alarm_on_no_pages_admitted(self) -> None:
+        """A rate on its own is a number nobody reads; zero admitted while plenty refused is the alarm.
+
+        A company refusing sixty links and admitting four is working correctly. One refusing sixty and admitting
+        none is either a company with no careers pages or a recruiting-path rule that just ate them. Read per
+        company from the discovery run's own record, so a widening rule announces itself on the run that introduced
+        it rather than six weeks later.
+        """
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("DISCOVERY_REFUSALS_WITHOUT_A_PAGE", health)
+        self.assertIn("tool_name=eq.DiscoverRecruitingSources", health)
+        self.assertIn("Discovery admitted no page sources", health)
+        # The condition is admitted-zero-and-refused-many, never a ratio.
+        self.assertIn("row.admitted === 0 && row.refused >= DISCOVERY_REFUSALS_WITHOUT_A_PAGE", health)
+        # The counts are persisted by the discovery run, per rule, so the report is not recomputing the rules.
+        cli = (ROOT / "worker/src/firstseen/cli.py").read_text()
+        self.assertIn('"admitted_page_sources": discovery.admitted_page_sources', cli)
+        self.assertIn('"refused_pages": discovery.refused_pages', cli)
+        discovery = (ROOT / "worker/src/firstseen/discovery.py").read_text()
+        self.assertIn("def admitted_no_pages(self, *, refused_at_least: int) -> bool:", discovery)
+        self.assertIn("refused_pages: dict[str, int] = Field(default_factory=dict)", discovery)
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")

@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field, HttpUrl
 
 from .adapters.base import AdapterName, HttpTransport, SourceConfig
 from .providers import CompletionClient, CompletionResult, ModelRoutingError, ProviderFailure
-from .recruiting_paths import recruiting_page, recruiting_sitemap, single_job_page
+from .recruiting_paths import page_source_refusal, recruiting_page, recruiting_sitemap, single_job_page
 from .robots import RobotsDisallowedError
 
 DiscoveryMethod = Literal[
@@ -110,6 +110,29 @@ class CompanyDiscoveryResult(BaseModel):
     identity: CompanyIdentity
     sources: list[DiscoveredSource]
     rejected_sources: list[RejectedSource] = Field(default_factory=list)
+    # How many links the recruiting-path rules refused, per rule. A refused page was dropped with a bare `continue`
+    # and no record, so discovery could silently drop every link it saw and say nothing: the 2026-09-14 bootstrap
+    # registered 451 sources of which 144 are refused today, and nobody knew for a month. A rate alone is not the
+    # thing to watch, though -- see `admitted_no_pages`.
+    refused_pages: dict[str, int] = Field(default_factory=dict)
+
+    @property
+    def admitted_page_sources(self) -> int:
+        return sum(1 for source in self.sources if source.adapter in {"generic", "sitemap"})
+
+    @property
+    def refused_page_count(self) -> int:
+        return sum(self.refused_pages.values())
+
+    def admitted_no_pages(self, *, refused_at_least: int) -> bool:
+        """Discovery finished having admitted no page source while refusing plenty.
+
+        This is the failure worth catching, and it does not look like a high refusal rate. A company that refuses
+        sixty links and admits four is working correctly. One that refuses sixty and admits none is either a company
+        with no careers pages or a rule that just ate them, and either way somebody should look -- on the run that
+        introduced the rule rather than six weeks later.
+        """
+        return self.admitted_page_sources == 0 and self.refused_page_count >= refused_at_least
 
     def source_configs(self) -> list[SourceConfig]:
         return [source.as_source_config(self.identity.name) for source in self.sources]
@@ -833,6 +856,15 @@ class DiscoverRecruitingSources:
     def run(self, query: str) -> CompanyDiscoveryResult:
         identity, homepage = self.identity_tool.run(query)
         found: dict[str, DiscoveredSource] = {}
+        # Which rule refused each link, counted so a run states its own refusals instead of dropping them
+        # silently. `None` means the rules allow it, which the caller uses to tell a refusal from a near miss.
+        refused_pages: dict[str, int] = {}
+
+        def count_refusal(url: str) -> str | None:
+            rule = page_source_refusal("generic", url) if not _not_a_page(url) else "not_a_page"
+            if rule is not None:
+                refused_pages[rule] = refused_pages.get(rule, 0) + 1
+            return rule
 
         def add(
             url: str,
@@ -915,6 +947,7 @@ class DiscoverRecruitingSources:
                 # Canonical's "Careers" menu once registered its homepage and its navigation fragment. A single
                 # posting is skipped too: it is one row of a board, it stops existing when the posting closes, and
                 # thirty-two of the rig's page sources were postings registered this way.
+                count_refusal(absolute)
                 continue
             elif self._campus_label.search(label):
                 candidate_pages.append((absolute, "campus_page", text or href))
@@ -962,6 +995,10 @@ class DiscoverRecruitingSources:
                 if not _is_web_url(absolute):
                     continue
                 ats_match = _ats_match(absolute)
+                # Counted before the chain below, which also weighs host and link text: a path refusal is the thing
+                # a widening rule shows up in, and failing the rest of the chain is not a refusal.
+                if not ats_match:
+                    count_refusal(absolute)
                 if ats_match:
                     add_ats(*ats_match, absolute, page, f"{text or href} -> {absolute}")
                 elif (
@@ -1120,6 +1157,12 @@ class DiscoverRecruitingSources:
                 "ats_tenant": ats_source.external_key if ats_source else None,
             }
         )
-        return CompanyDiscoveryResult(query=query, identity=identity, sources=sources, rejected_sources=rejected)
+        return CompanyDiscoveryResult(
+            query=query,
+            identity=identity,
+            sources=sources,
+            rejected_sources=rejected,
+            refused_pages=dict(sorted(refused_pages.items())),
+        )
 
     __call__ = run

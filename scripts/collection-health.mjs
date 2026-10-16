@@ -50,6 +50,9 @@ const SOURCE_STALE_AFTER_HOURS = 72;
 // Fetched this many times without ever producing a job, a signal, or a capture, and the source is not quiet: it is
 // useless. Three, because one or two unproductive fetches is just a company with no openings this week.
 const SOURCE_DEAD_AFTER_FETCHES = 3;
+// Refused this many links while admitting no page source, and a recruiting-path rule has probably gone too broad.
+// A rate is not the thing to watch: a company refusing sixty links and admitting four is working correctly.
+const DISCOVERY_REFUSALS_WITHOUT_A_PAGE = 10;
 
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
@@ -330,6 +333,43 @@ async function sourceProduction() {
   return { live: live.length, dead, refused: live.filter((row) => row.refused) };
 }
 
+/**
+ * Per company, what its last discovery admitted and what the recruiting-path rules refused.
+ *
+ * A refused page used to be dropped with a bare `continue` and no record, so discovery could drop every link it saw
+ * and say nothing: the 2026-09-14 bootstrap registered 451 sources of which 144 are refused today, and nothing
+ * mentioned it for a month. The failure worth catching is not a high refusal rate -- it is a company that finished
+ * discovery having admitted no page source at all while refusing plenty, which is either a company with no careers
+ * pages or a rule that just ate them.
+ */
+async function discoveryRefusals() {
+  // The 200 newest discoveries, one request under the row cap: this is about recent runs, not every one ever.
+  const calls = await (await rest(
+    "agent_tool_calls?select=started_at,output_redacted&tool_name=eq.DiscoverRecruitingSources&status=eq.succeeded"
+      + "&order=started_at.desc,id.desc&limit=200",
+  )).json();
+  const newest = new Map();
+  for (const call of calls) {
+    const domain = call.output_redacted?.domain;
+    if (!domain || newest.has(domain)) continue;
+    const refused = Object.values(call.output_redacted?.refused_pages ?? {}).reduce((sum, n) => sum + Number(n), 0);
+    newest.set(domain, {
+      domain,
+      admitted: Number(call.output_redacted?.admitted_page_sources ?? 0),
+      refused,
+      byRule: call.output_redacted?.refused_pages ?? {},
+      at: call.started_at,
+    });
+  }
+  const companies = [...newest.values()];
+  return {
+    companies,
+    atePages: companies.filter(
+      (row) => row.admitted === 0 && row.refused >= DISCOVERY_REFUSALS_WITHOUT_A_PAGE,
+    ),
+  };
+}
+
 async function abandonedRuns() {
   return (
     await rest(
@@ -345,7 +385,7 @@ async function checkpoints() {
 /* ------------------------------------------------------------------- report */
 
 async function main() {
-  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges, production] = await Promise.all([
+  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges, production, discovery] = await Promise.all([
     rowsAdded(),
     pipelineRuns(),
     failingSources(),
@@ -360,6 +400,7 @@ async function main() {
     enrichmentSkips(),
     sourceFetchAges(),
     sourceProduction(),
+    discoveryRefusals(),
   ]);
 
   const lines = [];
@@ -507,6 +548,29 @@ async function main() {
       `${production.refused.length} enabled source(s) are skipped by the recruiting-path rules on every run; `
         + "something the system refuses to use should not look live in the source list",
     );
+  }
+
+  if (discovery.companies.length) {
+    out(`### Discovery refusals`);
+    out();
+    out(
+      `${discovery.companies.length} companies with a recorded discovery. `
+        + `${discovery.atePages.length} admitted no page source while refusing `
+        + `${DISCOVERY_REFUSALS_WITHOUT_A_PAGE}+ links.`,
+    );
+    out();
+    for (const row of discovery.atePages) {
+      out(`- **${cell(row.domain)}**: admitted 0 page sources, refused ${row.refused} (${JSON.stringify(row.byRule)})`);
+    }
+    if (discovery.atePages.length) {
+      out();
+      warn(
+        "Discovery admitted no page sources",
+        `${discovery.atePages.length} company/companies finished discovery having admitted no page source while `
+          + `refusing ${DISCOVERY_REFUSALS_WITHOUT_A_PAGE}+ links; either they have no careers pages or a `
+          + "recruiting-path rule is too broad and ate them",
+      );
+    }
   }
 
   out(`### Sources failing ${FAILURE_STREAK}+ consecutive attempts (last ${LOOKBACK_DAYS} days)`);

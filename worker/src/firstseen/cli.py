@@ -691,6 +691,12 @@ def regenerate_changed_forecasts() -> int:
     return 1 if status == "failed" and role_ids else 0
 
 
+# Refusing this many links while admitting no page source is the shape of a rule that has gone too broad. A company
+# refusing sixty links and admitting four is working correctly; one refusing sixty and admitting none is either a
+# company with no careers pages or a rule that just ate them, and either way somebody should look.
+DISCOVERY_REFUSALS_WITHOUT_A_PAGE = 10
+
+
 def run_discovery(company: str, *, ingest: bool) -> int:
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
@@ -726,6 +732,10 @@ def run_discovery(company: str, *, ingest: bool) -> int:
                 "domain": discovery.identity.domain,
                 "sources": len(discovery.sources),
                 "ats_provider": discovery.identity.ats_provider,
+                # Persisted so the health report can show it per company, and so a widening rule is readable from
+                # the run that introduced it rather than inferred from a later source count.
+                "admitted_page_sources": discovery.admitted_page_sources,
+                "refused_pages": discovery.refused_pages,
             },
             started_at=started_at,
         )
@@ -743,12 +753,22 @@ def run_discovery(company: str, *, ingest: bool) -> int:
                 except Exception:  # noqa: BLE001 - discovery remains useful if one source fails
                     failures += 1
         repository.finish_agent_run(run_id, status="succeeded" if failures == 0 else "partial")
+        ate_the_pages = discovery.admitted_no_pages(refused_at_least=DISCOVERY_REFUSALS_WITHOUT_A_PAGE)
         print(
             json.dumps(
                 {
                     "company": discovery.identity.model_dump(mode="json"),
                     "sources": [source.model_dump(mode="json") for source in discovery.sources],
                     "rejected_sources": [source.model_dump(mode="json") for source in discovery.rejected_sources],
+                    "refused_pages": discovery.refused_pages,
+                    "admitted_page_sources": discovery.admitted_page_sources,
+                    "admitted_no_pages": ate_the_pages,
+                    "note": (
+                        f"Refused {discovery.refused_page_count} links and admitted no page source. Either this "
+                        "company has no careers pages, or a recruiting-path rule is too broad and ate them."
+                    )
+                    if ate_the_pages
+                    else None,
                     "ingested": ingest,
                     "ingestion_failures": failures,
                 },
