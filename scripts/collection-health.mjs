@@ -41,6 +41,9 @@ const ALERT = process.argv.includes("--alert");
 const FAILURE_STREAK = Math.max(1, Number(process.env.COLLECTION_HEALTH_FAILURE_STREAK || 3));
 // Longer than the longest workflow timeout (historical enrichment, 90 minutes).
 const ABANDONED_AFTER_HOURS = 3;
+// Below this, a run of unskipped companies says nothing: a handful of new companies are all legitimately unchanged-
+// never. Above it, zero skips means the skip is broken rather than the corpus being busy.
+const ENRICHMENT_SKIP_FLOOR = 10;
 
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
@@ -261,6 +264,24 @@ async function failingSources() {
     .sort((a, b) => b.failed - a.failed);
 }
 
+/**
+ * Whether enrichment's skip is firing, from the tool calls it records (enrichment_fingerprints.py).
+ *
+ * A company whose inputs are unchanged since a pass that changed nothing is not re-read, and the skip is recorded on
+ * that company's own `enrichment.company` call. It is 70% of a collection run when it does not fire -- 1,782 of 2,535
+ * seconds on 2026-10-16 -- and it has now silently stopped working three times: migration 046 hashed the whole row
+ * including text and always timed out, 049 fixed that and the skip was still dead because `save_signal_observation`
+ * keyed on the raw byte hash, and it is dead again. A skip that fails silently three times is a skip nobody watches.
+ */
+async function enrichmentSkips() {
+  const since = iso(now - WINDOW_HOURS * HOUR);
+  const calls = await all(
+    `agent_tool_calls?select=id,output_redacted&tool_name=eq.enrichment.company&started_at=gte.${since}&order=started_at.desc,id.desc`,
+  );
+  const skipped = calls.filter((call) => String(call.output_redacted?.result || "").startsWith("skipped_inputs_unchanged")).length;
+  return { considered: calls.length, skipped };
+}
+
 async function abandonedRuns() {
   return (
     await rest(
@@ -276,7 +297,7 @@ async function checkpoints() {
 /* ------------------------------------------------------------------- report */
 
 async function main() {
-  const [tables, runs, failing, abandoned, cursors, actions] = await Promise.all([
+  const [tables, runs, failing, abandoned, cursors, actions, skips] = await Promise.all([
     rowsAdded(),
     pipelineRuns(),
     failingSources(),
@@ -288,6 +309,7 @@ async function main() {
         success: await actionsRun(workflow.file, "&status=success"),
       })),
     ),
+    enrichmentSkips(),
   ]);
 
   const lines = [];
@@ -371,6 +393,20 @@ async function main() {
         `${gib} GiB of 8 GiB (${share}%); the database goes read-only at the ceiling, which stops collection and every write the site makes`,
       );
     }
+  }
+
+  // More than a handful of companies enriched and not one skipped means the skip is dead, which is 70% of the run.
+  // Measured on the rig: three consecutive completed passes take it from 165.6 s to 1.1 s and 86.5 MB to 0.2 MB.
+  out(`### Enrichment skip (last ${WINDOW_HOURS}h)`);
+  out();
+  out(`${skips.skipped} of ${skips.considered} companies skipped as unchanged.`);
+  out();
+  if (skips.considered >= ENRICHMENT_SKIP_FLOOR && skips.skipped === 0) {
+    warn(
+      "Enrichment skip is not firing",
+      `${skips.considered} companies enriched in ${WINDOW_HOURS}h and none was skipped as unchanged; enrichment is `
+        + "most of a collection run, and this skip has silently stopped working three times before",
+    );
   }
 
   out(`### Sources failing ${FAILURE_STREAK}+ consecutive attempts (last ${LOOKBACK_DAYS} days)`);

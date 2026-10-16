@@ -198,6 +198,30 @@ class OpsWorkflowTests(unittest.TestCase):
         self.assertIn('"failing": None if streaks is None else streaks.get(str(row["id"]), [])', takedown)
         self.assertIn("PGRST202", (ROOT / "worker/src/firstseen/repository.py").read_text())
 
+    def test_a_dead_enrichment_skip_raises_an_alert(self) -> None:
+        """The skip is 70% of a collection run and has silently stopped working three times.
+
+        Migration 046 hashed the whole row including text and always timed out; 049 fixed that and the skip was still
+        dead because `save_signal_observation` keyed on the raw byte hash; it was dead again on 2026-10-16, with
+        `companies_unchanged: 0` across 80 companies and 1,782 of 2,535 seconds spent in enrichment. Each time it was
+        found by reading a run summary weeks later. It is a warning now, from the per-company tool calls the skip
+        records, with a floor so a handful of genuinely new companies does not cry wolf.
+        """
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("ENRICHMENT_SKIP_FLOOR", health)
+        self.assertIn("tool_name=eq.enrichment.company", health)
+        # The recorded marker, which `enrichment_fingerprints.py` owns.
+        self.assertIn("skipped_inputs_unchanged", health)
+        self.assertIn("Enrichment skip is not firing", health)
+        self.assertIn("skips.considered >= ENRICHMENT_SKIP_FLOOR && skips.skipped === 0", health)
+        # The marker the report matches on has to be the one the worker writes.
+        self.assertTrue(
+            (ROOT / "worker/src/firstseen/enrichment_fingerprints.py").read_text().count(
+                'UNCHANGED_RESULT = "skipped_inputs_unchanged'
+            ),
+            "the report matches a marker the worker no longer writes",
+        )
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")
