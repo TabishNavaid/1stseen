@@ -12,8 +12,14 @@ import type { ForecastRole } from "@firstseen/shared";
 import { cn } from "@/lib/utils";
 
 /**
- * One program in the list: the company's mark, who and what, the date it is likely to open, and the way to what that
- * date rests on.
+ * One program in the list: the company's mark, who and what, and either the fact that it is open or the date it is
+ * likely to open, with the way to what that rests on.
+ *
+ * A live posting outranks the forecast. A forecast answers "when will this open"; while the posting is up that
+ * question is already answered, and leading with "Likely around Oct 19" for a programme a reader can apply to today
+ * is the product contradicting itself. It is also the ordinary case rather than the exception: 144 of 149
+ * forecastable roles were listed when this was measured. So the open ones say so, and their forecast moves into the
+ * drawer, where the window is detail rather than the headline.
  *
  * It is a row, not a card. Forty cards down a column, each with its own border, shadow and tinted ground, gave every
  * program the same weight and made the page look generated rather than set. A hairline between rows, a background
@@ -38,7 +44,8 @@ export function ForecastRow({
   active: boolean;
   onSelect: () => void;
 }) {
-  const outlook = item?.outlook ?? null;
+  const openNow = item?.listedNow ?? false;
+  const outlook = openNow ? null : item?.outlook ?? null;
   // The row carries no label over its date, so a window still ahead and one that has begun read the same here. The
   // one state it has to say is the last: the date has gone by and nothing has been seen open.
   const note = outlook ? outlookNote(windowState(outlook, today)) : null;
@@ -67,7 +74,10 @@ export function ForecastRow({
           line rather than a third one. The confidence belongs to the forecast, not to the window, so it is written
           whichever of the two a row has: a fixture carries only its window and still says how sure the model is.
         */}
-        {outlook ? (
+        {openNow ? (
+          /* Not a prediction, so no dashed underline: that mark means the product is guessing. */
+          <p className="heading-display text-2xl leading-none text-date-confirmed-ink">Open now</p>
+        ) : outlook ? (
           <p className="heading-display tabular text-2xl leading-none text-ink underline decoration-date-predicted-line decoration-dashed decoration-2 underline-offset-[6px]">
             {formatDay(outlook.expected)}
           </p>
@@ -75,9 +85,16 @@ export function ForecastRow({
           <p className="tabular text-base font-semibold text-ink">{role.window}</p>
         )}
         <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption tabular text-ink-muted sm:justify-end">
-          {note && <span className="font-semibold text-warm-ink">{note} ·</span>}
-          {outlook && (note ? `window ${windowRange(outlook.start, outlook.end)}` : windowRange(outlook.start, outlook.end))}
-          <ConfidenceWord value={role.confidence} align="end" variant="plain" />
+          {openNow ? (
+            "Applications are open"
+          ) : (
+            <>
+              {note && <span className="font-semibold text-warm-ink">{note} ·</span>}
+              {outlook && (note ? `window ${windowRange(outlook.start, outlook.end)}` : windowRange(outlook.start, outlook.end))}
+              {/* The confidence belongs to the forecast, so it goes where the forecast goes. */}
+              <ConfidenceWord value={role.confidence} align="end" variant="plain" />
+            </>
+          )}
         </p>
       </div>
       <div className="col-start-2 sm:col-start-4">
@@ -87,7 +104,7 @@ export function ForecastRow({
           aria-pressed={active}
           className="focus-ring link-accent inline-flex min-h-touch items-center gap-1 rounded-sm text-caption font-semibold sm:min-h-9"
         >
-          Why this date<Icon name="arrow-right" size={13} />
+          {openNow ? "See the forecast" : "Why this date"}<Icon name="arrow-right" size={13} />
         </button>
       </div>
     </article>

@@ -583,7 +583,9 @@ export function fixtureDashboardView(roles: ForecastRole[], filters: DashboardFi
     season: "unknown",
     targetYear: null,
     location: role.location,
-    listedNow: false,
+    // The corpus is overwhelmingly listed (144 of 149), so a fixture set where nothing is open renders the rarest
+    // case and never the dominant one. A fixture is open when its evidence holds a posting.
+    listedNow: role.evidence.some((item) => item.kind === "posting"),
     followed: false,
     // Every fixture role is a stored forecast, and a stored forecast is shown whatever its history (migration 202608140035).
     forecastable: true,

@@ -358,7 +358,7 @@ export function ForecastDashboard({
         )}
       </main>
       {/* The shared contract's track knows only Internship and New grad, so the role's own program type names it. */}
-      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} outlook={selectedItem.outlook} today={today} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
+      {selected && <EvidenceDrawer role={selected} basis={selectedItem.basis} outlook={selectedItem.outlook} today={today} openNow={selectedItem.listedNow} programType={selectedItem.programType ? programTypeLabel(selectedItem.programType) : undefined} open={drawerOpen} onClose={() => setDrawerOpen(false)} />}
     </div>
   );
 }

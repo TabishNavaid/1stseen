@@ -14,6 +14,57 @@ import { outlookLabel, outlookNote, windowState } from "../lib/forecast-window.t
 
 const WINDOW = { expected: "2027-07-17", start: "2027-06-20", end: "2027-08-14" };
 
+async function render(pathname, env = { FIRSTSEEN_DEMO_MODE: "true" }) {
+  const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  try {
+    const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+    workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${Math.random()}`);
+    const { default: worker } = await import(workerUrl.href);
+    const response = await worker.fetch(
+      new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
+      { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+      { waitUntil() {}, passThroughOnException() {} },
+    );
+    return await response.text();
+  } finally {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+/** Each row of the list, as words. */
+function rows(html) {
+  return [...html.matchAll(/<article[^>]*>([\s\S]*?)<\/article>/g)]
+    .map(([, inner]) => inner.replace(/<!--.*?-->/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+test("a live posting outranks the forecast: an open programme says so and does not guess at a date", async () => {
+  const html = await render("/roles");
+  const listed = rows(html).filter((row) => row.includes("Open now"));
+  assert.ok(listed.length > 0, "the fixtures include an open programme, because almost every real one is");
+  for (const row of listed) {
+    // The question a forecast answers is already answered while the posting is up.
+    assert.doesNotMatch(row, /Likely around|Expected around|Not seen open yet/, row.slice(0, 90));
+    assert.match(row, /Applications are open/);
+    // The forecast is not gone, it moved: the drawer is where the window now lives.
+    assert.match(row, /See the forecast/);
+    // The confidence belongs to the forecast, so it goes with it.
+    assert.doesNotMatch(row, /confidence/i);
+  }
+  // And the fact is no longer the last item of the small meta line under the title.
+  assert.doesNotMatch(html, /Hybrid · Open now|On-site · Open now|Program year \d+ · Open now/);
+});
+
+test("a programme with no posting keeps its forecast as the loud thing", async () => {
+  const html = await render("/roles");
+  const quiet = rows(html).filter((row) => row.includes("Discipline not classified") && !row.includes("Open now"));
+  assert.ok(quiet.length > 0, "not every fixture is open");
+  for (const row of quiet) assert.match(row, /confidence/i, row.slice(0, 90));
+});
+
 test("a window still ahead is a likelihood, and one that has begun is an expectation", () => {
   // Case 2: the window has not begun.
   assert.equal(windowState(WINDOW, "2027-06-19"), "ahead");

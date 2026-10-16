@@ -34,6 +34,7 @@ export const forecastRoles = forecastRolesSchema.parse([
       { label: "Window width", value: "18 days", tone: "neutral" },
     ],
     evidence: [
+      { label: "Posting on the career page", detail: "Seen on the company's own student programs page", date: "Sep 12, 2026", kind: "posting" },
       { label: "Archived job posting", detail: "Role family and location matched", date: "Sep 11, 2025", kind: "archive" },
       { label: "Campus page change", detail: "Student programs copy updated", date: "Aug 11, 2026", kind: "signal" },
       { label: "Recruiter activity", detail: "2 relevant public posts detected", date: "Aug 10, 2026", kind: "signal" },
