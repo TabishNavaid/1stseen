@@ -44,6 +44,9 @@ const ABANDONED_AFTER_HOURS = 3;
 // Below this, a run of unskipped companies says nothing: a handful of new companies are all legitimately unchanged-
 // never. Above it, zero skips means the skip is broken rather than the corpus being busy.
 const ENRICHMENT_SKIP_FLOOR = 10;
+// Current collection runs twice a day, so three days without a fetch means a source is not being reached at all.
+// This is watched per source rather than per run on purpose: a run can report success while never reaching its tail.
+const SOURCE_STALE_AFTER_HOURS = 72;
 
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
@@ -282,6 +285,22 @@ async function enrichmentSkips() {
   return { considered: calls.length, skipped };
 }
 
+/**
+ * How long since each enabled source was last fetched.
+ *
+ * Deliberately not "did the last run succeed". A run that exits cleanly on a budget, or is killed at its timeout,
+ * can report success or cancellation while never reaching the end of a stable source order, and the first symptom
+ * would be forecasts going stale for companies nobody can name. The oldest last-fetched time catches that whatever
+ * the runs say, and a source that has never been fetched counts as the worst case rather than being skipped.
+ */
+async function sourceFetchAges() {
+  const rows = await all("sources?select=id,url,adapter,last_fetched_at&enabled=is.true&order=id.asc");
+  const never = rows.filter((row) => !row.last_fetched_at);
+  const dated = rows.filter((row) => row.last_fetched_at).sort((a, b) => a.last_fetched_at.localeCompare(b.last_fetched_at));
+  const stale = dated.filter((row) => hoursSince(row.last_fetched_at) > SOURCE_STALE_AFTER_HOURS);
+  return { total: rows.length, never, stale, oldest: dated[0] ?? null };
+}
+
 async function abandonedRuns() {
   return (
     await rest(
@@ -297,7 +316,7 @@ async function checkpoints() {
 /* ------------------------------------------------------------------- report */
 
 async function main() {
-  const [tables, runs, failing, abandoned, cursors, actions, skips] = await Promise.all([
+  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges] = await Promise.all([
     rowsAdded(),
     pipelineRuns(),
     failingSources(),
@@ -310,6 +329,7 @@ async function main() {
       })),
     ),
     enrichmentSkips(),
+    sourceFetchAges(),
   ]);
 
   const lines = [];
@@ -406,6 +426,27 @@ async function main() {
       "Enrichment skip is not firing",
       `${skips.considered} companies enriched in ${WINDOW_HOURS}h and none was skipped as unchanged; enrichment is `
         + "most of a collection run, and this skip has silently stopped working three times before",
+    );
+  }
+
+  out(`### Source freshness`);
+  out();
+  out(
+    `${fetchAges.total} enabled sources. Oldest fetch ${ago(fetchAges.oldest?.last_fetched_at)}; `
+      + `${fetchAges.stale.length} not fetched in ${SOURCE_STALE_AFTER_HOURS}h; ${fetchAges.never.length} never fetched.`,
+  );
+  out();
+  if (fetchAges.never.length) {
+    warn(
+      "Sources never fetched",
+      `${fetchAges.never.length} enabled source(s) have never been fetched; collection is not reaching them`,
+    );
+  }
+  if (fetchAges.stale.length) {
+    warn(
+      "Sources not being reached",
+      `${fetchAges.stale.length} enabled source(s) have not been fetched in ${SOURCE_STALE_AFTER_HOURS}h, the oldest `
+        + `${ago(fetchAges.oldest?.last_fetched_at)}; a run can report success without reaching the end of its list`,
     );
   }
 

@@ -222,6 +222,23 @@ class OpsWorkflowTests(unittest.TestCase):
             "the report matches a marker the worker no longer writes",
         )
 
+    def test_source_freshness_is_watched_per_source_not_per_run(self) -> None:
+        """A run can report success while never reaching the end of a stable source order.
+
+        Today a run that cannot finish is killed at its 45-minute timeout and GitHub says cancelled, which is loud.
+        A budgeted run would exit cleanly, collect the same head every time, never reach the tail, and report
+        success -- a visible failure traded for an invisible one, whose first symptom is forecasts going stale for
+        companies nobody can name. So freshness is read from each source's own `last_fetched_at`, never from whether
+        a run succeeded, and a source that has never been fetched is the worst case rather than an absent one.
+        """
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("SOURCE_STALE_AFTER_HOURS", health)
+        self.assertIn("last_fetched_at", health)
+        self.assertIn("Sources not being reached", health)
+        self.assertIn("Sources never fetched", health)
+        # Read per source over the sources table, not derived from a run's own report of itself.
+        self.assertIn('all("sources?select=id,url,adapter,last_fetched_at&enabled=is.true&order=id.asc")', health)
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")
