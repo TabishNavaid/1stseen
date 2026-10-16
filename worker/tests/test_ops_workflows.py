@@ -239,6 +239,34 @@ class OpsWorkflowTests(unittest.TestCase):
         # Read per source over the sources table, not derived from a run's own report of itself.
         self.assertIn('all("sources?select=id,url,adapter,last_fetched_at&enabled=is.true&order=id.asc")', health)
 
+    def test_a_source_that_produces_nothing_is_a_finding(self) -> None:
+        """Registered but useless accumulated silently, because it looks like a company with no openings.
+
+        Point72 had five sources over its careers search and Veeva three, and between them they had returned zero
+        jobs since the day they were registered, with nothing in the system ever mentioning it. Measured over 439
+        enabled sources: 90 had been fetched successfully three or more times and produced nothing at all, and 112
+        were enabled while the recruiting-path rules refused them outright. Every ATS board was productive; all of
+        the waste was page scraping.
+        """
+        health = (ROOT / "scripts/collection-health.mjs").read_text()
+        self.assertIn("SOURCE_DEAD_AFTER_FETCHES", health)
+        self.assertIn("rpc/source_yield", health)
+        self.assertIn("Sources producing nothing", health)
+        self.assertIn("Sources enabled but refused", health)
+        # Jobs alone is the wrong test: a careers page with no openings still emits change signals, and an archive
+        # source produces captures rather than jobs. A source is dead only when it has produced none of the three.
+        for field in ("row.jobs", "row.signals", "row.archive_captures"):
+            self.assertIn(field, health, "a source is being called dead on too little")
+
+        migration = (ROOT / "supabase/migrations/202608140057_source_yield.sql").read_text()
+        self.assertIn("create or replace function public.source_yield()", migration)
+        # The refusal is read from the stored diagnostic, not by restating the path rules in SQL, and from the newest
+        # attempt so a source whose address was fixed stops being reported. It writes no source_fetches row at all.
+        self.assertIn("'[\"source_not_on_recruiting_path\"]'", migration)
+        self.assertIn("order by t.started_at desc, t.id desc", migration)
+        self.assertIn("revoke all on function public.source_yield() from public, anon, authenticated;", migration)
+        self.assertIn("grant execute on function public.source_yield() to service_role;", migration)
+
     def test_every_table_is_backed_up_or_left_out_with_a_reason(self) -> None:
         backed_up = _js_string_array(BACKUP, "CORPUS_TABLES")
         left_out = _js_object_keys(BACKUP, "NOT_BACKED_UP")

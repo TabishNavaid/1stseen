@@ -47,6 +47,9 @@ const ENRICHMENT_SKIP_FLOOR = 10;
 // Current collection runs twice a day, so three days without a fetch means a source is not being reached at all.
 // This is watched per source rather than per run on purpose: a run can report success while never reaching its tail.
 const SOURCE_STALE_AFTER_HOURS = 72;
+// Fetched this many times without ever producing a job, a signal, or a capture, and the source is not quiet: it is
+// useless. Three, because one or two unproductive fetches is just a company with no openings this week.
+const SOURCE_DEAD_AFTER_FETCHES = 3;
 
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
@@ -301,6 +304,32 @@ async function sourceFetchAges() {
   return { total: rows.length, never, stale, oldest: dated[0] ?? null };
 }
 
+/**
+ * What each source has ever produced, and whether the path rules are refusing it (migration 202608140057).
+ *
+ * A source returning no jobs looks exactly like a source whose company has no openings today, so "registered but
+ * useless" accumulated silently: Point72 had five sources over its careers search and Veeva three that had returned
+ * nothing since the day they were registered, and nothing had ever mentioned it. Measured over 439: 90 had been
+ * fetched successfully three or more times and produced nothing at all, and 112 were enabled while the recruiting-path
+ * rules refused them outright. Every ATS board was productive; all of it was page scraping.
+ *
+ * Jobs alone would be the wrong test -- a careers page listing no openings can still emit change signals, and an
+ * archive source produces captures rather than jobs -- so a source is dead only when it has produced none of them.
+ */
+async function sourceProduction() {
+  // bounded: one row per source, and the function's own SQL orders and caps it.
+  const rows = await (await rest("rpc/source_yield")).json();
+  const live = rows.filter((row) => row.enabled);
+  const dead = live.filter(
+    (row) =>
+      Number(row.successful_fetches) >= SOURCE_DEAD_AFTER_FETCHES
+      && Number(row.jobs) === 0
+      && Number(row.signals) === 0
+      && Number(row.archive_captures) === 0,
+  );
+  return { live: live.length, dead, refused: live.filter((row) => row.refused) };
+}
+
 async function abandonedRuns() {
   return (
     await rest(
@@ -316,7 +345,7 @@ async function checkpoints() {
 /* ------------------------------------------------------------------- report */
 
 async function main() {
-  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges] = await Promise.all([
+  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges, production] = await Promise.all([
     rowsAdded(),
     pipelineRuns(),
     failingSources(),
@@ -330,6 +359,7 @@ async function main() {
     ),
     enrichmentSkips(),
     sourceFetchAges(),
+    sourceProduction(),
   ]);
 
   const lines = [];
@@ -447,6 +477,35 @@ async function main() {
       "Sources not being reached",
       `${fetchAges.stale.length} enabled source(s) have not been fetched in ${SOURCE_STALE_AFTER_HOURS}h, the oldest `
         + `${ago(fetchAges.oldest?.last_fetched_at)}; a run can report success without reaching the end of its list`,
+    );
+  }
+
+  out(`### Sources that produce nothing`);
+  out();
+  out(
+    `${production.dead.length} of ${production.live} enabled sources have been fetched `
+      + `${SOURCE_DEAD_AFTER_FETCHES}+ times and produced no job, signal or capture. `
+      + `${production.refused.length} are enabled while the recruiting-path rules refuse them.`,
+  );
+  out();
+  if (production.dead.length) {
+    out("| Company | Adapter | Source | Successful fetches |");
+    out("|---|---|---|---:|");
+    for (const row of production.dead.slice(0, 15)) {
+      out(`| ${cell(row.company_name)} | ${cell(row.adapter)} | ${cell(row.url)} | ${row.successful_fetches} |`);
+    }
+    out();
+    warn(
+      "Sources producing nothing",
+      `${production.dead.length} enabled source(s) have been fetched ${SOURCE_DEAD_AFTER_FETCHES}+ times and have `
+        + "never produced a job, a signal or an archive capture; they are paid for on every run",
+    );
+  }
+  if (production.refused.length) {
+    warn(
+      "Sources enabled but refused",
+      `${production.refused.length} enabled source(s) are skipped by the recruiting-path rules on every run; `
+        + "something the system refuses to use should not look live in the source list",
     );
   }
 
