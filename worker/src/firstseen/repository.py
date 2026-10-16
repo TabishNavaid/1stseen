@@ -3041,6 +3041,12 @@ class IntelligenceRepository:
             key="id",
         )
 
+    def source_refusal_streaks(self, days: int = 30) -> list[dict[str, Any]]:
+        """Consecutive collection attempts the recruiting-path rules refused, per source (migration 202608140058)."""
+        # bounded: the function's own SQL clamps its window and returns one row per source.
+        response = self.client.rpc("source_refusal_streaks", {"p_days": days}).execute()
+        return cast(list[dict[str, Any]], response.data or [])
+
     def source_failure_streaks(self, company_id: UUID | None = None) -> list[dict[str, Any]] | None:
         """Consecutive failed collection and signal attempts per source (migration 202608140056).
 

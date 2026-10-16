@@ -23,7 +23,7 @@ from .adapters.base import (
     robots_diagnostic,
 )
 from .adapters.registry import AdapterRegistry
-from .recruiting_paths import page_source_allowed
+from .recruiting_paths import page_source_refusal
 from .robots import RobotsDisallowedError
 
 if TYPE_CHECKING:
@@ -93,7 +93,8 @@ class SourceIngestionService:
         self.inference_policy = inference_policy or DeterministicFirstInferencePolicy()
 
     def ingest(self, source: SourceConfig, *, observed_at: datetime) -> IngestionSummary:
-        if not page_source_allowed(source.adapter, str(source.url)):
+        path_refusal = page_source_refusal(source.adapter, str(source.url))
+        if path_refusal is not None:
             # A page source registered off a recruiting path is paid for on every run and yields nothing a program
             # needs (recruiting_paths.py). It is skipped before any request, and its earlier observations stay as they are.
             return IngestionSummary(
@@ -111,7 +112,8 @@ class SourceIngestionService:
                         code="source_not_on_recruiting_path",
                         message="Skipped a page source whose address is not a recruiting page or sitemap.",
                         url=str(source.url),
-                        details={"adapter": source.adapter},
+                        # The rule's own name, so a retirement six months from now can say which one refused it.
+                        details={"adapter": source.adapter, "rule": path_refusal},
                     ),
                 ),
             )

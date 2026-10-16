@@ -199,14 +199,36 @@ def sitemap_children(urls: list[str]) -> list[str]:
 PAGE_ADAPTERS = frozenset({"generic", "sitemap", "wayback"})
 
 
-def page_source_allowed(adapter: str, url: str) -> bool:
-    """Whether a source of this adapter may collect this address. Non-page adapters are always allowed.
+# Which rule refused a source, so a retirement is explicable six months later and a widening rule can be read off
+# the audit row rather than inferred from the date.
+REFUSAL_NOT_A_RECRUITING_SITEMAP = "not_a_recruiting_sitemap"
+REFUSAL_IN_A_NON_RECRUITING_SECTION = "in_a_non_recruiting_section"
+REFUSAL_SINGLE_JOB_POSTING = "a_single_job_posting"
+REFUSAL_OFF_THE_RECRUITING_PATH = "off_the_recruiting_path"
 
-    A single posting is on a recruiting path and is still not a source, so both tests run here: discovery cannot
-    register one, and collection skips the ones already registered before making a request.
+
+def page_source_refusal(adapter: str, url: str) -> str | None:
+    """Which rule refuses this source, or None when none does. Non-page adapters are always allowed.
+
+    One definition with a name attached. `page_source_allowed` is this answered as a yes or no, and the name is what
+    an audit row carries: measured 2026-10-16, the rules refuse 132 of 439 enabled sources, and "not on a recruiting
+    path" and "a single job posting" are different enough findings that collapsing them into one code made the
+    132 unreadable.
     """
     if adapter == "sitemap":
-        return recruiting_sitemap(url)
+        return None if recruiting_sitemap(url) else REFUSAL_NOT_A_RECRUITING_SITEMAP
     if adapter in {"generic", "wayback"}:
-        return recruiting_page(url) and not single_job_page(url)
-    return True
+        if not_a_posting_page(url):
+            return REFUSAL_IN_A_NON_RECRUITING_SECTION
+        # A single posting is on a recruiting path and is still not a source, so both tests run here: discovery
+        # cannot register one, and collection skips the ones already registered before making a request.
+        if single_job_page(url):
+            return REFUSAL_SINGLE_JOB_POSTING
+        if not recruiting_page(url):
+            return REFUSAL_OFF_THE_RECRUITING_PATH
+    return None
+
+
+def page_source_allowed(adapter: str, url: str) -> bool:
+    """Whether a source of this adapter may collect this address."""
+    return page_source_refusal(adapter, url) is None

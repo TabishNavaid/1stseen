@@ -14,7 +14,12 @@ from firstseen.adapters import GenericCareerPageAdapter, SitemapAdapter
 from firstseen.adapters.registry import AdapterRegistry
 from firstseen.adapters.wayback import WaybackAdapter
 from firstseen.recruiting_paths import (
+    REFUSAL_IN_A_NON_RECRUITING_SECTION,
+    REFUSAL_NOT_A_RECRUITING_SITEMAP,
+    REFUSAL_OFF_THE_RECRUITING_PATH,
+    REFUSAL_SINGLE_JOB_POSTING,
     page_source_allowed,
+    page_source_refusal,
     recruiting_page,
     recruiting_sitemap,
     single_job_page,
@@ -92,6 +97,30 @@ class RecruitingPageTests(unittest.TestCase):
                 self.assertTrue(recruiting_page(url))
                 self.assertFalse(page_source_allowed("generic", url))
                 self.assertFalse(page_source_allowed("wayback", url))
+
+    def test_each_refusal_names_the_rule_that_made_it(self) -> None:
+        """A retirement has to be explicable six months later, so the rule carries its own name.
+
+        The rules refuse 132 of 439 enabled sources, and "not on a recruiting path" and "a single job posting" are
+        different enough findings that one shared code made the 132 unreadable. `page_source_allowed` is this
+        answered as a yes or no, so the two cannot disagree.
+        """
+        cases = {
+            "https://ubuntu.com/internet-of-things/contact-us": REFUSAL_IN_A_NON_RECRUITING_SECTION,
+            "https://www.optiver.com/join-us/jobs/technology/london/graduate-software-engineer": REFUSAL_SINGLE_JOB_POSTING,
+            "https://vercel.com/passport": REFUSAL_OFF_THE_RECRUITING_PATH,
+        }
+        for url, rule in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(page_source_refusal("generic", url), rule)
+                self.assertFalse(page_source_allowed("generic", url))
+        self.assertEqual(
+            page_source_refusal("sitemap", "https://ramp.com/sitemap/vendors.xml"),
+            REFUSAL_NOT_A_RECRUITING_SITEMAP,
+        )
+        # A source the rules allow has no refusal, and a non-page adapter is never refused here.
+        self.assertIsNone(page_source_refusal("generic", "https://canonical.com/careers"))
+        self.assertIsNone(page_source_refusal("greenhouse", "https://boards.greenhouse.io/fixture"))
 
     def test_a_page_that_lists_jobs_is_not_mistaken_for_one(self) -> None:
         """Six digits and not four, and a slug under `jobs` must name a role before it is a posting.

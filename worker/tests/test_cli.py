@@ -160,6 +160,115 @@ class EnrichmentKeysSurviveAKilledRunTests(unittest.TestCase):
             self.assertEqual(len(saved), index, "each save carries every key learned so far")
 
 
+class RetirementRepository(Repository):
+    """Enough of the repository for retirement: the enabled sources and their refusal streaks."""
+
+    disabled: ClassVar[list[tuple[str, str]]] = []
+
+    def __init__(self) -> None:
+        RetirementRepository.disabled = []
+
+    def list_source_configs(self, company=None):
+        from firstseen.adapters.base import SourceConfig
+
+        def source(index, url):
+            return SourceConfig(
+                id=UUID(int=index), company_id=UUID(int=900), company="Fixture",
+                adapter="generic", url=url, trust_score=0.9,
+            )
+
+        # One refused page, and nine the rules allow, so the refused fraction is a tenth.
+        return [source(1, "https://vercel.com/passport")] + [
+            source(index, f"https://fixture{index}.example/careers") for index in range(2, 11)
+        ]
+
+    def source_refusal_streaks(self, days=30):
+        return [{"source_id": str(UUID(int=1)), "consecutive_refusals": 5, "rule": None, "last_attempt": None}]
+
+
+class RetirementTests(unittest.TestCase):
+    """Retirement is the rules acting on themselves, which is why it is not 132 stored disables.
+
+    A refusal is a live decision re-evaluated every run; a disable is a stored one that sticks. Converting the 132
+    sources the rules refuse today into stored disables would freeze today's rules into the database, and when the
+    rules widen again -- September 112, October 132 -- the stored ones would not follow.
+    """
+
+    def _run(self, **kwargs):
+        from firstseen import cli as module
+
+        captured = StringIO()
+        with (
+            patch.object(module.IntelligenceRepository, "from_settings", lambda settings: RetirementRepository()),
+            patch.object(module, "get_settings", lambda: SimpleNamespace()),
+            patch.object(module, "TakedownService", lambda repository: SimpleNamespace(
+                disable=lambda **call: RetirementRepository.disabled.append((str(call["source_id"]), call["reason"])))),
+            redirect_stdout(captured),
+        ):
+            code = module.retire_refused_sources(**kwargs)
+        return code, json.loads(captured.getvalue())
+
+    def test_the_first_run_reports_and_changes_nothing(self) -> None:
+        code, report = self._run(min_refusals=3, max_fraction=0.10, apply=False, by="tester")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "reported")
+        self.assertFalse(report["applied"])
+        self.assertEqual(report["candidates"], 1)
+        self.assertEqual(report["by_rule"], {"off_the_recruiting_path": 1})
+        self.assertEqual(RetirementRepository.disabled, [], "a report retired something")
+        # Every candidate is listed, grouped by rule and then company: a backlog is cleared by reading it, and 104
+        # of 438 is an accumulated past rather than a rule change, so counts alone are not enough to judge it.
+        grouped = report["by_rule_and_company"]
+        self.assertEqual(list(grouped), ["off_the_recruiting_path"])
+        self.assertEqual(list(grouped["off_the_recruiting_path"]), ["Fixture"])
+        listed = [row for companies in grouped.values() for rows in companies.values() for row in rows]
+        self.assertEqual(len(listed), report["candidates"], "the list is truncated against its own count")
+        self.assertEqual(listed[0]["url"], "https://vercel.com/passport")
+        self.assertEqual(listed[0]["consecutive_refusals"], 5)
+
+    def test_the_audit_reason_names_the_rule(self) -> None:
+        code, report = self._run(min_refusals=3, max_fraction=0.50, apply=True, by="tester")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["retired"], 1)
+        self.assertEqual(len(RetirementRepository.disabled), 1)
+        _, reason = RetirementRepository.disabled[0]
+        self.assertIn("off_the_recruiting_path", reason)
+        self.assertIn("5 consecutive", reason)
+
+    def test_too_large_a_fraction_stops_rather_than_proceeding(self) -> None:
+        """A bad rule must not be able to quietly empty the source list."""
+        code, report = self._run(min_refusals=3, max_fraction=0.05, apply=True, by="tester")
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "refused")
+        self.assertEqual(report["reason"], "too_large_a_fraction")
+        self.assertFalse(report["applied"])
+        self.assertEqual(RetirementRepository.disabled, [], "the guard let a retirement through")
+
+    def test_a_source_whose_address_was_fixed_is_not_retired_on_an_old_attempt(self) -> None:
+        """The rule is named from the address now, not from a diagnostic a past run recorded."""
+
+        class Fixed(RetirementRepository):
+            def list_source_configs(self, company=None):
+                from firstseen.adapters.base import SourceConfig
+
+                return [SourceConfig(id=UUID(int=1), company_id=UUID(int=900), company="Fixture",
+                                     adapter="generic", url="https://fixture.example/careers", trust_score=0.9)]
+
+        from firstseen import cli as module
+
+        captured = StringIO()
+        with (
+            patch.object(module.IntelligenceRepository, "from_settings", lambda settings: Fixed()),
+            patch.object(module, "get_settings", lambda: SimpleNamespace()),
+            patch.object(module, "TakedownService", lambda repository: SimpleNamespace(
+                disable=lambda **call: RetirementRepository.disabled.append((str(call["source_id"]), call["reason"])))),
+            redirect_stdout(captured),
+        ):
+            module.retire_refused_sources(min_refusals=3, max_fraction=0.9, apply=True, by="tester")
+        self.assertEqual(json.loads(captured.getvalue())["candidates"], 0)
+        self.assertEqual(RetirementRepository.disabled, [])
+
+
 class EnrichmentRepository(Repository):
     """Reports one configured company so enrichment scope can be asserted."""
 
