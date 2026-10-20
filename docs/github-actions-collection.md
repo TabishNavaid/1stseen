@@ -145,6 +145,46 @@ reason, and titles came in PostgREST's unordered embed order, so a role's stored
 over the same evidence. Titles are now read earliest-seen first; the first run after this rewrites such reasons once
 (1,472 on the scratch copy, no status among them).
 
+### The skip still did not hold, and the fingerprint now says why
+
+Proving it on the rig was not enough. Measured on hosted on 2026-10-20, four completed current-jobs runs
+(2026-10-16 04:31, 10-17 15:34, 10-18 04:32, 10-19 04:39) each reported `companies_unchanged` **0 of 80**, with
+enrichment steady at 1,720 to 1,793 s and a run at 40.7 to 42.3 minutes. All four ran at one commit, `e39c69d`, so the
+worker's own hash was not moving them.
+
+The cause was in `fetches`. It is in the fingerprint because a degraded source demotes its archive captures, so the
+resolver may then prove a role was present but never that it was absent, and a degradation has to re-run enrichment. It
+hashed `error ->> 'status'`, which takes three values: null when the fetch was complete with no diagnostics,
+`complete` when it was complete and emitted one, `degraded` when it was not complete. Enrichment reads exactly one
+thing out of it, `status = 'degraded'` (`IntelligenceRepository.degraded_among`). The gap between null and `complete`
+is invisible to every decision enrichment makes, and it moved the fingerprint anyway, for **every** source of the
+company rather than only the ones carrying captures. So a sitemap hitting its page limit again, a job page failing
+again, an access challenge — any of them, on any one source — invalidated that company's stored key and re-derived the
+whole company, on every run, however unchanged its content was. With something flapping every run, that is 0 of 80 at
+any commit.
+
+Measured on the real schema: one source fetched twice, same content, complete both times, one diagnostic on the
+second, moved `fetches` from `abc131da33c12c38edffdf42e5f8a6b5` to `cdbfdd869fc1c08f2547b12673292da8` and the
+company's fingerprint from `774cf4b106551752ab3ccc38ab15011b` to `696d7e8e0104a9624abc37ac4a0f3de8`, with the degraded
+verdict unchanged at 0. Migration `202608140060` hashes the verdict instead, so plumbing no longer moves it while a
+source going degraded, or recovering, still does.
+
+Nothing had tested that premise. `worker/tests/test_enrichment_skip.py` drives the loop with a fake repository and a
+fake service whose steady company's fingerprint is hard-coded never to move: it pins the bookkeeping and says nothing
+about whether a real pass leaves a real fingerprint where it found it.
+`apps/web/tests/integration/enrichment-fingerprint-parts.test.mjs` holds it against the real schema, with a company
+that has archive captures, and was proved to fail when the fix is reverted.
+
+And the run now says which part moved rather than only that a company was re-enriched.
+`company_enrichment_fingerprint_parts` (migration `202608140059`) returns the component hashes beside the combined
+fingerprint — one definition of both, so they cannot drift — and the worker keeps them beside each company's key.
+Every `ingest` and `enrich` summary reports `inputs_changed_by_component` (companies per moved component; a company
+may name more than one) and `companies_never_converged` (those with no stored no-op pass to compare against, which is
+the expected state for one pass after any worker change), and each company's tool call carries `inputs_changed`. Read
+them with `companies_unchanged`: 0 unchanged with every company under one component is a component that moves on its
+own, which is the shape that cost a day here. A database without the parts function reports `unknown` and skips
+exactly as before.
+
 Signal collection had the same shape. Every signal that names no single role recomputes each in-scope role of its
 company, and each recomputation re-read the whole evidence set (every role, observation, match, event, and signal,
 about 2 MB on the wire at the bootstrap's size). It now reads roles and openings once per run and only the signals again

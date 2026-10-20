@@ -30,6 +30,7 @@ from .backtesting import (
 from .config import Settings, get_settings
 from .cycles import derive_cycle_key
 from .discovery import CompanyDiscoveryResult, DiscoveredSource, DiscoveryEvidence
+from .enrichment_fingerprints import EnrichmentFingerprint
 from .forecast_currency import forecast_is_current, parse_timestamp
 from .forecasting import (
     Forecast,
@@ -420,7 +421,17 @@ class IntelligenceRepository:
 
     def company_enrichment_fingerprints(self, company_ids: Sequence[UUID]) -> dict[UUID, str]:
         """Each company's enrichment-input fingerprint, computed in the database (migration 202608140046)."""
-        fingerprints: dict[UUID, str] = {}
+        return {company: parts.fingerprint for company, parts in self.company_enrichment_parts(company_ids).items()}
+
+    def company_enrichment_parts(self, company_ids: Sequence[UUID]) -> dict[UUID, EnrichmentFingerprint]:
+        """Each company's fingerprint and the component hashes it is built from (migration 202608140059).
+
+        The parts are what lets a run say *which* component moved. A database without that function still answers:
+        the fingerprint is read from `company_enrichment_fingerprints` and the parts come back empty, so the skip
+        works exactly as before and only the explanation is missing. That is the degradation rule for anything whose
+        job is to report (AGENTS.md): a missing function is a null field and a stated reason, never a refusal.
+        """
+        fingerprints: dict[UUID, EnrichmentFingerprint] = {}
         ids = [str(item) for item in company_ids]
         # Five companies a call. Measured on hosted on 2026-09-20 with migration 049: a warm call over five takes about
         # 200-350 ms and the whole corpus about 3.5 s, while the first call of a connection pays for cold buffer cache
@@ -428,14 +439,37 @@ class IntelligenceRepository:
         # the work per call. A call that does time out costs only that chunk's skips: the caller treats a missing
         # fingerprint as "not known to be unchanged" and enriches those companies.
         for chunk in (ids[index : index + FINGERPRINT_CHUNK] for index in range(0, len(ids), FINGERPRINT_CHUNK)):
-            # bounded: one row per company in the chunk, at most ten.
-            response = self.client.rpc("company_enrichment_fingerprints", {"p_company_ids": chunk}).execute()
-            for row in cast(list[dict[str, Any]], response.data or []):
-                fingerprints[UUID(str(row["company_id"]))] = str(row["fingerprint"])
+            try:
+                # bounded: one row per company in the chunk, at most ten.
+                response = self.client.rpc("company_enrichment_fingerprint_parts", {"p_company_ids": chunk}).execute()
+                rows = cast(list[dict[str, Any]], response.data or [])
+            except APIError:
+                # Migration 202608140059 is not in this database yet. Fall back to the fingerprint alone.
+                # bounded: one row per company in the chunk, at most ten.
+                response = self.client.rpc("company_enrichment_fingerprints", {"p_company_ids": chunk}).execute()
+                rows = cast(list[dict[str, Any]], response.data or [])
+            for row in rows:
+                raw_parts = row.get("parts")
+                parts = {
+                    str(name): str(value)
+                    for name, value in cast(dict[str, Any], raw_parts or {}).items()
+                    if value is not None
+                }
+                fingerprints[UUID(str(row["company_id"]))] = EnrichmentFingerprint(
+                    fingerprint=str(row["fingerprint"]), parts=parts
+                )
         return fingerprints
 
     def enrichment_noop_keys(self) -> dict[str, str]:
         """Per company, the key of its last enrichment pass that changed nothing (enrichment_fingerprints.py)."""
+        return self.enrichment_noop_state()[0]
+
+    def enrichment_noop_state(self) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
+        """Each company's stored no-op key and, beside it, the component hashes that key was taken from.
+
+        The parts are stored under their own sibling key, so a checkpoint written before migration 202608140059
+        still reads: the keys are found as they always were and the parts come back empty.
+        """
         # bounded: one row, the checkpoint keyed by its primary key (pipeline).
         response = (
             self.client.table("collection_checkpoints")
@@ -445,16 +479,33 @@ class IntelligenceRepository:
             .execute()
         )
         rows = cast(list[dict[str, Any]], response.data or [])
-        companies = cast(dict[str, Any], rows[0].get("metadata") or {}).get("companies") if rows else None
-        return {str(key): str(value) for key, value in (companies or {}).items()}
+        metadata = cast(dict[str, Any], rows[0].get("metadata") or {}) if rows else {}
+        companies = cast(dict[str, Any], metadata.get("companies") or {})
+        stored_parts = cast(dict[str, Any], metadata.get("parts") or {})
+        keys = {str(key): str(value) for key, value in companies.items()}
+        parts = {
+            str(company): {str(name): str(value) for name, value in cast(dict[str, Any], row or {}).items()}
+            for company, row in stored_parts.items()
+        }
+        return keys, parts
 
-    def save_enrichment_noop_keys(self, keys: dict[str, str], *, run_id: UUID) -> None:
+    def save_enrichment_noop_keys(
+        self,
+        keys: dict[str, str],
+        *,
+        run_id: UUID,
+        parts: dict[str, dict[str, str]] | None = None,
+    ) -> None:
+        metadata: dict[str, Any] = {"companies": dict(sorted(keys.items()))}
+        if parts is not None:
+            # Only for companies that still hold a key: the two maps are written together and never drift.
+            metadata["parts"] = {company: parts[company] for company in sorted(keys) if company in parts}
         self.save_collection_checkpoint(
             ENRICHMENT_FINGERPRINT_PIPELINE,
             cursor_at=datetime.now(UTC),
             run_id=run_id,
             status="succeeded",
-            metadata={"companies": dict(sorted(keys.items()))},
+            metadata=metadata,
         )
 
     def changed_role_ids_since(self, since: datetime | None) -> list[UUID]:

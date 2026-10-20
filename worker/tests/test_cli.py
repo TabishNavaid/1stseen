@@ -14,6 +14,7 @@ from uuid import UUID
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from firstseen import cli
+from firstseen.enrichment_fingerprints import EnrichmentFingerprint
 
 
 class Repository:
@@ -43,10 +44,16 @@ class Repository:
     def company_enrichment_fingerprints(self, company_ids):
         return {}
 
+    def company_enrichment_parts(self, company_ids):
+        return {}
+
     def enrichment_noop_keys(self):
         return {}
 
-    def save_enrichment_noop_keys(self, keys, *, run_id):
+    def enrichment_noop_state(self):
+        return {}, {}
+
+    def save_enrichment_noop_keys(self, keys, *, run_id, parts=None):
         type(self).noop_keys_saved = dict(keys)
 
     def finish_agent_run(self, run_id, *, status, error=None):
@@ -99,10 +106,19 @@ class IncrementalKeyRepository(Repository):
     def company_enrichment_fingerprints(self, company_ids):
         return {company_id: "stable" for company_id in company_ids}
 
+    def company_enrichment_parts(self, company_ids):
+        return {
+            company_id: EnrichmentFingerprint(fingerprint="stable", parts={"observations": "stable"})
+            for company_id in company_ids
+        }
+
     def enrichment_noop_keys(self):
         return {}
 
-    def save_enrichment_noop_keys(self, keys, *, run_id):
+    def enrichment_noop_state(self):
+        return {}, {}
+
+    def save_enrichment_noop_keys(self, keys, *, run_id, parts=None):
         IncrementalKeyRepository.saves.append(dict(keys))
 
     def record_tool_call(self, run_id, **kwargs):
@@ -566,7 +582,7 @@ class CliTests(unittest.TestCase):
         # Collection alone cannot produce a forecast, so the same pass must derive
         # the canonical-role and historical-event records forecasting depends on.
         with (
-            patch.object(cli, "_enrich_companies", return_value=([], 0, 0)) as enrich,
+            patch.object(cli, "_enrich_companies", return_value=([], 0, 0, {}, 0)) as enrich,
             patch.object(sys, "argv", ["firstseen", "ingest", "--all"]),
             redirect_stdout(StringIO()) as output,
         ):
@@ -1043,7 +1059,7 @@ class HistoricalRotationTests(unittest.TestCase):
         with (
             patch.object(cli, "IntelligenceRepository", HistoricalSliceRepository),
             patch.object(cli, "SourceIngestionService", Service),
-            patch.object(cli, "_enrich_companies", lambda *args, **kwargs: ([], 0, 0)),
+            patch.object(cli, "_enrich_companies", lambda *args, **kwargs: ([], 0, 0, {}, 0)),
             patch.object(cli.time, "monotonic", side_effect=clock),
             redirect_stdout(StringIO()) as output,
         ):

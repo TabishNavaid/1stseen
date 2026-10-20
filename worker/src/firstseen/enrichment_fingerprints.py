@@ -18,6 +18,7 @@ the company is enriched again.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 
@@ -51,3 +52,34 @@ def worker_fingerprint(settings: Settings) -> str:
 def skip_key(inputs: str, worker: str) -> str:
     """What a company's recorded no-op pass is compared by: its inputs' fingerprint and the worker's."""
     return sha256(f"{inputs}|{worker}".encode()).hexdigest()
+
+
+# The component the worker's own source and model configuration stands in for. It is not one of the database's
+# components, so it cannot collide with them, and it is reported the same way.
+WORKER_COMPONENT = "worker"
+# Reported when a company has a key and parts were not available on one side, so no component can be named.
+UNKNOWN_COMPONENT = "unknown"
+
+
+@dataclass(frozen=True)
+class EnrichmentFingerprint:
+    """A company's enrichment-input fingerprint and the component hashes it was built from.
+
+    `parts` is empty against a database without migration 202608140059. The fingerprint still decides the skip; only
+    the explanation of what moved is missing, and it is reported as missing rather than guessed at.
+    """
+
+    fingerprint: str
+    parts: dict[str, str] = field(default_factory=dict)
+
+
+def changed_components(stored: dict[str, str], current: dict[str, str]) -> tuple[str, ...]:
+    """Which components differ between a company's stored no-op pass and now.
+
+    Every component either side names is considered, so one that appears or disappears is named rather than ignored.
+    An empty result means the two agree on every component they name: with a differing fingerprint that can only be
+    the worker's own part, which the caller reports as `WORKER_COMPONENT`.
+    """
+    return tuple(
+        sorted(name for name in set(stored) | set(current) if stored.get(name) != current.get(name))
+    )

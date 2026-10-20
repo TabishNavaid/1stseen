@@ -18,8 +18,35 @@ import unittest
 from pathlib import Path
 
 MIGRATIONS = Path(__file__).resolve().parents[2] / "supabase/migrations"
-FINGERPRINT = MIGRATIONS / "202608140049_fingerprints_without_the_text.sql"
+
+
+def _latest_definition() -> Path:
+    """The newest migration that defines the fingerprint's components, found rather than named.
+
+    This test was pinned to 202608140049 by name, and 202608140059 then moved the component expressions into
+    `company_enrichment_fingerprint_parts` while 202608140060 changed one of them. A test named after one file would
+    have gone on checking a definition the database no longer uses, and column coverage is exactly the thing that
+    must not silently stop being checked -- an uncovered column is a change the skip can miss. So the file is
+    resolved: the last migration, in sequence, that declares the component block.
+    """
+    defining = [
+        path
+        for path in sorted(MIGRATIONS.glob("*.sql"))
+        if "as observations," in path.read_text() and "as fetches," in path.read_text()
+    ]
+    assert defining, "no migration defines the enrichment fingerprint's components"
+    return defining[-1]
+
+
+FINGERPRINT = _latest_definition()
+# The exclusions are declared as comments beside the definition that introduced them, and a later migration that
+# changes one expression does not restate them all, so they are read from every migration that declares any.
+EXCLUSION_SOURCES = sorted(MIGRATIONS.glob("*.sql"))
 MIN_REASON = 30
+
+
+def _exclusion_text() -> str:
+    return "\n".join(path.read_text() for path in EXCLUSION_SOURCES)
 
 # Every column of every table the fingerprint covers, as the migrations declare them today.
 COVERED_TABLES = {
@@ -108,7 +135,7 @@ def excluded_columns() -> dict[str, list[str]]:
     """Each `-- excluded: table.column -- reason` line, with its reason."""
     excluded: dict[str, list[str]] = {}
     for table, column, reason in re.findall(
-        r"-- excluded: ([a-z_]+)\.([a-z_]+) -- (.+)", FINGERPRINT.read_text()
+        r"-- excluded: ([a-z_]+)\.([a-z_]+) -- (.+)", _exclusion_text()
     ):
         excluded.setdefault(table, []).append(column) if reason.strip() else None
     return excluded
@@ -118,7 +145,7 @@ def exclusion_reasons() -> dict[tuple[str, str], str]:
     return {
         (table, column): reason.strip()
         for table, column, reason in re.findall(
-            r"-- excluded: ([a-z_]+)\.([a-z_]+) -- (.+)", FINGERPRINT.read_text()
+            r"-- excluded: ([a-z_]+)\.([a-z_]+) -- (.+)", _exclusion_text()
         )
     }
 

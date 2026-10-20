@@ -35,7 +35,14 @@ from .discovery import (
     postings_naming_company,
 )
 from .enrichment import EnrichmentSummary, EvidenceEnrichmentService
-from .enrichment_fingerprints import UNCHANGED_RESULT, skip_key, worker_fingerprint
+from .enrichment_fingerprints import (
+    UNCHANGED_RESULT,
+    UNKNOWN_COMPONENT,
+    WORKER_COMPONENT,
+    changed_components,
+    skip_key,
+    worker_fingerprint,
+)
 from .forecasting import Forecast, InsufficientEvidenceError, displayed_forecast_identity
 from .providers import ModelRouter
 from .readiness import (
@@ -180,13 +187,25 @@ def run_ingestion(company: str | None, *, collection: str = "all", max_seconds: 
     # had changed, so a 32% drop had to be argued for rather than shown.
     collection_seconds = round(time.monotonic() - started, 1)
     enrichment_started = time.monotonic()
-    enrichment_summaries, enrichment_failures, enrichment_unchanged = _enrich_companies(
+    (
+        enrichment_summaries,
+        enrichment_failures,
+        enrichment_unchanged,
+        enrichment_changed_by_component,
+        enrichment_never_converged,
+    ) = _enrich_companies(
         repository,
         sorted({source.company_id for source in collected}, key=str),
         run_id=run_id,
         router=router,
     )
-    enrichment = _enrichment_totals(enrichment_summaries, enrichment_failures, enrichment_unchanged)
+    enrichment = _enrichment_totals(
+        enrichment_summaries,
+        enrichment_failures,
+        enrichment_unchanged,
+        enrichment_changed_by_component,
+        enrichment_never_converged,
+    )
     enrichment_seconds = round(time.monotonic() - enrichment_started, 1)
     # Sources the budget left for the next run are not a failure: the run did what it had time for.
     deferred = len(sources) - len(collected)
@@ -234,7 +253,7 @@ def _enrich_companies(
     run_id: UUID,
     router: ModelRouter,
     force: bool = False,
-) -> tuple[list[EnrichmentSummary], int, int]:
+) -> tuple[list[EnrichmentSummary], int, int, dict[str, int], int]:
     """Derive canonical roles and historical openings from persisted evidence.
 
     Companies enrich independently and every outcome is audited, so one failing
@@ -251,16 +270,23 @@ def _enrich_companies(
         ),
     )
     summaries: list[EnrichmentSummary] = []
-    failures = unchanged = 0
+    failures = unchanged = never_converged = 0
+    # Which component of the fingerprint moved, per company, counted over the run. A company that was re-enriched
+    # although it held a key did so because something it reads changed, and the run now says what: "fetches" is a
+    # source's degraded verdict, "observations" a posting, "worker" this package's own source or model routes. Before
+    # this, a run could only say that eighty companies were re-enriched, and a day went into arguing about which of
+    # two causes it was instead of reading it (migration 202608140059).
+    changed_by_component: dict[str, int] = {}
     # A company whose inputs are exactly those of its last pass that changed nothing is not re-read or re-derived
     # (enrichment_fingerprints.py). The fingerprints are computed in the database, a hash per company.
     worker = worker_fingerprint(get_settings())
     try:
-        before = repository.company_enrichment_fingerprints(company_ids)
+        current = repository.company_enrichment_parts(company_ids)
     except APIError:
         # The fingerprint function (migration 202608140046) is not in this database yet: enrich every company.
-        before = {}
-    noop_keys = repository.enrichment_noop_keys()
+        current = {}
+    before = {company: item.fingerprint for company, item in current.items()}
+    noop_keys, stored_parts = repository.enrichment_noop_state()
     # Saved as each key is learned, not once at the end. A collection run that runs out of its 45 minutes is killed
     # from outside, mid-loop, so the single save after the loop was never reached: the run had moved every company's
     # fingerprint by enriching it and recorded none of the stabilisation, which destroys convergence rather than
@@ -268,17 +294,33 @@ def _enrich_companies(
     # passes to converge (measured on the rig: 0, then 21, then 58 of 58, and 165.6 s down to 1.1 s). Saving as we go
     # means a killed run keeps what it learned and the next one carries on from there.
     saved_keys = dict(noop_keys)
+    # The component hashes each kept key was taken from, written beside it so the next run can name what moved.
+    kept_parts: dict[str, dict[str, str]] = dict(stored_parts)
 
     def persist_keys() -> None:
         nonlocal saved_keys
         if noop_keys == saved_keys:
             return
         try:
-            repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+            repository.save_enrichment_noop_keys(noop_keys, run_id=run_id, parts=kept_parts)
         except APIError:
             # The skip is an optimisation: failing to record it costs a future pass, never this company's evidence.
             return
         saved_keys = dict(noop_keys)
+
+    def note_what_moved(company_id: UUID) -> tuple[str, ...]:
+        """Name the components that differ from this company's stored no-op pass, and count them for the run."""
+        stored = stored_parts.get(str(company_id), {})
+        now = current[company_id].parts if company_id in current else {}
+        if not stored or not now:
+            # One side has no components: the database predates migration 202608140059, or the key was stored before
+            # it did. Say so rather than attribute the change to a component nobody measured.
+            moved: tuple[str, ...] = (UNKNOWN_COMPONENT,)
+        else:
+            moved = changed_components(stored, now) or (WORKER_COMPONENT,)
+        for component in moved:
+            changed_by_component[component] = changed_by_component.get(component, 0) + 1
+        return moved
 
     for company_id in company_ids:
         started_at = datetime.now(UTC)
@@ -294,7 +336,15 @@ def _enrich_companies(
                 started_at=started_at,
             )
             continue
+        if key is not None and str(company_id) in noop_keys:
+            moved = note_what_moved(company_id)
+        else:
+            # No stored key: this company has never completed a pass that changed nothing, so nothing moved -- it
+            # has not converged yet. Counting it as a change would make a first run look like eighty changes.
+            moved = ()
+            never_converged += 1
         noop_keys.pop(str(company_id), None)
+        kept_parts.pop(str(company_id), None)
         try:
             summary = service.enrich_company(company_id)
         except Exception as exc:  # noqa: BLE001 - companies enrich independently
@@ -322,23 +372,37 @@ def _enrich_companies(
                 unchanged_inputs = False
             if unchanged_inputs:
                 noop_keys[str(company_id)] = key
+                if company_id in current and current[company_id].parts:
+                    kept_parts[str(company_id)] = dict(current[company_id].parts)
         persist_keys()
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",
             status="succeeded" if summary.complete else "partial",
             input_redacted={"company_id": str(company_id)},
-            output_redacted=summary.as_dict(),
+            output_redacted={**summary.as_dict(), "inputs_changed": list(moved)} if moved else summary.as_dict(),
             started_at=started_at,
         )
     persist_keys()
-    return summaries, failures, unchanged
+    return summaries, failures, unchanged, changed_by_component, never_converged
 
 
-def _enrichment_totals(summaries: list[EnrichmentSummary], failures: int, unchanged: int = 0) -> dict[str, object]:
+def _enrichment_totals(
+    summaries: list[EnrichmentSummary],
+    failures: int,
+    unchanged: int = 0,
+    changed_by_component: dict[str, int] | None = None,
+    never_converged: int = 0,
+) -> dict[str, object]:
     return {
         "companies": len(summaries) + failures + unchanged,
         "companies_unchanged": unchanged,
+        # Why the others were not. `inputs_changed_by_component` counts companies per moved component, and a company
+        # may name more than one; `companies_never_converged` are those with no stored no-op pass to compare against,
+        # which is the expected state for one pass after any worker change. Both are read with companies_unchanged:
+        # 0 unchanged with every company under one component is a component that moves on its own.
+        "inputs_changed_by_component": dict(sorted((changed_by_component or {}).items())),
+        "companies_never_converged": never_converged,
         "observations_considered": sum(item.observations_considered for item in summaries),
         "roles_matched": sum(item.roles_matched for item in summaries),
         "roles_created": sum(item.roles_created for item in summaries),
@@ -365,10 +429,10 @@ def run_enrichment(company: str | None, *, force: bool = False) -> int:
         input_fingerprint=sha256("|".join(str(item) for item in company_ids).encode()).hexdigest(),
     )
     router = ModelRouter.from_settings(settings, tracker=repository)
-    summaries, failures, unchanged = _enrich_companies(
+    summaries, failures, unchanged, changed_by_component, never_converged = _enrich_companies(
         repository, company_ids, run_id=run_id, router=router, force=force
     )
-    totals = _enrichment_totals(summaries, failures, unchanged)
+    totals = _enrichment_totals(summaries, failures, unchanged, changed_by_component, never_converged)
     status = (
         "failed"
         if company_ids and failures == len(company_ids)
