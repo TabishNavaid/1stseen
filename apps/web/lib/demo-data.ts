@@ -1,11 +1,32 @@
-import { forecastRolesSchema } from "@firstseen/shared";
-import { forecastBasis, type ForecastBasis } from "@/lib/forecast-basis";
-import { noForecastExplanation } from "@/lib/forecast-gap";
+import type { FixtureListFacts } from "@/lib/dashboard-query";
+import { forecastRolesSchema, type ForecastRole } from "@firstseen/shared";
+import { formatDay } from "./dates.ts";
+import { forecastBasis, type ForecastBasis } from "./forecast-basis.ts";
+import { noForecastExplanation } from "./forecast-gap.ts";
 import type { RoleView } from "@/lib/role-view";
+
+/**
+ * A fixture date, as a distance in days from the day it is rendered on.
+ *
+ * These were absolute dates, and they rotted: by 2026-10-16 every one of the thirty-nine was in the past, and the
+ * role page's fixture forecast had quietly become a window that closed weeks ago. An offset cannot go stale, and
+ * `apps/web/tests/fixture-dates.test.mjs` fails if an absolute one is written here again.
+ */
+function fixtureClock(now: Date) {
+  const at = (offset: number) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offset));
+  return {
+    day: (offset: number) => at(offset).toISOString().slice(0, 10),
+    stamp: (offset: number, time: string) => `${at(offset).toISOString().slice(0, 10)}T${time}`,
+  };
+}
+
+
 export type { ForecastRole } from "@firstseen/shared";
 
 // Product fixtures exercise the full UI without presenting synthetic dates as live intelligence.
-export const forecastRoles = forecastRolesSchema.parse([
+export function forecastRoles(now: Date): ForecastRole[] {
+  const { day } = fixtureClock(now);
+  return forecastRolesSchema.parse([
   {
     id: "northstar-swe-intern",
     company: "Northstar",
@@ -34,9 +55,10 @@ export const forecastRoles = forecastRolesSchema.parse([
       { label: "Window width", value: "18 days", tone: "neutral" },
     ],
     evidence: [
-      { label: "Archived job posting", detail: "Role family and location matched", date: "Sep 11, 2025", kind: "archive" },
-      { label: "Campus page change", detail: "Student programs copy updated", date: "Aug 11, 2026", kind: "signal" },
-      { label: "Recruiter activity", detail: "2 relevant public posts detected", date: "Aug 10, 2026", kind: "signal" },
+      { label: "Posting on the career page", detail: "Seen on the company's own student programs page", date: formatDay(day(29)), kind: "posting" },
+      { label: "Archived job posting", detail: "Role family and location matched", date: formatDay(day(-337)), kind: "archive" },
+      { label: "Campus page change", detail: "Student programs copy updated", date: formatDay(day(-3)), kind: "signal" },
+      { label: "Recruiter activity", detail: "2 relevant public posts detected", date: formatDay(day(-4)), kind: "signal" },
     ],
   },
   {
@@ -67,8 +89,8 @@ export const forecastRoles = forecastRolesSchema.parse([
       { label: "Window width", value: "22 days", tone: "neutral" },
     ],
     evidence: [
-      { label: "Archived job posting", detail: "Opening and closing dates captured", date: "Oct 17, 2025", kind: "archive" },
-      { label: "Program handbook", detail: "Annual cohort language confirmed", date: "Mar 2, 2026", kind: "posting" },
+      { label: "Archived job posting", detail: "Opening and closing dates captured", date: formatDay(day(-301)), kind: "archive" },
+      { label: "Program handbook", detail: "Annual cohort language confirmed", date: formatDay(day(-165)), kind: "posting" },
     ],
   },
   {
@@ -99,11 +121,83 @@ export const forecastRoles = forecastRolesSchema.parse([
       { label: "Window width", value: "13 days", tone: "positive" },
     ],
     evidence: [
-      { label: "ATS taxonomy", detail: "Role category added without a posting", date: "Aug 12, 2026", kind: "signal" },
-      { label: "Archived job posting", detail: "Role title normalized to this family", date: "Aug 27, 2025", kind: "archive" },
+      { label: "ATS taxonomy", detail: "Role category added without a posting", date: formatDay(day(-2)), kind: "signal" },
+      { label: "Archived job posting", detail: "Role title normalized to this family", date: formatDay(day(-352)), kind: "archive" },
+    ],
+  },
+  {
+    id: "harbor-mech-intern",
+    company: "Harbor",
+    companyMark: "H",
+    role: "Mechanical Engineering Intern",
+    track: "Internship",
+    location: "Seattle, WA",
+    window: "Mar 2 – Mar 20",
+    daysUntil: 0,
+    confidence: 54,
+    readiness: 40,
+    status: "quiet",
+    historicalCycles: ["Mar 9", "Mar 4"],
+    signalSummary: "No change on the campus page since the last cycle.",
+    nextDeadline: "Resume lock · Feb 16",
+    deadlines: [{ label: "Resume lock", date: "Feb 16" }],
+    confidenceFactors: [
+      { label: "2 observed cycles", value: "+ fair", tone: "neutral" },
+      { label: "Window width", value: "18 days", tone: "neutral" },
+    ],
+    evidence: [
+      { label: "Archived job posting", detail: "Matched on role family and location", date: formatDay(day(-523)), kind: "archive" },
+    ],
+  },
+  {
+    id: "beacon-quant-newgrad",
+    company: "Beacon",
+    companyMark: "B",
+    role: "Quantitative Researcher, New Grad",
+    track: "New grad",
+    location: "Chicago, IL",
+    window: "Jan 8 – Jan 26",
+    daysUntil: 0,
+    confidence: 63,
+    readiness: 72,
+    status: "signal",
+    historicalCycles: ["Jan 14", "Jan 9", "Jan 20"],
+    signalSummary: "Campus page listed a new application deadline this week.",
+    nextDeadline: "Referral asks · Dec 20",
+    deadlines: [{ label: "Referral asks", date: "Dec 20" }],
+    confidenceFactors: [
+      { label: "3 observed cycles", value: "+ strong", tone: "positive" },
+      { label: "Signal freshness", value: "2 days", tone: "positive" },
+    ],
+    evidence: [
+      { label: "Posting on the career page", detail: "Seen on the company's own careers page", date: formatDay(day(-217)), kind: "posting" },
+      { label: "Campus page change", detail: "Deadline text added", date: formatDay(day(-255)), kind: "signal" },
+    ],
+  },
+  {
+    id: "cedar-design-intern",
+    company: "Cedar",
+    companyMark: "C",
+    role: "Product Design Intern",
+    track: "Internship",
+    location: "Remote · US",
+    window: "No window yet",
+    daysUntil: 0,
+    confidence: 0,
+    readiness: 0,
+    status: "quiet",
+    historicalCycles: [],
+    signalSummary: "One sighting, and nothing since.",
+    nextDeadline: "Nothing scheduled",
+    deadlines: [],
+    confidenceFactors: [],
+    evidence: [
+      { label: "Archived job posting", detail: "Seen once in an archived capture", date: formatDay(day(-803)), kind: "archive" },
     ],
   },
 ]);
+}
+
 
 export type OpenedRole = {
   id: string;
@@ -153,7 +247,9 @@ export const agentEvents = [
 
 // Development fixture detail records, shaped exactly like the real reader output so
 // the role page has one code path. Reserved `.example` sources only.
-export const fixtureRoleViews: Record<string, RoleView> = {
+export function fixtureRoleViews(now: Date): Record<string, RoleView> {
+  const { day, stamp } = fixtureClock(now);
+  return {
   "northstar-swe-intern": {
     origin: "fixture",
     id: "northstar-swe-intern",
@@ -170,18 +266,18 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     locationScope: "United States · Hybrid",
     forecast: {
       forecastId: "fixture-forecast-northstar",
-      asOf: "2026-08-14",
-      expectedOpening: "2026-09-12",
-      windowStart: "2026-09-04",
-      windowEnd: "2026-09-22",
+      asOf: day(0),
+      expectedOpening: day(29),
+      windowStart: day(21),
+      windowEnd: day(39),
       daysUntilWindow: 21,
       confidence: 71,
       method: "hierarchical_circular_shrinkage",
       modelVersion: "hierarchical-circular-shrinkage-v2",
       historyCount: 4,
       inputFingerprint: "f01de529a38345d05364a7518f04e193c78839db25b2bb3003cfed957009a6e5",
-      forecastedAt: "2026-08-14T09:18:00Z",
-      lastVerifiedAt: "2026-08-14T09:18:00Z",
+      forecastedAt: stamp(0, "09:18:00Z"),
+      lastVerifiedAt: stamp(0, "09:18:00Z"),
       calibratedProbability: 0.71,
       priorEffectiveSampleSize: 2.5,
       confidenceFactors: [
@@ -196,21 +292,21 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     insufficientEvidence: null,
     forecastRefusal: null,
     forecastVersions: [
-      { forecastId: "fixture-forecast-northstar", asOf: "2026-08-14", expectedOpening: "2026-09-12", windowStart: "2026-09-04", windowEnd: "2026-09-22", confidence: 71, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.74, 0.26), change: { notes: ["Window moved 2 days earlier"], changedAt: "2026-08-14T09:18:00Z" } },
-      { forecastId: "fixture-forecast-northstar-prev", asOf: "2026-08-11", expectedOpening: "2026-09-14", windowStart: "2026-09-07", windowEnd: "2026-09-25", confidence: 69, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.61, 0.39), change: null },
+      { forecastId: "fixture-forecast-northstar", asOf: day(0), expectedOpening: day(29), windowStart: day(21), windowEnd: day(39), confidence: 71, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.74, 0.26), change: { notes: ["Window moved 2 days earlier"], changedAt: stamp(0, "09:18:00Z") } },
+      { forecastId: "fixture-forecast-northstar-prev", asOf: day(-3), expectedOpening: day(31), windowStart: day(24), windowEnd: day(42), confidence: 69, modelVersion: "hierarchical-circular-shrinkage-v2", basis: forecastBasis(0.61, 0.39), change: null },
     ],
     cycles: [
-      { id: "fixture-cycle-2025", openedOn: "2025-09-11", closedOn: null, windowStart: "2025-09-11", windowEnd: "2025-09-11", precision: "exact", uncertaintyDays: 0, uncertaintyReason: "The structured job record supplied this publication date.", sourceUrl: "https://jobs.northstar.example/swe-intern", sourceKind: "official", observedAt: "2025-09-11T08:00:00Z", evidenceQuote: "first_published: 2025-09-11" },
-      { id: "fixture-cycle-2024", openedOn: "2024-09-08", closedOn: null, windowStart: null, windowEnd: "2024-09-08", precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "1stSeen first detected the matching posting on this date; it may have opened earlier.", sourceUrl: "https://jobs.northstar.example/swe-intern", sourceKind: "official", observedAt: "2024-09-08T08:00:00Z", evidenceQuote: "Software Engineering Intern" },
-      { id: "fixture-cycle-2023", openedOn: "2023-09-12", closedOn: null, windowStart: null, windowEnd: "2023-09-12", precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "An archive capture proves the content existed by this time; capture time is not a publication date.", sourceUrl: "https://careers.northstar.example/students", sourceKind: "archive", observedAt: "2023-09-12T04:00:00Z", evidenceQuote: "Software Engineering Intern — applications open" },
-      { id: "fixture-cycle-2022", openedOn: "2022-09-22", closedOn: null, windowStart: "2022-09-15", windowEnd: "2022-09-22", precision: "bounded", uncertaintyDays: 7, uncertaintyReason: "A complete capture without the role was followed by a matching capture.", sourceUrl: "https://careers.northstar.example/students", sourceKind: "archive", observedAt: "2022-09-22T04:00:00Z", evidenceQuote: "Software Engineering Intern — applications open" },
+      { id: "fixture-cycle-2025", openedOn: day(-337), closedOn: null, windowStart: day(-337), windowEnd: day(-337), precision: "exact", uncertaintyDays: 0, uncertaintyReason: "The structured job record supplied this publication date.", sourceUrl: "https://jobs.northstar.example/swe-intern", sourceKind: "official", observedAt: stamp(-337, "08:00:00Z"), evidenceQuote: `first_published: ${day(-337)}` },
+      { id: "fixture-cycle-2024", openedOn: day(-705), closedOn: null, windowStart: null, windowEnd: day(-705), precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "1stSeen first detected the matching posting on this date; it may have opened earlier.", sourceUrl: "https://jobs.northstar.example/swe-intern", sourceKind: "official", observedAt: stamp(-705, "08:00:00Z"), evidenceQuote: "Software Engineering Intern" },
+      { id: "fixture-cycle-2023", openedOn: day(-1067), closedOn: null, windowStart: null, windowEnd: day(-1067), precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "An archive capture proves the content existed by this time; capture time is not a publication date.", sourceUrl: "https://careers.northstar.example/students", sourceKind: "archive", observedAt: stamp(-1067, "04:00:00Z"), evidenceQuote: "Software Engineering Intern — applications open" },
+      { id: "fixture-cycle-2022", openedOn: day(-1422), closedOn: null, windowStart: day(-1429), windowEnd: day(-1422), precision: "bounded", uncertaintyDays: 7, uncertaintyReason: "A complete capture without the role was followed by a matching capture.", sourceUrl: "https://careers.northstar.example/students", sourceKind: "archive", observedAt: stamp(-1422, "04:00:00Z"), evidenceQuote: "Software Engineering Intern — applications open" },
     ],
     precisionCounts: { exact: 1, bounded: 1, observed_by: 2 },
     provenance: [
-      { observationId: "fixture-obs-1", sourceUrl: "https://jobs.northstar.example/swe-intern", observedAt: "2025-09-11T08:00:00Z", contentHash: "a".repeat(64), extractionMethod: "api", contribution: "role_history", weight: 0.56, rationale: "Exact source-supplied publication date for the 2025 cycle.", precision: "exact", signalKind: null },
-      { observationId: "fixture-obs-4", sourceUrl: "https://jobs.lumen.example/engineering-intern", observedAt: "2025-09-02T08:00:00Z", contentHash: "d".repeat(64), extractionMethod: "api", contribution: "role_family_prior", weight: 0.26, rationale: "A similar internship program's timing, borrowed while this program's own history is short.", precision: "exact", signalKind: null },
-      { observationId: "fixture-obs-2", sourceUrl: "https://careers.northstar.example/students", observedAt: "2023-09-12T04:00:00Z", contentHash: "b".repeat(64), extractionMethod: "archive", contribution: "role_history", weight: 0.18, rationale: "Archive capture proves presence only, so it carries less date weight.", precision: "observed_by", signalKind: null },
-      { observationId: "fixture-obs-3", sourceUrl: "https://careers.northstar.example/students", observedAt: "2026-08-11T06:42:00Z", contentHash: "c".repeat(64), extractionMethod: "http", contribution: "signal", weight: 0, rationale: "Recent official campus page change raises confidence only.", precision: null, signalKind: "internship_program_page_changed" },
+      { observationId: "fixture-obs-1", sourceUrl: "https://jobs.northstar.example/swe-intern", observedAt: stamp(-337, "08:00:00Z"), contentHash: "a".repeat(64), extractionMethod: "api", contribution: "role_history", weight: 0.56, rationale: "Exact source-supplied publication date for the 2025 cycle.", precision: "exact", signalKind: null },
+      { observationId: "fixture-obs-4", sourceUrl: "https://jobs.lumen.example/engineering-intern", observedAt: stamp(-346, "08:00:00Z"), contentHash: "d".repeat(64), extractionMethod: "api", contribution: "role_family_prior", weight: 0.26, rationale: "A similar internship program's timing, borrowed while this program's own history is short.", precision: "exact", signalKind: null },
+      { observationId: "fixture-obs-2", sourceUrl: "https://careers.northstar.example/students", observedAt: stamp(-1067, "04:00:00Z"), contentHash: "b".repeat(64), extractionMethod: "archive", contribution: "role_history", weight: 0.18, rationale: "Archive capture proves presence only, so it carries less date weight.", precision: "observed_by", signalKind: null },
+      { observationId: "fixture-obs-3", sourceUrl: "https://careers.northstar.example/students", observedAt: stamp(-3, "06:42:00Z"), contentHash: "c".repeat(64), extractionMethod: "http", contribution: "signal", weight: 0, rationale: "Recent official campus page change raises confidence only.", precision: null, signalKind: "internship_program_page_changed" },
     ],
     // Development fixture weights, as forecast_evidence holds them: 74% the program's own openings, 26% borrowed.
     provenanceGroups: [
@@ -221,8 +317,8 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     provenanceTotal: 4,
     provenancePage: 1,
     signals: [
-      { id: "fixture-signal-1", kind: "internship_program_page_changed", observedAt: "2026-08-11T06:42:00Z", strength: 0.5, reliability: 0.9, evidenceQuote: "Student opportunities content and application preparation language changed.", sourceUrl: "https://careers.northstar.example/students", extractionMethod: "static_html" },
-      { id: "fixture-signal-2", kind: "community_recruiting_discussion", observedAt: "2026-08-10T18:05:00Z", strength: 0.3, reliability: 0.42, evidenceQuote: "Two public posts referenced fall university recruiting preparation.", sourceUrl: "https://community.northstar.example/thread", extractionMethod: "llm" },
+      { id: "fixture-signal-1", kind: "internship_program_page_changed", observedAt: stamp(-3, "06:42:00Z"), strength: 0.5, reliability: 0.9, evidenceQuote: "Student opportunities content and application preparation language changed.", sourceUrl: "https://careers.northstar.example/students", extractionMethod: "static_html" },
+      { id: "fixture-signal-2", kind: "community_recruiting_discussion", observedAt: stamp(-4, "18:05:00Z"), strength: 0.3, reliability: 0.42, evidenceQuote: "Two public posts referenced fall university recruiting preparation.", sourceUrl: "https://community.northstar.example/thread", extractionMethod: "llm" },
     ],
     currentPostings: [],
     milestones: [],
@@ -249,7 +345,7 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     forecastRefusal: null,
     forecastVersions: [],
     cycles: [
-      { id: "fixture-meridian-2025", openedOn: "2025-10-17", closedOn: null, windowStart: null, windowEnd: "2025-10-17", precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "An archive capture proves the content existed by this time.", sourceUrl: "https://careers.meridian.example/apm", sourceKind: "archive", observedAt: "2025-10-17T04:00:00Z", evidenceQuote: "Associate Product Manager, University Grad" },
+      { id: "fixture-meridian-2025", openedOn: day(-301), closedOn: null, windowStart: null, windowEnd: day(-301), precision: "observed_by", uncertaintyDays: null, uncertaintyReason: "An archive capture proves the content existed by this time.", sourceUrl: "https://careers.meridian.example/apm", sourceKind: "archive", observedAt: stamp(-301, "04:00:00Z"), evidenceQuote: "Associate Product Manager, University Grad" },
     ],
     precisionCounts: { exact: 0, bounded: 0, observed_by: 1 },
     provenance: [],
@@ -264,6 +360,8 @@ export const fixtureRoleViews: Record<string, RoleView> = {
     observationCount: 2,
   },
 };
+}
+
 
 /**
  * Development fixture: the share of each fixture forecast's weight from its own openings and from comparable programs,
@@ -273,9 +371,57 @@ const fixtureWeights: Record<string, [own: number, borrowed: number]> = {
   "northstar-swe-intern": [0.74, 0.26],
   "meridian-apm": [0.31, 0.69],
   "atlas-data-science": [0.42, 0.58],
+  "harbor-mech-intern": [0.18, 0.82],
+  "beacon-quant-newgrad": [0.88, 0.12],
 };
 
 export function fixtureBasis(roleId: string): ForecastBasis | null {
   const weights = fixtureWeights[roleId];
   return weights ? forecastBasis(weights[0], weights[1]) : null;
 }
+
+/**
+ * What each fixture role looks like to the roles list, beyond what `ForecastRole` carries.
+ *
+ * The shared fixture type describes one program's detail card: a display window like "Sep 4 – Sep 22", a
+ * non-negative `daysUntil`, and evidence by source rather than by date precision. The list needs other things — an
+ * expected date with a real interval, the precision counts behind it, and whether the reader follows it — and none
+ * of them can be bent out of the shared schema without changing a contract that exists for a different purpose.
+ *
+ * The window is held as offsets in days rather than as dates on purpose. A fixture with fixed dates is only
+ * honest on the day it was written: every one of them drifts into the same state as the calendar moves, which is
+ * how the list came to have no dated forecast in it at all. Offsets mean the set spans the three window states
+ * (lib/forecast-window.ts) on every day it is ever rendered, and `apps/web/tests/fixture-coverage.test.mjs` fails
+ * if it stops.
+ */
+export const fixtureListFacts: Record<string, FixtureListFacts> = {
+  // A window still ahead: the ordinary "Likely around" case.
+  "northstar-swe-intern": {
+    discipline: "software_engineering", season: "fall", targetYear: 2027, followed: true, forecastable: true,
+    outlook: { startsIn: 24, expectedIn: 38, endsIn: 52 }, exactEvents: 2, boundedEvents: 1, observedEvents: 1,
+  },
+  // A window that has begun, with the expected date still to come.
+  "meridian-apm": {
+    discipline: "product_management", season: "summer", targetYear: 2027, followed: false, forecastable: true,
+    outlook: { startsIn: -9, expectedIn: 11, endsIn: 27 }, exactEvents: 1, boundedEvents: 0, observedEvents: 2,
+  },
+  // The expected date has gone by and nothing has been seen open.
+  "atlas-data-science": {
+    discipline: "data", season: "summer", targetYear: null, followed: false, forecastable: true,
+    outlook: { startsIn: -30, expectedIn: -6, endsIn: 8 }, exactEvents: 0, boundedEvents: 2, observedEvents: 0,
+  },
+  "harbor-mech-intern": {
+    discipline: "mechanical_engineering", season: "spring", targetYear: 2027, followed: false, forecastable: true,
+    outlook: { startsIn: 96, expectedIn: 110, endsIn: 124 }, exactEvents: 0, boundedEvents: 0, observedEvents: 2,
+  },
+  "beacon-quant-newgrad": {
+    discipline: "quantitative", season: "winter", targetYear: 2027, followed: true, forecastable: true,
+    outlook: { startsIn: -4, expectedIn: 14, endsIn: 30 }, exactEvents: 3, boundedEvents: 0, observedEvents: 0,
+  },
+  // A role the model refused a window: it is listed and counted like any other, with the reason in place of a date.
+  "cedar-design-intern": {
+    discipline: null, season: "unknown", targetYear: null, followed: false, forecastable: false,
+    // No dated opening at all, which is both the "none" precision and the reason this role has no window.
+    outlook: null, exactEvents: 0, boundedEvents: 0, observedEvents: 0,
+  },
+};

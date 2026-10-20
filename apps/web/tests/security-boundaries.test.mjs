@@ -1,8 +1,44 @@
+/**
+ * The boundaries that decide who a request is, checked by making the request.
+ *
+ * These used to be read as source text — `readFileSync` and a regular expression over the Worker entry, including
+ * one that asserted a header was deleted *before* it was set by comparing two `indexOf` results. A boundary
+ * verified by the order of two strings in a file is not verified: the file can keep saying the right thing while
+ * the deployed behaviour changes underneath it.
+ *
+ * The Worker entry cannot be imported directly — it pulls in vinext's virtual modules — but the *built* Worker can
+ * be called, which is what the rest of the suite already does. So every assertion here that can be made by sending
+ * a request is, and the few that cannot say why in place.
+ */
+
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { GUEST_AGENT_HEADER } from "../cloudflare/guest-agent.ts";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
+
+/** One request against the built Worker, with no session and no Durable Object binding. */
+async function post(pathname, body, headers = {}) {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${Math.random()}`);
+  const { default: worker } = await import(workerUrl.href);
+  const response = await worker.fetch(
+    new Request(`http://localhost${pathname}`, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  return { status: response.status, body: await response.text() };
+}
+
+const QUESTION = { question: "When does it open?" };
+const REPLAY = { role_id: "00000000-0000-4000-8000-000000000001", target_year: 2025, forecast_cutoff: "2025-06-01" };
+/** Headers a public Worker will happily accept from anyone, and must never read as an identity. */
+const FORGED_IDENTITY = {
+  "oai-authenticated-user-id": "user-forged",
+  "oai-authenticated-user-email": "forged@example.com",
+  "x-firstseen-user-id": "00000000-0000-4000-8000-0000000000ff",
+};
 
 test("OAuth credentials are encrypted with provider- and user-bound authenticated data", async () => {
   // Both integrations share lib/oauth-token-crypto.ts. tests/oauth-integrations.test.mjs
@@ -30,22 +66,30 @@ test("OAuth callbacks bind state to the initiating authenticated user", async ()
   assert.match(gmailCallback, /expectedUserId !== auth\.userId/);
 });
 
-test("agent and replay routes default closed outside authenticated sessions", async () => {
-  const shared = await read("../lib/agent-auth.ts");
-  assert.match(shared, /NODE_ENV !== "production"/);
-  assert.match(shared, /ALLOW_UNAUTHENTICATED_AGENT_DEV === "true"/);
-  const replay = await read("../app/api/forecast-replay/route.ts");
-  assert.match(replay, /const allowUnauthenticatedDev = unauthenticatedDevAllowed\(\);/);
-  assert.match(replay, /if \(!user && !allowUnauthenticatedDev\)/);
-  // The agent route's only signed-out path is a guest the Worker entry has rate-limited; the development bypass is gone.
+test("replay refuses a request with no session, and a forged identity does not change that", async () => {
+  const plain = await post("/api/forecast-replay", REPLAY);
+  assert.equal(plain.status, 401, plain.body);
+  const forged = await post("/api/forecast-replay", REPLAY, FORGED_IDENTITY);
+  assert.deepEqual(forged, plain, "headers anyone can send must not change the answer");
+});
+
+test("the entry strips a client's own guest header, so forging it buys nothing", async () => {
+  // The route lets a signed-out question through only when the Worker entry marked it allowed, after the limits.
+  // Forging that header is the obvious attack.
+  //
+  // It has to be asked for with a session cookie on it. Without one the entry takes its guest branch, finds no
+  // limiter bound, and answers 503 before it ever forwards the request — so whether it stripped the header is
+  // invisible, and a test that only sends the header passes even when the entry trusts it. (Checked by deleting
+  // the strip and rebuilding: the header-only request answered identically, the request below did not.)
+  const cookie = { cookie: "sb-abc-auth-token=not-a-real-session" };
+  const plain = await post("/api/recruiting-agent", QUESTION, cookie);
+  const forged = await post("/api/recruiting-agent", QUESTION, { ...cookie, [GUEST_AGENT_HEADER]: "allowed" });
+  assert.equal(plain.status, 401, plain.body);
+  assert.deepEqual(forged, plain, "a forged guest header carried a request past the sign-in gate");
+
+  // Still worth reading once: the development bypass is gone from the route entirely, which no request can show.
   const agent = await read("../app/api/recruiting-agent/route.ts");
-  assert.match(agent, /const guest = !user && request\.headers\.get\(GUEST_AGENT_HEADER\) === "allowed";/);
-  assert.match(agent, /if \(!user && !guest\)/);
   assert.doesNotMatch(agent, /unauthenticatedDevAllowed|ALLOW_UNAUTHENTICATED_AGENT_DEV/);
-  const entry = await read("../cloudflare/index.ts");
-  const dropped = entry.indexOf("headers.delete(GUEST_AGENT_HEADER);");
-  const granted = entry.indexOf('headers.set(GUEST_AGENT_HEADER, "allowed");');
-  assert.ok(dropped > 0 && granted > dropped, "the entry drops a client's guest header before it can set its own");
 });
 
 test("only a Supabase identity may scope an agent answer to a watchlist", async () => {
@@ -62,6 +106,11 @@ test("only a Supabase identity may scope an agent answer to a watchlist", async 
 });
 
 test("the readiness route derives ownership from the session, never the request body", async () => {
+  // A body carrying someone else's id is refused for want of a session, rather than acted on for the id it names.
+  const withOwnerInBody = await post("/api/readiness", { role_id: REPLAY.role_id, user_id: FORGED_IDENTITY["x-firstseen-user-id"] });
+  assert.equal(withOwnerInBody.status, 401, withOwnerInBody.body);
+  assert.deepEqual(withOwnerInBody, await post("/api/readiness", { role_id: REPLAY.role_id }), "the body's user_id changed the answer");
+
   const source = await read("../app/api/readiness/route.ts");
   assert.match(source, /const auth = await authenticatedUser\(\);/);
   assert.match(source, /requestReadinessPlan\(auth\.userId, parsed\.data\.role_id\)/);
@@ -72,6 +121,13 @@ test("the readiness route derives ownership from the session, never the request 
 });
 
 test("onboarding writes and plans only for the signed-in user", async () => {
+  // Signed out, the route never reaches a write. It answers the same whether or not the body names an owner, which
+  // is as far as a request can show here: without Supabase configured it stops at 503 before the origin check, so
+  // the same-origin rule below is still read rather than exercised.
+  const named = await post("/api/onboarding", { fields: [], user_id: FORGED_IDENTITY["x-firstseen-user-id"] });
+  assert.deepEqual(named, await post("/api/onboarding", { fields: [] }), "the body's user_id changed the answer");
+  assert.notEqual(named.status, 200, named.body);
+
   const source = await read("../app/api/onboarding/route.ts");
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.match(code, /supabase\.auth\.getUser\(\)/);

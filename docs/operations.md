@@ -438,6 +438,35 @@ health check four times a day at about a minute each (120), the weekly backup at
 backtest at about 3. Storage: two weekly backups at about 51 MiB each, plus JSON summaries kept 14 to 30 days, stay
 under 120 MB. A private repository needs a paid plan or a lower collection cadence; a public one runs as is.
 
+## Known issues we did not cause
+
+### `Uncaught SyntaxError: Identifier 'a' has already been declared`, once per page
+
+Every page logs this once, in every browser, on every load. It is vinext's own streamed-icon bootstrap: the
+framework emits that inline script **twice** into each document, and the script opens with a top-level
+`const a='data-vinext-streamed-icon'`. A classic inline script's top-level `const` lives in the shared global
+lexical scope, so the second copy throws while being parsed, before it runs.
+
+Measured 2026-10-16 on production: exactly two copies and exactly one error on `/`, `/roles`, `/opened` and
+`/methodology`, over 24 loads, on cache hits and misses alike. It is in the bytes, so a slow connection or a cold
+cache changes nothing.
+
+It is cosmetic. The first copy runs and does the work — on `/roles`, three icons are hoisted into `<head>` and none
+are left in `<body>` — and the second is redundant. A classic script that fails to parse stops no other script, and
+React hydrates from module scripts, which have their own scope. It is specifically **not** the cause of a page
+failing to render: `/` logs the error and renders completely.
+
+Deliberately not patched. Silencing someone else's bootstrap to clear a console message is not worth the risk of
+owning their script. Revisit when vinext is next upgraded; if it is still there, report it upstream.
+
+Reproduce with:
+
+```bash
+curl -s https://1stseen.win/ | grep -c "const a='data-vinext-streamed-icon'"
+```
+
+Two means the bug is still present. One means it is fixed.
+
 ## Backtest history
 
 `backtest.yml` now also runs monthly, and `scripts/backtest-history.mjs` lists every persisted run oldest first with its

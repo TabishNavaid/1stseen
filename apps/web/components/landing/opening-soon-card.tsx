@@ -11,7 +11,7 @@ import type { OpeningSoonRole } from "@/lib/landing-data";
 export function OpeningSoonCard({ role, today }: { role: OpeningSoonRole; today: string }) {
   const { forecast } = role;
   return (
-    <li className="card lift relative flex h-full flex-col p-5">
+    <li data-reveal-item className="card lift relative flex h-full flex-col p-5">
       <span className="flex items-center gap-3">
         <CompanyMark company={role.company} size="sm" />
         <span className="min-w-0">

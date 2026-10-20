@@ -11,7 +11,8 @@ import { plainNoForecastReason } from "@/lib/forecast-gap";
  * do exist.
  *
  * It keeps the forecast row's columns so the list stays one column of dates and one of names, with the reason
- * standing where a date would be rather than a gap where a reader expects one.
+ * standing where a date would be rather than a gap where a reader expects one. A role with no window can still have
+ * a posting up, and that is the fact worth leading with when it does.
  */
 export function InsufficientRoleRow({ item }: { item: DashboardListItem }) {
   return (
@@ -25,8 +26,17 @@ export function InsufficientRoleRow({ item }: { item: DashboardListItem }) {
         <p className="mt-1 truncate text-caption text-ink-subtle">{roleMeta(item)}</p>
       </div>
       <div className="col-start-2 sm:col-start-3 sm:text-right">
-        <p className="flex items-center gap-1.5 text-caption font-semibold text-ink-muted sm:justify-end"><Icon name="circle-dashed" size={12} />No date yet</p>
-        <p className="mt-1.5 text-caption leading-5 text-ink-subtle">{plainNoForecastReason(item.exactEvents + item.boundedEvents + item.observedEvents)}</p>
+        {item.listedNow ? (
+          <>
+            <p className="heading-display text-2xl leading-none text-date-confirmed-ink sm:text-right">Open now</p>
+            <p className="mt-2.5 text-caption text-ink-muted">Applications are open</p>
+          </>
+        ) : (
+          <>
+            <p className="flex items-center gap-1.5 text-caption font-semibold text-ink-muted sm:justify-end"><Icon name="circle-dashed" size={12} />No date yet</p>
+            <p className="mt-1.5 text-caption leading-5 text-ink-subtle">{plainNoForecastReason(item.exactEvents + item.boundedEvents + item.observedEvents)}</p>
+          </>
+        )}
       </div>
       <div className="col-start-2 sm:col-start-4" />
     </article>

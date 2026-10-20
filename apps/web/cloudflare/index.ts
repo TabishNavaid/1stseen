@@ -9,9 +9,9 @@ import {
   guestAgentAllowance,
   guestLimitResponse,
   type GuestAgentLimits,
-} from "./guest-agent";
-import { frontDoorRedirect } from "./front-door";
-import { durableAuthLimits, durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter";
+} from "./guest-agent.ts";
+import { frontDoorRedirect } from "./front-door.ts";
+import { durableAuthLimits, durableGuestLimits, type DurableObjectNamespaceLike } from "./guest-limiter.ts";
 import {
   AUTH_ATTEMPTS_PER_ADDRESS,
   AUTH_LIMITED_ROUTES,
@@ -19,13 +19,13 @@ import {
   AUTH_VERIFICATIONS_PER_ADDRESS,
   authLimitAllowance,
   authLimitResponse,
-} from "./auth-limits";
-import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache";
-import { withPageStatus } from "./page-status";
-import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers";
+} from "./auth-limits.ts";
+import { guestCachePath, hasSessionCookie, memoizedVersion, serveGuestPage, type GuestCache } from "./guest-cache.ts";
+import { withPageStatus } from "./page-status.ts";
+import { contentSecurityPolicy, createNonce, withSecurityHeaders } from "./security-headers.ts";
 
 // Durable Object classes must be exported from the Worker's main module.
-export { GuestQuestionLimiter } from "./guest-limiter";
+export { GuestQuestionLimiter } from "./guest-limiter.ts";
 
 interface Env extends GuestAgentLimits {
   ASSETS: Fetcher;

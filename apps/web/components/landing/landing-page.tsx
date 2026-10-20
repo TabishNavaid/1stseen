@@ -4,6 +4,7 @@ import { CountUp } from "@/components/count-up";
 import { HandMark } from "@/components/brand/hand-mark";
 import { Doodle } from "@/components/doodle";
 import { NewSticker, openedJustNow } from "@/components/brand/marks";
+import { LandingMotion } from "@/components/landing/landing-motion";
 import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { StatusLine } from "@/components/landing/status-line";
@@ -103,6 +104,8 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
   return (
     <div className="flex-1 bg-canvas text-ink">
       {header}
+      {/* The only route that loads an animation library, and only when motion is wanted (landing-motion.tsx). */}
+      <LandingMotion />
       <StatusLine status={data?.status ?? null} now={now} />
       <main id="landing-content">
         <section aria-labelledby="hero-title" className="relative overflow-hidden">
@@ -128,7 +131,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
               <ReturningGuestNote />
             </div>
 
-            {preview && <div className="fade-in relative" style={{ animationDelay: "160ms" }}><RolePreviewCard preview={preview} /></div>}
+            {preview && <div className="fade-in relative" style={{ animationDelay: "160ms" }}><RolePreviewCard preview={preview} today={todayIso(now)} /></div>}
           </div>
         </section>
 
@@ -154,7 +157,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           </section>
         )}
 
-        <section id="how" aria-labelledby="how-title" className="border-y border-line bg-surface">
+        <section id="how" aria-labelledby="how-title" data-reveal className="border-y border-line bg-surface">
           <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
             <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
               <div>
@@ -182,7 +185,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
         </section>
 
         {soon.length > 0 && (
-          <section aria-labelledby="soon-title" className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <section data-reveal aria-labelledby="soon-title" className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 id="soon-title" className="heading-display text-3xl leading-tight sm:text-4xl">{soonHeading}</h2>
@@ -203,7 +206,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           <HandMark name="divider" className="h-4 w-full max-w-md text-line-strong" />
         </div>
 
-        <section aria-labelledby="questions-title" className="border-t border-line bg-surface">
+        <section data-reveal aria-labelledby="questions-title" className="border-t border-line bg-surface">
           <div className="mx-auto max-w-3xl px-4 py-16 md:px-6 md:py-20">
             <h2 id="questions-title" className="heading-display text-3xl leading-tight sm:text-4xl">Questions</h2>
             <div className="mt-8 divide-y divide-line border-y border-line">
@@ -220,7 +223,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
           </div>
         </section>
 
-        <section aria-labelledby="start-title" className="relative overflow-hidden px-4 py-20 md:px-6 md:py-24">
+        <section data-reveal aria-labelledby="start-title" className="relative overflow-hidden px-4 py-20 md:px-6 md:py-24">
           <span className="glow glow-accent left-1/2 top-0 size-[34rem] -translate-x-1/2" aria-hidden="true" />
           <span className="glow glow-warm right-10 bottom-0 size-[22rem]" aria-hidden="true" />
           <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
