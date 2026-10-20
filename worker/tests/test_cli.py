@@ -87,6 +87,188 @@ class Repository:
 COMPANY_ID = UUID("00000000-0000-4000-8000-000000000001")
 
 
+class IncrementalKeyRepository(Repository):
+    """Records every save, so a save-per-company is distinguishable from one save at the end."""
+
+    saves: ClassVar[list[dict[str, str]]] = []
+    fingerprints: ClassVar[dict] = {}
+
+    def __init__(self) -> None:
+        IncrementalKeyRepository.saves = []
+
+    def company_enrichment_fingerprints(self, company_ids):
+        return {company_id: "stable" for company_id in company_ids}
+
+    def enrichment_noop_keys(self):
+        return {}
+
+    def save_enrichment_noop_keys(self, keys, *, run_id):
+        IncrementalKeyRepository.saves.append(dict(keys))
+
+    def record_tool_call(self, run_id, **kwargs):
+        return None
+
+
+class EnrichmentKeysSurviveAKilledRunTests(unittest.TestCase):
+    """A collection run killed at its 45-minute timeout must keep the keys it had already learned.
+
+    The single save after the loop was never reached when the job was killed from outside, so a cancelled run had
+    moved every company's fingerprint by enriching it and recorded none of the stabilisation. That destroys
+    convergence rather than pausing it, and the skip needs three consecutive completed passes to converge: measured
+    on the rig, 0 then 21 then 58 of 58 companies skipped, with the pass going from 165.6 s to 1.1 s. Six of the
+    eight collection runs to 2026-10-16 were cancelled, which is why `companies_unchanged` read 0 for weeks.
+    """
+
+    def test_a_key_is_saved_as_each_company_stabilises(self) -> None:
+        repository = IncrementalKeyRepository()
+        companies = [UUID(int=index) for index in range(1, 5)]
+
+        from firstseen.enrichment import EnrichmentSummary
+
+        class Service:
+            def enrich_company(self, company_id):
+                return EnrichmentSummary(
+                    company_id=company_id,
+                    observations_considered=0,
+                    roles_matched=0,
+                    roles_created=0,
+                    resolution_failures=0,
+                    roles_reconstructed=0,
+                    events_persisted=0,
+                    reconstruction_failures=0,
+                    degraded_capture_sources=0,
+                )
+
+        with (
+            patch.object(cli, "EvidenceEnrichmentService", lambda *args, **kwargs: Service()),
+            patch.object(cli, "worker_fingerprint", lambda settings: "worker"),
+            patch.object(cli, "get_settings", lambda: SimpleNamespace()),
+            patch.object(cli, "RoleResolver", lambda **kwargs: None),
+            patch.object(cli, "RoleScopeService", lambda *args, **kwargs: None),
+            patch.object(cli, "RoleScopeClassifier", lambda *args, **kwargs: None),
+            patch.object(cli, "LlmRoleClassifier", lambda *args, **kwargs: None),
+            patch.object(cli, "LlmScopeClassifier", lambda *args, **kwargs: None),
+        ):
+            cli._enrich_companies(
+                repository, companies, run_id=UUID(int=99), router=SimpleNamespace(client=lambda *a, **k: None)
+            )
+
+        # One save per company that stabilised, not one at the end: a run killed after the second company keeps two.
+        self.assertGreater(len(IncrementalKeyRepository.saves), 1, "the keys are still saved only once, at the end")
+        self.assertEqual(len(IncrementalKeyRepository.saves), len(companies))
+        for index, saved in enumerate(IncrementalKeyRepository.saves, start=1):
+            self.assertEqual(len(saved), index, "each save carries every key learned so far")
+
+
+class RetirementRepository(Repository):
+    """Enough of the repository for retirement: the enabled sources and their refusal streaks."""
+
+    disabled: ClassVar[list[tuple[str, str]]] = []
+
+    def __init__(self) -> None:
+        RetirementRepository.disabled = []
+
+    def list_source_configs(self, company=None):
+        from firstseen.adapters.base import SourceConfig
+
+        def source(index, url):
+            return SourceConfig(
+                id=UUID(int=index), company_id=UUID(int=900), company="Fixture",
+                adapter="generic", url=url, trust_score=0.9,
+            )
+
+        # One refused page, and nine the rules allow, so the refused fraction is a tenth.
+        return [source(1, "https://vercel.com/passport")] + [
+            source(index, f"https://fixture{index}.example/careers") for index in range(2, 11)
+        ]
+
+    def source_refusal_streaks(self, days=30):
+        return [{"source_id": str(UUID(int=1)), "consecutive_refusals": 5, "rule": None, "last_attempt": None}]
+
+
+class RetirementTests(unittest.TestCase):
+    """Retirement is the rules acting on themselves, which is why it is not 132 stored disables.
+
+    A refusal is a live decision re-evaluated every run; a disable is a stored one that sticks. Converting the 132
+    sources the rules refuse today into stored disables would freeze today's rules into the database, and when the
+    rules widen again -- September 112, October 132 -- the stored ones would not follow.
+    """
+
+    def _run(self, **kwargs):
+        from firstseen import cli as module
+
+        captured = StringIO()
+        with (
+            patch.object(module.IntelligenceRepository, "from_settings", lambda settings: RetirementRepository()),
+            patch.object(module, "get_settings", lambda: SimpleNamespace()),
+            patch.object(module, "TakedownService", lambda repository: SimpleNamespace(
+                disable=lambda **call: RetirementRepository.disabled.append((str(call["source_id"]), call["reason"])))),
+            redirect_stdout(captured),
+        ):
+            code = module.retire_refused_sources(**kwargs)
+        return code, json.loads(captured.getvalue())
+
+    def test_the_first_run_reports_and_changes_nothing(self) -> None:
+        code, report = self._run(min_refusals=3, max_fraction=0.10, apply=False, by="tester")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "reported")
+        self.assertFalse(report["applied"])
+        self.assertEqual(report["candidates"], 1)
+        self.assertEqual(report["by_rule"], {"off_the_recruiting_path": 1})
+        self.assertEqual(RetirementRepository.disabled, [], "a report retired something")
+        # Every candidate is listed, grouped by rule and then company: a backlog is cleared by reading it, and 104
+        # of 438 is an accumulated past rather than a rule change, so counts alone are not enough to judge it.
+        grouped = report["by_rule_and_company"]
+        self.assertEqual(list(grouped), ["off_the_recruiting_path"])
+        self.assertEqual(list(grouped["off_the_recruiting_path"]), ["Fixture"])
+        listed = [row for companies in grouped.values() for rows in companies.values() for row in rows]
+        self.assertEqual(len(listed), report["candidates"], "the list is truncated against its own count")
+        self.assertEqual(listed[0]["url"], "https://vercel.com/passport")
+        self.assertEqual(listed[0]["consecutive_refusals"], 5)
+
+    def test_the_audit_reason_names_the_rule(self) -> None:
+        code, report = self._run(min_refusals=3, max_fraction=0.50, apply=True, by="tester")
+        self.assertEqual(code, 0)
+        self.assertEqual(report["retired"], 1)
+        self.assertEqual(len(RetirementRepository.disabled), 1)
+        _, reason = RetirementRepository.disabled[0]
+        self.assertIn("off_the_recruiting_path", reason)
+        self.assertIn("5 consecutive", reason)
+
+    def test_too_large_a_fraction_stops_rather_than_proceeding(self) -> None:
+        """A bad rule must not be able to quietly empty the source list."""
+        code, report = self._run(min_refusals=3, max_fraction=0.05, apply=True, by="tester")
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "refused")
+        self.assertEqual(report["reason"], "too_large_a_fraction")
+        self.assertFalse(report["applied"])
+        self.assertEqual(RetirementRepository.disabled, [], "the guard let a retirement through")
+
+    def test_a_source_whose_address_was_fixed_is_not_retired_on_an_old_attempt(self) -> None:
+        """The rule is named from the address now, not from a diagnostic a past run recorded."""
+
+        class Fixed(RetirementRepository):
+            def list_source_configs(self, company=None):
+                from firstseen.adapters.base import SourceConfig
+
+                return [SourceConfig(id=UUID(int=1), company_id=UUID(int=900), company="Fixture",
+                                     adapter="generic", url="https://fixture.example/careers", trust_score=0.9)]
+
+        from firstseen import cli as module
+
+        captured = StringIO()
+        with (
+            patch.object(module.IntelligenceRepository, "from_settings", lambda settings: Fixed()),
+            patch.object(module, "get_settings", lambda: SimpleNamespace()),
+            patch.object(module, "TakedownService", lambda repository: SimpleNamespace(
+                disable=lambda **call: RetirementRepository.disabled.append((str(call["source_id"]), call["reason"])))),
+            redirect_stdout(captured),
+        ):
+            module.retire_refused_sources(min_refusals=3, max_fraction=0.9, apply=True, by="tester")
+        self.assertEqual(json.loads(captured.getvalue())["candidates"], 0)
+        self.assertEqual(RetirementRepository.disabled, [])
+
+
 class EnrichmentRepository(Repository):
     """Reports one configured company so enrichment scope can be asserted."""
 

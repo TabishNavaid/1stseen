@@ -166,7 +166,7 @@ insert into public.forecasts (
     '{"role_history_strength":0.7364,"prior_support":0.0,"cycle_consistency":0.8412,"source_quality":0.95,"evidence_recency":0.6304,"event_uncertainty_precision":1.0,"interval_precision":0.8187,"company_recruiting_scale":0.75,"current_signal_support":0.4078,"signal_contradiction":0.0,"signal_conflict":0.0}',
     '[{"name":"role openings 2022-2025","kind":"role_history","date_weight":1.0,"confidence_effect":0.8753,"influences_date":true,"rationale":"Four sourced role cycles weighted by quality and recency."},{"name":"internship_program_page_changed","kind":"signal","date_weight":0,"confidence_effect":0.5239,"influences_date":false,"rationale":"Recent reliable signal supports recurrence confidence but cannot move the date."},{"name":"company recruiting scale","kind":"context","date_weight":0,"confidence_effect":0.06,"influences_date":false,"rationale":"Recruiting scale affects repeatability confidence, not the expected date."}]',
     'uncertainty_weighted_hierarchical_circular_model',
-    'hierarchical-circular-shrinkage-v2',
+    'hierarchical-circular-shrinkage-v3',
     '2026-08-14T00:00:00Z',
     4,
     0,

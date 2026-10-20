@@ -33,7 +33,7 @@ export function RecruitingTimeline({ programs }: { programs: OpenedProgram[] }) 
             <p className="text-xs font-semibold text-ink-muted">{program.company}</p>
             <h2 className="mt-0.5 text-base font-semibold leading-snug text-ink">
               {program.roleId
-                ? <Link href={`/roles/${program.roleId}`} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{program.role}</Link>
+                ? <Link href={`/roles/${program.roleId}`} prefetch={false} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{program.role}</Link>
                 : program.role}
             </h2>
             <p className="mt-1 text-caption text-ink-subtle">{program.details}</p>

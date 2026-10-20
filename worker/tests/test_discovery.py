@@ -3,6 +3,7 @@ import sys
 import unittest
 from datetime import UTC, date, datetime
 from pathlib import Path
+from uuid import UUID
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -14,7 +15,10 @@ from firstseen.adapters.generic import GenericCareerPageAdapter
 from firstseen.adapters.registry import AdapterRegistry
 from firstseen.discovery import (
     MAX_SITEMAP_SOURCES,
+    CompanyDiscoveryResult,
+    CompanyIdentity,
     DiscoverRecruitingSources,
+    DiscoveryEvidence,
     DnsResult,
     IdentifyCompany,
     _ats_match,
@@ -522,12 +526,76 @@ class RefusedSourceTests(unittest.TestCase):
         )
         result = discover(transport, domain)
 
-        self.assertIn(
-            "https://careers.prop-desk.example/job-post/2025-summer-internship-software-developer",
+        # The posting is not registered at all now, which is stronger than ranking it last among archive candidates:
+        # a single posting is one row of a board, it stops existing when the posting closes, and discovery had made
+        # thirty-two of the rig's page sources out of them. Measured first: no company's archive sat on a posting, so
+        # none loses its history to this.
+        self.assertEqual(
             [str(source.url) for source in result.sources if source.category == "related_career_page"],
+            [],
+            "a job posting is on a recruiting path and is still not a source",
         )
         archive = next(source for source in result.sources if source.adapter == "wayback")
         self.assertEqual(str(archive.url), "https://careers.prop-desk.example/")
+
+    def test_a_run_counts_the_links_the_rules_refused(self):
+        """A refused page was dropped with a bare `continue` and no record.
+
+        So discovery could drop every link it saw and say nothing: the 2026-09-14 bootstrap registered 451 sources
+        of which 144 are refused today, and nothing mentioned it for a month. The counts go in the result beside
+        `rejected_sources`, which until now only ever carried refuted ATS boards.
+        """
+        domain = "counted.example"
+        home = (
+            b"<html><head><title>Counted</title></head><body>"
+            b'<a href="https://careers.counted.example/students">Students and graduates</a>'
+            b'<a href="https://linkedin.com/shareArticle?mini=true&url=x">Share</a>'
+            b'<a href="/blog/our-summer-interns">Our summer interns</a>'
+            b'<a href="/careers/jobs/4817263901">Software Engineer Intern</a>'
+            b"</body></html>"
+        )
+        transport = StatusTransport(
+            {
+                f"https://{domain}/": (home, "text/html"),
+                "https://careers.counted.example/students": (b"<html><title>Students</title></html>", "text/html"),
+                f"https://{domain}/robots.txt": (b"User-agent: *", "text/plain"),
+            }
+        )
+        result = discover(transport, domain)
+        self.assertGreater(sum(result.refused_pages.values()), 0, "no refusal was counted")
+        # The share button is off the recruiting path and the blog post is in a non-recruiting section; the posting
+        # under /careers/jobs/<id> is a single job posting. Each is named rather than sharing one code.
+        self.assertIn("a_single_job_posting", result.refused_pages)
+        self.assertTrue(
+            {"off_the_recruiting_path", "in_a_non_recruiting_section", "not_a_page"} & set(result.refused_pages),
+            f"nothing but the posting was counted: {result.refused_pages}",
+        )
+        # The real careers page was still admitted, so counting did not change what discovery accepts.
+        self.assertGreater(result.admitted_page_sources, 0)
+
+    def test_the_alarm_is_no_pages_admitted_not_a_high_refusal_rate(self):
+        """A company refusing sixty links and admitting four is working correctly.
+
+        One refusing sixty and admitting none is either a company with no careers pages or a rule that just ate
+        them, and either way somebody should look -- on the run that introduced the rule, not six weeks later.
+        """
+        identity = CompanyIdentity(
+            id=UUID(int=7), name="Fixture", domain="fixture.example", official_url="https://fixture.example/",
+            evidence=[DiscoveryEvidence(method="html_link", evidence_url="https://fixture.example/", quote="Careers")],
+        )
+        busy = CompanyDiscoveryResult(
+            query="fixture", identity=identity, sources=[], refused_pages={"off_the_recruiting_path": 60},
+        )
+        self.assertTrue(busy.admitted_no_pages(refused_at_least=10), "zero admitted and sixty refused is the alarm")
+        # Refusing plenty while admitting something is correct behaviour, however high the count.
+        working = busy.model_copy(update={"sources": [_page_source(identity)]})
+        self.assertEqual(working.admitted_page_sources, 1)
+        self.assertFalse(working.admitted_no_pages(refused_at_least=10))
+        # And a quiet company that refused almost nothing is not an alarm either.
+        quiet = CompanyDiscoveryResult(
+            query="fixture", identity=identity, sources=[], refused_pages={"off_the_recruiting_path": 2},
+        )
+        self.assertFalse(quiet.admitted_no_pages(refused_at_least=10))
 
     def test_a_board_its_own_endpoint_refutes_is_not_attached(self):
         # Shield AI's careers page links a subsidiary's Greenhouse board, whose metadata names the subsidiary,
@@ -792,3 +860,12 @@ class IdentityNameTests(unittest.TestCase):
             "AbbVie",
         )
         self.assertIsNone(self.name("example.test", title="Something Else Entirely"))
+
+def _page_source(identity):
+    from firstseen.discovery import DiscoveredSource
+
+    return DiscoveredSource(
+        id=UUID(int=11), company_id=identity.id, url="https://fixture.example/careers",
+        category="careers_page", adapter="generic", trust_score=0.9,
+        evidence=[DiscoveryEvidence(method="html_link", evidence_url="https://fixture.example/", quote="Careers")],
+    )

@@ -112,12 +112,32 @@ class DisplayedIdentityTests(unittest.TestCase):
         )
         self.assertNotEqual(displayed_forecast_identity(before), displayed_forecast_identity(after))
 
-    def test_the_window_moving_when_as_of_passes_the_date_is_a_new_version(self) -> None:
-        """as_of legitimately changes the answer once: the next occurrence becomes next year's."""
+    def test_a_cycle_that_has_just_opened_does_not_jump_to_next_year(self) -> None:
+        """The day after the expected date, the window is open, not a year away.
+
+        `_next_occurrence` used to take the next occurrence at or after as_of, so one day past the centre the
+        estimate moved a whole cycle. Over the rig's 115 scoreable backtest cases that threw 43% of them a
+        median 353 days out when the opening was 60 days away, and it is why measured coverage read 50.4%
+        against a nominal 0.80. The date stays put until the cycle can no longer be open.
+        """
         window = forecast(HISTORY, date(2026, 6, 1))
-        after = forecast(HISTORY, window.point_date + timedelta(days=1))
-        self.assertNotEqual(displayed_forecast_identity(window), displayed_forecast_identity(after))
+        just_after = forecast(HISTORY, window.point_date + timedelta(days=1))
+        self.assertEqual(just_after.point_date, window.point_date)
+
+    def test_the_window_moves_on_once_its_own_window_has_closed(self) -> None:
+        """Once today is past this window's end, the reader is waiting on next year, and that is a new version.
+
+        The test is the role's own half-width, not a flat number, so a forecast is never in the state of having a
+        passed centre, a closed window, and no named next cycle -- which the model could not render, publishing
+        one date.
+        """
+        window = forecast(HISTORY, date(2026, 6, 1))
+        inside = forecast(HISTORY, window.window_end)
+        self.assertEqual(inside.point_date, window.point_date, "while its window covers today the date holds")
+        after = forecast(HISTORY, window.window_end + timedelta(days=1))
         self.assertGreater(after.point_date, window.point_date)
+        self.assertEqual((after.point_date - window.point_date).days, 365)
+        self.assertNotEqual(displayed_forecast_identity(window), displayed_forecast_identity(after))
 
     def test_sample_size_does_not_move_on_its_own(self) -> None:
         """Measured separately, because a sample size that grew every run would be a second churn source.

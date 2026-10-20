@@ -41,18 +41,37 @@ def strip_html(value: str, *, limit: int = 4_000) -> str:
 
 
 def location_text(value: Any) -> str | None:
+    """A source's location as text, from a string, a structured object, or a list of either.
+
+    Two shapes were being dropped, and between them they account for every location 1stSeen never stored.
+    Greenhouse answers `location: {"name": "New York, New York, United States"}`, and reading only the six
+    schema.org address keys returned None for all 7,803 Greenhouse observations on the rig. JSON-LD nests the
+    same keys one level down, under `jobLocation.address`, so a generic page's location was lost the same way.
+    `name` is read first because a source that supplies it has already written the line it wants shown; the
+    address keys are the fallback, and `address` is followed wherever it appears.
+    """
     if isinstance(value, str):
         return value.strip() or None
     if isinstance(value, dict):
+        named = value.get("name")
+        if isinstance(named, str) and named.strip():
+            return named.strip()
         parts = [
             value.get(key)
             for key in ("addressLocality", "city", "addressRegion", "region", "addressCountry", "country")
         ]
         clean: list[str] = [str(item).strip() for item in parts if item]
-        return ", ".join(dict.fromkeys(clean)) or None
+        if clean:
+            return ", ".join(dict.fromkeys(clean)) or None
+        # schema.org Place wraps its address; so does a Greenhouse office that carries no name.
+        for key in ("address", "jobLocation", "location"):
+            nested = location_text(value.get(key))
+            if nested:
+                return nested
+        return None
     if isinstance(value, list):
-        nested = [location_text(item) for item in value]
-        return " · ".join(item for item in nested if item) or None
+        nested_items = [location_text(item) for item in value]
+        return " · ".join(item for item in nested_items if item) or None
     return None
 
 

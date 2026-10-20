@@ -44,7 +44,7 @@ from .readiness import (
     ReadinessForecast,
     SupabaseReadinessPlanStore,
 )
-from .recruiting_paths import page_source_allowed
+from .recruiting_paths import page_source_allowed, page_source_refusal
 from .repository import (
     OUT_OF_SCOPE_TEXT_KEPT,
     BacktestDataset,
@@ -261,6 +261,25 @@ def _enrich_companies(
         # The fingerprint function (migration 202608140046) is not in this database yet: enrich every company.
         before = {}
     noop_keys = repository.enrichment_noop_keys()
+    # Saved as each key is learned, not once at the end. A collection run that runs out of its 45 minutes is killed
+    # from outside, mid-loop, so the single save after the loop was never reached: the run had moved every company's
+    # fingerprint by enriching it and recorded none of the stabilisation, which destroys convergence rather than
+    # pausing it. Six of the eight runs to 2026-10-16 were cancelled, and the skip needs three consecutive completed
+    # passes to converge (measured on the rig: 0, then 21, then 58 of 58, and 165.6 s down to 1.1 s). Saving as we go
+    # means a killed run keeps what it learned and the next one carries on from there.
+    saved_keys = dict(noop_keys)
+
+    def persist_keys() -> None:
+        nonlocal saved_keys
+        if noop_keys == saved_keys:
+            return
+        try:
+            repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+        except APIError:
+            # The skip is an optimisation: failing to record it costs a future pass, never this company's evidence.
+            return
+        saved_keys = dict(noop_keys)
+
     for company_id in company_ids:
         started_at = datetime.now(UTC)
         key = skip_key(before[company_id], worker) if company_id in before else None
@@ -303,6 +322,7 @@ def _enrich_companies(
                 unchanged_inputs = False
             if unchanged_inputs:
                 noop_keys[str(company_id)] = key
+        persist_keys()
         repository.record_tool_call(
             run_id,
             tool_name="enrichment.company",
@@ -311,7 +331,7 @@ def _enrich_companies(
             output_redacted=summary.as_dict(),
             started_at=started_at,
         )
-    repository.save_enrichment_noop_keys(noop_keys, run_id=run_id)
+    persist_keys()
     return summaries, failures, unchanged
 
 
@@ -671,6 +691,12 @@ def regenerate_changed_forecasts() -> int:
     return 1 if status == "failed" and role_ids else 0
 
 
+# Refusing this many links while admitting no page source is the shape of a rule that has gone too broad. A company
+# refusing sixty links and admitting four is working correctly; one refusing sixty and admitting none is either a
+# company with no careers pages or a rule that just ate them, and either way somebody should look.
+DISCOVERY_REFUSALS_WITHOUT_A_PAGE = 10
+
+
 def run_discovery(company: str, *, ingest: bool) -> int:
     settings = get_settings()
     repository = IntelligenceRepository.from_settings(settings)
@@ -706,6 +732,10 @@ def run_discovery(company: str, *, ingest: bool) -> int:
                 "domain": discovery.identity.domain,
                 "sources": len(discovery.sources),
                 "ats_provider": discovery.identity.ats_provider,
+                # Persisted so the health report can show it per company, and so a widening rule is readable from
+                # the run that introduced it rather than inferred from a later source count.
+                "admitted_page_sources": discovery.admitted_page_sources,
+                "refused_pages": discovery.refused_pages,
             },
             started_at=started_at,
         )
@@ -723,12 +753,22 @@ def run_discovery(company: str, *, ingest: bool) -> int:
                 except Exception:  # noqa: BLE001 - discovery remains useful if one source fails
                     failures += 1
         repository.finish_agent_run(run_id, status="succeeded" if failures == 0 else "partial")
+        ate_the_pages = discovery.admitted_no_pages(refused_at_least=DISCOVERY_REFUSALS_WITHOUT_A_PAGE)
         print(
             json.dumps(
                 {
                     "company": discovery.identity.model_dump(mode="json"),
                     "sources": [source.model_dump(mode="json") for source in discovery.sources],
                     "rejected_sources": [source.model_dump(mode="json") for source in discovery.rejected_sources],
+                    "refused_pages": discovery.refused_pages,
+                    "admitted_page_sources": discovery.admitted_page_sources,
+                    "admitted_no_pages": ate_the_pages,
+                    "note": (
+                        f"Refused {discovery.refused_page_count} links and admitted no page source. Either this "
+                        "company has no careers pages, or a recruiting-path rule is too broad and ate them."
+                    )
+                    if ate_the_pages
+                    else None,
                     "ingested": ingest,
                     "ingestion_failures": failures,
                 },
@@ -1089,6 +1129,107 @@ def re_resolve_role_identities(company: str | None, *, apply: bool, show: int) -
         )
     )
     return 0 if not summary.failures else 1
+
+
+def retire_refused_sources(*, min_refusals: int, max_fraction: float, apply: bool, by: str) -> int:
+    """Retire a source the recruiting-path rules have refused on several consecutive attempts.
+
+    The alternative was disabling the 132 sources the rules refuse today, and it is the wrong shape. A refusal is a
+    live decision re-evaluated every run; a disable is a stored one that sticks. Turning 132 live decisions into
+    stored ones freezes today's rules into the database for a tidier list, and when the rules widen again -- as they
+    did between September's 112 and October's 132 -- the stored ones do not follow. Retiring by the rules themselves
+    handles those, every future one, and the next twenty-five companies, with nobody running a loop.
+
+    Three things it will not do. It does not act unless asked (`--apply`), so the first run is a list to read. It
+    does not retire without naming the rule, read live rather than from the stored diagnostic, so the audit row is
+    explicable six months later. And it stops rather than proceeding when it would retire more than `--max-fraction`
+    of the enabled sources at once, because a bad rule must not be able to quietly empty the source list.
+    """
+    settings = get_settings()
+    repository = IntelligenceRepository.from_settings(settings)
+    service = TakedownService(repository)
+    enabled = repository.list_source_configs()
+    by_id = {source.id: source for source in enabled}
+    streaks = {
+        UUID(str(row["source_id"])): int(row["consecutive_refusals"])
+        for row in repository.source_refusal_streaks(365)
+        if int(row.get("consecutive_refusals") or 0) >= min_refusals
+    }
+    # The rule is named from the address now, not from the diagnostic a past run happened to record: a source whose
+    # address was corrected has stopped being refused and must not be retired on an old attempt's say-so.
+    candidates = []
+    for source_id, refusals in sorted(streaks.items(), key=lambda item: (-item[1], str(item[0]))):
+        source = by_id.get(source_id)
+        if source is None:
+            continue
+        rule = page_source_refusal(source.adapter, str(source.url))
+        if rule is None:
+            continue
+        candidates.append({"id": str(source_id), "company": source.company, "adapter": source.adapter,
+                           "url": str(source.url), "rule": rule, "consecutive_refusals": refusals})
+
+    fraction = len(candidates) / len(enabled) if enabled else 0.0
+    by_rule: dict[str, int] = {}
+    for item in candidates:
+        by_rule[str(item["rule"])] = by_rule.get(str(item["rule"]), 0) + 1
+    # Every candidate, grouped by rule and then company: a backlog is cleared by reading it, not by trusting a count.
+    # 105 of 439 on the rig is an accumulated past rather than a rule change, so the list is the thing to judge.
+    grouped: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for item in candidates:
+        company = grouped.setdefault(str(item["rule"]), {}).setdefault(str(item["company"]), [])
+        company.append({
+            "id": item["id"],
+            "adapter": item["adapter"],
+            "url": item["url"],
+            "consecutive_refusals": item["consecutive_refusals"],
+        })
+    report: dict[str, Any] = {
+        "enabled_sources": len(enabled),
+        "min_refusals": min_refusals,
+        "candidates": len(candidates),
+        "fraction_of_enabled": round(fraction, 4),
+        "by_rule": dict(sorted(by_rule.items())),
+        "by_rule_and_company": {
+            rule: {company: sorted(rows, key=lambda row: str(row["url"])) for company, rows in sorted(companies.items())}
+            for rule, companies in sorted(grouped.items())
+        },
+        "applied": False,
+    }
+    if not apply:
+        report["status"] = "reported"
+        report["note"] = "Nothing was changed. Re-run with --apply to retire these."
+        print(json.dumps(report, indent=2))
+        return 0
+    if fraction > max_fraction:
+        report["status"] = "refused"
+        report["reason"] = "too_large_a_fraction"
+        report["note"] = (
+            f"Would retire {len(candidates)} of {len(enabled)} enabled sources "
+            f"({fraction:.0%}), over the {max_fraction:.0%} limit. A rule this broad is reviewed, not applied."
+        )
+        print(json.dumps(report, indent=2))
+        return 1
+
+    retired = failures = 0
+    for item in candidates:
+        try:
+            service.disable(
+                company_domain=None,
+                source_id=UUID(str(item["id"])),
+                reason=(
+                    f"Retired automatically: the recruiting-path rules refused this source on "
+                    f"{item['consecutive_refusals']} consecutive collection attempts (rule: {item['rule']})."
+                ),
+                requested_by=by,
+            )
+            retired += 1
+        except (TakedownRefused, APIError):
+            # One source cannot stop the rest, and a refusal here changed nothing.
+            failures += 1
+    report.update({"applied": True, "retired": retired, "failures": failures,
+                   "status": "partial" if failures else "succeeded"})
+    print(json.dumps(report, indent=2))
+    return 1 if failures else 0
 
 
 def run_scope_classification(company: str | None) -> int:
@@ -1608,6 +1749,21 @@ def main() -> int:
         takedown_target.add_argument("--source", type=UUID, help="One source id, from `sources show`")
         takedown_parser.add_argument("--reason", required=True, help="Why, in a sentence; stored with the action")
         takedown_parser.add_argument("--by", help="Who is acting (default: FIRSTSEEN_REVIEWER)")
+    retire = subparsers.add_parser(
+        "retire-sources",
+        help="Retire sources the recruiting-path rules keep refusing (docs/takedown.md)",
+    )
+    retire.add_argument(
+        "--min-refusals", type=int, default=3,
+        help="Consecutive refused attempts before a source is retired (default 3)",
+    )
+    retire.add_argument(
+        "--max-fraction", type=float, default=0.10,
+        help="Refuse to apply when this fraction of enabled sources would be retired at once (default 0.10)",
+    )
+    retire.add_argument("--apply", action="store_true", help="Retire them; without this it only reports")
+    retire.add_argument("--by", help="Who is acting (default: FIRSTSEEN_REVIEWER)")
+
     sources_show = sources_commands.add_parser(
         "show", help="A company's sources, whether its collection is held, and every takedown action on it"
     )
@@ -1651,6 +1807,13 @@ def main() -> int:
         if args.review_command == "list":
             return list_scope_review_queue(args.company, args.reason, args.limit)
         return record_scope_decision(args)
+    if args.command == "retire-sources":
+        return retire_refused_sources(
+            min_refusals=args.min_refusals,
+            max_fraction=args.max_fraction,
+            apply=args.apply,
+            by=getattr(args, "by", None) or os.environ.get("FIRSTSEEN_REVIEWER", ""),
+        )
     if args.command == "re-resolve-roles":
         return re_resolve_role_identities(
             args.company if not args.all else None, apply=args.apply, show=args.show

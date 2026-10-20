@@ -60,6 +60,8 @@ class TakedownStore(Protocol):
 
     def takedown_history(self, company_id: UUID) -> list[dict[str, Any]]: ...
 
+    def source_failure_streaks(self, company_id: UUID | None = None) -> list[dict[str, Any]] | None: ...
+
     def withdrawal_preview(self, company_id: UUID) -> dict[str, int]: ...
 
     def apply_collection_takedown(
@@ -192,11 +194,36 @@ class TakedownService:
         company = self.company(company_domain)
         company_id = UUID(str(company["id"]))
         hold = self.store.company_hold(company_id)
+        # A missing streak function leaves `failing` null and says so once, rather than refusing the whole command.
+        reported = self.store.source_failure_streaks(company_id)
+        streaks: dict[str, list[dict[str, Any]]] | None = None if reported is None else {}
+        for streak in reported or ():
+            assert streaks is not None
+            streaks.setdefault(str(streak["source_id"]), []).append(
+                {
+                    "family": streak.get("family"),
+                    "consecutive_failures": streak.get("consecutive_failures"),
+                    "last_error": streak.get("last_error"),
+                    "last_attempt": streak.get("last_attempt"),
+                }
+            )
         return {
             "company": {"id": str(company_id), "name": company.get("name"), "domain": company.get("domain")},
             "held": None if hold is None else {key: hold.get(key) for key in ("action", "reason", "requested_by", "recorded_at")},
+            "failure_streaks": "unavailable: source_failure_streaks is not in this database (migration 202608140056)"
+            if streaks is None
+            else "per source, under `failing`",
             "sources": [
-                {"id": str(row["id"]), "adapter": row.get("adapter"), "enabled": bool(row.get("enabled")), "url": row.get("url")}
+                {
+                    "id": str(row["id"]),
+                    "adapter": row.get("adapter"),
+                    "enabled": bool(row.get("enabled")),
+                    "url": row.get("url"),
+                    # Why a source is failing, and how long it has been, which only the health report used to know:
+                    # when that died nothing could answer it, and the alert names a company and an adapter but no id.
+                    # Null, not an empty list, when the streak function is not deployed: absent and clean differ.
+                    "failing": None if streaks is None else streaks.get(str(row["id"]), []),
+                }
                 for row in self.store.company_sources(company_id)
             ],
             "history": [

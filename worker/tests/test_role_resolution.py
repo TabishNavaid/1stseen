@@ -315,6 +315,50 @@ class AmbiguousProgramRenameTests(unittest.TestCase):
 
 
 class PersistentResolutionTests(unittest.TestCase):
+    def test_a_matching_observation_promotes_an_unknown_season(self):
+        """A season stated by a matching observation is evidence, not something to discard into the alias row.
+
+        `recruiting_season` was set once, at role creation, so a role created from a posting that named no season
+        stayed unknown for ever: a later "... Summer 2027" observation matched it at season-similarity 1.0 and its
+        season went only into the alias. 311 of the rig's 464 in-scope roles were unknown, and 33 of them had a
+        matching observation that states a season inside the window `_season` reads.
+        """
+        role = canonical(
+            "swe_summer",
+            "Software Engineer Intern",
+            "Internship building production software with engineer mentorship and code reviews.",
+        )
+        self.assertEqual(role.features.recruiting_season, "unknown", "the fixture role starts with no season")
+        stated = observation(
+            "states-a-season",
+            "Software Engineer Intern",
+            "This is a 12-week internship during summer 2027 building production software with mentorship.",
+        )
+        resolved = RoleResolver().resolve(company_id=COMPANY_ID, observation=stated, candidates=[role])
+        self.assertEqual(resolved.decision, "matched")
+        self.assertEqual(resolved.canonical_role.id, role.id)
+        self.assertEqual(resolved.canonical_role.features.recruiting_season, "summer")
+        # The identity key is not rewritten: it is unique per company, and a role that already holds the promoted
+        # key would collide. Re-keying is a migration's job, not a side effect of a match.
+        self.assertEqual(resolved.canonical_role.recurrence_key, role.recurrence_key)
+
+    def test_a_role_that_already_states_a_season_keeps_it(self):
+        """Only unknown is promoted. A conflicting season is a hard incompatibility and never reaches this."""
+        role = canonical(
+            "swe_winter",
+            "Software Engineer Intern",
+            "Winter internship building production software with engineer mentorship and code reviews.",
+        )
+        self.assertEqual(role.features.recruiting_season, "winter")
+        stated = observation(
+            "states-summer",
+            "Software Engineer Intern",
+            "Winter cohort programme. Applications for the summer cohort open separately.",
+        )
+        resolved = RoleResolver().resolve(company_id=COMPANY_ID, observation=stated, candidates=[role])
+        if resolved.decision == "matched":
+            self.assertEqual(resolved.canonical_role.features.recruiting_season, "winter")
+
     def test_persisted_observation_is_not_resolved_twice(self):
         class Store:
             def __init__(self):

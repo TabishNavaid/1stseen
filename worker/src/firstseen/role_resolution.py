@@ -9,7 +9,7 @@ from difflib import SequenceMatcher
 from functools import lru_cache
 from hashlib import sha256
 from math import sqrt
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import BaseModel, Field
@@ -493,11 +493,25 @@ class RoleResolver:
         runner_up = viable[1] if len(viable) > 1 else None
         margin = best.score - runner_up.score if best and runner_up else 1.0
         if best and best.score >= self.match_threshold and margin >= 0.06:
-            role = best.role.model_copy(
-                update={
-                    "aliases": list(dict.fromkeys([*best.role.aliases, observation.raw_title])),
-                }
-            )
+            update: dict[str, Any] = {
+                "aliases": list(dict.fromkeys([*best.role.aliases, observation.raw_title])),
+            }
+            # A season stated by a matching observation is evidence about the program, so a role whose season is
+            # still unknown takes it instead of discarding it into the alias row. Measured on the rig: 33 of 311
+            # unknown-season in-scope roles have a matching observation that states one inside the window
+            # `_season` actually reads, and promoting them splits no role.
+            #
+            # Only unknown is promoted. A role that already states a season keeps it, and a candidate whose season
+            # conflicts has already been hard-rejected above, so this cannot overwrite one stated season with
+            # another. `recurrence_key` is deliberately left alone: it is an identity key under
+            # `unique (company_id, recurrence_key)`, and rewriting it here could collide with a role of the same
+            # company that already holds the promoted key. Re-keying is a migration's job (202608140034), not a
+            # side effect of a match.
+            if best.role.features.recruiting_season == "unknown" and features.recruiting_season != "unknown":
+                update["features"] = best.role.features.model_copy(
+                    update={"recruiting_season": features.recruiting_season}
+                )
+            role = best.role.model_copy(update=update)
             return RoleResolution(
                 observation_id=observation.id,
                 canonical_role=role,

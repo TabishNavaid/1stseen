@@ -41,6 +41,18 @@ const ALERT = process.argv.includes("--alert");
 const FAILURE_STREAK = Math.max(1, Number(process.env.COLLECTION_HEALTH_FAILURE_STREAK || 3));
 // Longer than the longest workflow timeout (historical enrichment, 90 minutes).
 const ABANDONED_AFTER_HOURS = 3;
+// Below this, a run of unskipped companies says nothing: a handful of new companies are all legitimately unchanged-
+// never. Above it, zero skips means the skip is broken rather than the corpus being busy.
+const ENRICHMENT_SKIP_FLOOR = 10;
+// Current collection runs twice a day, so three days without a fetch means a source is not being reached at all.
+// This is watched per source rather than per run on purpose: a run can report success while never reaching its tail.
+const SOURCE_STALE_AFTER_HOURS = 72;
+// Fetched this many times without ever producing a job, a signal, or a capture, and the source is not quiet: it is
+// useless. Three, because one or two unproductive fetches is just a company with no openings this week.
+const SOURCE_DEAD_AFTER_FETCHES = 3;
+// Refused this many links while admitting no page source, and a recruiting-path rule has probably gone too broad.
+// A rate is not the thing to watch: a company refusing sixty links and admitting four is working correctly.
+const DISCOVERY_REFUSALS_WITHOUT_A_PAGE = 10;
 
 /**
  * Each workflow, the pipeline it records, and how old its last success may be before
@@ -65,6 +77,16 @@ const serviceKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 const now = Date.now();
 const iso = (ms) => new Date(ms).toISOString();
 
+/** The five-character SQLSTATE from a PostgREST error body, and nothing else from it. 57014 is a statement timeout. */
+async function sqlState(response) {
+  try {
+    const code = (await response.json())?.code;
+    return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
+}
+
 async function rest(path, { method = "GET", prefer } = {}) {
   const response = await fetch(`${restBase}/${path}`, {
     method,
@@ -75,8 +97,11 @@ async function rest(path, { method = "GET", prefer } = {}) {
     },
   });
   if (!response.ok) {
-    // The table name is enough to act on; the URL and any response body are not echoed.
-    throw new Error(`read of ${path.split("?")[0]} failed with HTTP ${response.status}`);
+    // The URL and the response body stay out: a PostgREST error body can quote the query and the data. The
+    // SQLSTATE goes in, because without it a 500 is unreadable -- `counted_table_totals` answered 500 for
+    // thirteen days and the timeout could only be inferred, never confirmed.
+    const code = await sqlState(response);
+    throw new Error(`read of ${path.split("?")[0]} failed with HTTP ${response.status}${code ? ` (SQLSTATE ${code})` : ""}`);
   }
   return response;
 }
@@ -142,9 +167,22 @@ const cell = (value) => String(value ?? "—").replace(/\|/g, "\\|");
 
 // Supabase Pro allows 8 GB and the database goes read-only at the ceiling, which stops collection and every write the
 // site makes. 60% is the line: at the growth this corpus has seen that is weeks of warning, not hours, and the check
-// costs nothing extra: `counted_table_totals` reports the database's own size beside the table counts.
+// costs one catalogue read: `database_size_bytes` is its own function and cannot be slowed by anything else.
 const DATABASE_CEILING_BYTES = 8 * 1024 * 1024 * 1024;
 const DATABASE_WARN_FRACTION = 0.6;
+
+/**
+ * The storage ceiling, read on its own (migration 202608140056).
+ *
+ * Deliberately not folded into the table counts: the database going read-only stops collection and every write the
+ * site makes, so the number that watches for it must not be reachable by anything that can be slow. This is one
+ * catalogue read and takes no arguments.
+ */
+async function databaseSize() {
+  const rows = await (await rest("rpc/database_size_bytes")).json();
+  const bytes = Number(Array.isArray(rows) ? rows[0] : rows);
+  return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
 
 /**
  * Every counted table's 24h growth, exact total, and size, in one request (migration 202608140054).
@@ -162,8 +200,8 @@ async function rowsAdded() {
   return rows.map((row) => ({
     table: row.table_name,
     added: Number(row.added),
-    total: Number(row.total),
-    databaseBytes: Number(row.database_bytes),
+    // The catalogue's estimate, null where the table has never been analysed. Never presented as a count.
+    estimate: row.total === null ? null : Number(row.total),
   }));
 }
 
@@ -235,6 +273,103 @@ async function failingSources() {
     .sort((a, b) => b.failed - a.failed);
 }
 
+/**
+ * Whether enrichment's skip is firing, from the tool calls it records (enrichment_fingerprints.py).
+ *
+ * A company whose inputs are unchanged since a pass that changed nothing is not re-read, and the skip is recorded on
+ * that company's own `enrichment.company` call. It is 70% of a collection run when it does not fire -- 1,782 of 2,535
+ * seconds on 2026-10-16 -- and it has now silently stopped working three times: migration 046 hashed the whole row
+ * including text and always timed out, 049 fixed that and the skip was still dead because `save_signal_observation`
+ * keyed on the raw byte hash, and it is dead again. A skip that fails silently three times is a skip nobody watches.
+ */
+async function enrichmentSkips() {
+  const since = iso(now - WINDOW_HOURS * HOUR);
+  const calls = await all(
+    `agent_tool_calls?select=id,output_redacted&tool_name=eq.enrichment.company&started_at=gte.${since}&order=started_at.desc,id.desc`,
+  );
+  const skipped = calls.filter((call) => String(call.output_redacted?.result || "").startsWith("skipped_inputs_unchanged")).length;
+  return { considered: calls.length, skipped };
+}
+
+/**
+ * How long since each enabled source was last fetched.
+ *
+ * Deliberately not "did the last run succeed". A run that exits cleanly on a budget, or is killed at its timeout,
+ * can report success or cancellation while never reaching the end of a stable source order, and the first symptom
+ * would be forecasts going stale for companies nobody can name. The oldest last-fetched time catches that whatever
+ * the runs say, and a source that has never been fetched counts as the worst case rather than being skipped.
+ */
+async function sourceFetchAges() {
+  const rows = await all("sources?select=id,url,adapter,last_fetched_at&enabled=is.true&order=id.asc");
+  const never = rows.filter((row) => !row.last_fetched_at);
+  const dated = rows.filter((row) => row.last_fetched_at).sort((a, b) => a.last_fetched_at.localeCompare(b.last_fetched_at));
+  const stale = dated.filter((row) => hoursSince(row.last_fetched_at) > SOURCE_STALE_AFTER_HOURS);
+  return { total: rows.length, never, stale, oldest: dated[0] ?? null };
+}
+
+/**
+ * What each source has ever produced, and whether the path rules are refusing it (migration 202608140057).
+ *
+ * A source returning no jobs looks exactly like a source whose company has no openings today, so "registered but
+ * useless" accumulated silently: Point72 had five sources over its careers search and Veeva three that had returned
+ * nothing since the day they were registered, and nothing had ever mentioned it. Measured over 439: 90 had been
+ * fetched successfully three or more times and produced nothing at all, and 112 were enabled while the recruiting-path
+ * rules refused them outright. Every ATS board was productive; all of it was page scraping.
+ *
+ * Jobs alone would be the wrong test -- a careers page listing no openings can still emit change signals, and an
+ * archive source produces captures rather than jobs -- so a source is dead only when it has produced none of them.
+ */
+async function sourceProduction() {
+  // bounded: one row per source, and the function's own SQL orders and caps it.
+  const rows = await (await rest("rpc/source_yield")).json();
+  const live = rows.filter((row) => row.enabled);
+  const dead = live.filter(
+    (row) =>
+      Number(row.successful_fetches) >= SOURCE_DEAD_AFTER_FETCHES
+      && Number(row.jobs) === 0
+      && Number(row.signals) === 0
+      && Number(row.archive_captures) === 0,
+  );
+  return { live: live.length, dead, refused: live.filter((row) => row.refused) };
+}
+
+/**
+ * Per company, what its last discovery admitted and what the recruiting-path rules refused.
+ *
+ * A refused page used to be dropped with a bare `continue` and no record, so discovery could drop every link it saw
+ * and say nothing: the 2026-09-14 bootstrap registered 451 sources of which 144 are refused today, and nothing
+ * mentioned it for a month. The failure worth catching is not a high refusal rate -- it is a company that finished
+ * discovery having admitted no page source at all while refusing plenty, which is either a company with no careers
+ * pages or a rule that just ate them.
+ */
+async function discoveryRefusals() {
+  // The 200 newest discoveries, one request under the row cap: this is about recent runs, not every one ever.
+  const calls = await (await rest(
+    "agent_tool_calls?select=started_at,output_redacted&tool_name=eq.DiscoverRecruitingSources&status=eq.succeeded"
+      + "&order=started_at.desc,id.desc&limit=200",
+  )).json();
+  const newest = new Map();
+  for (const call of calls) {
+    const domain = call.output_redacted?.domain;
+    if (!domain || newest.has(domain)) continue;
+    const refused = Object.values(call.output_redacted?.refused_pages ?? {}).reduce((sum, n) => sum + Number(n), 0);
+    newest.set(domain, {
+      domain,
+      admitted: Number(call.output_redacted?.admitted_page_sources ?? 0),
+      refused,
+      byRule: call.output_redacted?.refused_pages ?? {},
+      at: call.started_at,
+    });
+  }
+  const companies = [...newest.values()];
+  return {
+    companies,
+    atePages: companies.filter(
+      (row) => row.admitted === 0 && row.refused >= DISCOVERY_REFUSALS_WITHOUT_A_PAGE,
+    ),
+  };
+}
+
 async function abandonedRuns() {
   return (
     await rest(
@@ -250,7 +385,7 @@ async function checkpoints() {
 /* ------------------------------------------------------------------- report */
 
 async function main() {
-  const [tables, runs, failing, abandoned, cursors, actions] = await Promise.all([
+  const [tables, runs, failing, abandoned, cursors, actions, skips, fetchAges, production, discovery] = await Promise.all([
     rowsAdded(),
     pipelineRuns(),
     failingSources(),
@@ -262,6 +397,10 @@ async function main() {
         success: await actionsRun(workflow.file, "&status=success"),
       })),
     ),
+    enrichmentSkips(),
+    sourceFetchAges(),
+    sourceProduction(),
+    discoveryRefusals(),
   ]);
 
   const lines = [];
@@ -314,20 +453,24 @@ async function main() {
 
   out(`### Rows added in the last ${WINDOW_HOURS}h`);
   out();
-  out("| Table | Added | Total |");
+  out("| Table | Added | Rows (estimate) |");
   out("|---|---:|---:|");
-  for (const row of tables) out(`| ${row.table} | ${row.added ?? "?"} | ${row.total ?? "?"} |`);
+  for (const row of tables) out(`| ${row.table} | ${row.added ?? "?"} | ${row.estimate === null ? "not analysed" : `~${row.estimate}`} |`);
+  out();
+  out("Rows added is exact, from each table's timestamp index. The row count is the catalogue's estimate: an exact");
+  out("count of a growing table crossed PostgREST's statement timeout and took this report down for thirteen days");
+  out("(migration 202608140056).");
   out();
   const fetches = tables.find((row) => row.table === "source_fetches");
-  // Every ingestion records a fetch row, unchanged pages included, so zero means nothing ran.
-  if (fetches && fetches.total > 0 && fetches.added === 0) {
+  // Every ingestion records a fetch row, unchanged pages included, so zero added means nothing ran. Judged on the
+  // exact `added` figure and a non-empty table; the estimate is never the thing a warning turns on.
+  if (fetches && fetches.estimate !== 0 && fetches.added === 0) {
     warn("No source fetches in 24h", "source_fetches gained no rows; current collection did not run or reached no source");
   }
 
-  const reported = tables.find((row) => Number.isFinite(row.databaseBytes) && row.databaseBytes > 0);
-  const sizeBytes = reported ? reported.databaseBytes : null;
+  const sizeBytes = await databaseSize().catch(() => null);
   if (sizeBytes === null) {
-    warn("Database size unknown", "counted_table_totals reported no database size, so the storage ceiling is unwatched");
+    warn("Database size unknown", "database_size_bytes did not answer, so the storage ceiling is unwatched");
   } else {
     const gib = (sizeBytes / 1024 / 1024 / 1024).toFixed(2);
     const share = Math.round((sizeBytes / DATABASE_CEILING_BYTES) * 100);
@@ -339,6 +482,93 @@ async function main() {
       warn(
         "Database approaching its ceiling",
         `${gib} GiB of 8 GiB (${share}%); the database goes read-only at the ceiling, which stops collection and every write the site makes`,
+      );
+    }
+  }
+
+  // More than a handful of companies enriched and not one skipped means the skip is dead, which is 70% of the run.
+  // Measured on the rig: three consecutive completed passes take it from 165.6 s to 1.1 s and 86.5 MB to 0.2 MB.
+  out(`### Enrichment skip (last ${WINDOW_HOURS}h)`);
+  out();
+  out(`${skips.skipped} of ${skips.considered} companies skipped as unchanged.`);
+  out();
+  if (skips.considered >= ENRICHMENT_SKIP_FLOOR && skips.skipped === 0) {
+    warn(
+      "Enrichment skip is not firing",
+      `${skips.considered} companies enriched in ${WINDOW_HOURS}h and none was skipped as unchanged; enrichment is `
+        + "most of a collection run, and this skip has silently stopped working three times before",
+    );
+  }
+
+  out(`### Source freshness`);
+  out();
+  out(
+    `${fetchAges.total} enabled sources. Oldest fetch ${ago(fetchAges.oldest?.last_fetched_at)}; `
+      + `${fetchAges.stale.length} not fetched in ${SOURCE_STALE_AFTER_HOURS}h; ${fetchAges.never.length} never fetched.`,
+  );
+  out();
+  if (fetchAges.never.length) {
+    warn(
+      "Sources never fetched",
+      `${fetchAges.never.length} enabled source(s) have never been fetched; collection is not reaching them`,
+    );
+  }
+  if (fetchAges.stale.length) {
+    warn(
+      "Sources not being reached",
+      `${fetchAges.stale.length} enabled source(s) have not been fetched in ${SOURCE_STALE_AFTER_HOURS}h, the oldest `
+        + `${ago(fetchAges.oldest?.last_fetched_at)}; a run can report success without reaching the end of its list`,
+    );
+  }
+
+  out(`### Sources that produce nothing`);
+  out();
+  out(
+    `${production.dead.length} of ${production.live} enabled sources have been fetched `
+      + `${SOURCE_DEAD_AFTER_FETCHES}+ times and produced no job, signal or capture. `
+      + `${production.refused.length} are enabled while the recruiting-path rules refuse them.`,
+  );
+  out();
+  if (production.dead.length) {
+    out("| Company | Adapter | Source | Successful fetches |");
+    out("|---|---|---|---:|");
+    for (const row of production.dead.slice(0, 15)) {
+      out(`| ${cell(row.company_name)} | ${cell(row.adapter)} | ${cell(row.url)} | ${row.successful_fetches} |`);
+    }
+    out();
+    warn(
+      "Sources producing nothing",
+      `${production.dead.length} enabled source(s) have been fetched ${SOURCE_DEAD_AFTER_FETCHES}+ times and have `
+        + "never produced a job, a signal or an archive capture; they are paid for on every run",
+    );
+  }
+  if (production.refused.length) {
+    warn(
+      "Sources enabled but refused",
+      `${production.refused.length} enabled source(s) are skipped by the recruiting-path rules on every run; `
+        + "something the system refuses to use should not look live in the source list",
+    );
+  }
+
+  if (discovery.companies.length) {
+    out(`### Discovery refusals`);
+    out();
+    out(
+      `${discovery.companies.length} companies with a recorded discovery. `
+        + `${discovery.atePages.length} admitted no page source while refusing `
+        + `${DISCOVERY_REFUSALS_WITHOUT_A_PAGE}+ links.`,
+    );
+    out();
+    for (const row of discovery.atePages) {
+      out(`- **${cell(row.domain)}**: admitted 0 page sources, refused ${row.refused} (${JSON.stringify(row.byRule)})`);
+    }
+    if (discovery.atePages.length) {
+      out();
+      warn(
+        "Discovery admitted no page sources",
+        `${discovery.atePages.length} company/companies finished discovery having admitted no page source while `
+          + `refusing ${DISCOVERY_REFUSALS_WITHOUT_A_PAGE}+ links; either they have no careers pages or a `
+          + "recruiting-path rule is too broad and ate them",
       );
     }
   }

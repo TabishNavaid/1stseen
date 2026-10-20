@@ -14,9 +14,15 @@ from firstseen.adapters import GenericCareerPageAdapter, SitemapAdapter
 from firstseen.adapters.registry import AdapterRegistry
 from firstseen.adapters.wayback import WaybackAdapter
 from firstseen.recruiting_paths import (
+    REFUSAL_IN_A_NON_RECRUITING_SECTION,
+    REFUSAL_NOT_A_RECRUITING_SITEMAP,
+    REFUSAL_OFF_THE_RECRUITING_PATH,
+    REFUSAL_SINGLE_JOB_POSTING,
     page_source_allowed,
+    page_source_refusal,
     recruiting_page,
     recruiting_sitemap,
+    single_job_page,
     sitemap_children,
     sitemap_job_page,
 )
@@ -57,6 +63,86 @@ class RecruitingPageTests(unittest.TestCase):
         ):
             with self.subTest(url=url):
                 self.assertFalse(recruiting_page(url))
+
+    def test_one_job_posting_is_never_a_recurring_source(self) -> None:
+        """Discovery registered fifteen job detail pages as recurring page sources.
+
+        Ten at IMC, three at Vercel, two at Canonical, all as `related_career_page`, because a posting linked
+        from a careers page is on the company's own site under a recruiting path and named for a job -- it
+        passes every other test. It is still one row of a board we already poll: it stops existing when the
+        posting closes, and its anchor text on the listing carries the row's facet columns, which is where
+        "Hardware Engineer Intern Intern Technology Amsterdam" came from. The guard runs in
+        `page_source_allowed`, so it keeps discovery from registering one and stops collection fetching the
+        ones already registered.
+        """
+        for url in (
+            # IMC and Canonical: a bare numeric board id as the last segment.
+            "https://www.imc.com/us/careers/jobs/4751729101",
+            "https://canonical.com/careers/4981249",
+            # Vercel: a slug with the id on the end.
+            "https://vercel.com/careers/software-engineering-intern-summer-27-6181759004",
+            # Lever and Ashby write a UUID.
+            "https://jobs.example.com/careers/3f1c2b4a-5d6e-7f80-9a1b-2c3d4e5f6071",
+            # No id anywhere, which the first version of this rule could not see at all. Keying on an id found 15 of
+            # the rig's 286 page sources; these found 17 more, so the id rule was less than half the category.
+            "https://careers.withwaymo.com/jobs/2027-summer-intern-bs-ms-software-engineer-san-francisco-california-united-states",
+            "https://www.hudsonrivertrading.com/hrt-job/hardware-engineer-internship-summer-2027",
+            "https://dvtrading.co/job-post/2025-summer-internship-software-developer-dv-commodities-london",
+            "https://www.optiver.com/join-us/jobs/technology/london/graduate-software-engineer",
+            "https://www.optiver.com/join-us/jobs/institutional-sales-and-trading/austin/quantitative-intern-summer-2027",
+        ):
+            with self.subTest(url=url):
+                self.assertTrue(single_job_page(url))
+                # It is on a recruiting path -- that is what `recruiting_page` answers -- and is still not a source.
+                self.assertTrue(recruiting_page(url))
+                self.assertFalse(page_source_allowed("generic", url))
+                self.assertFalse(page_source_allowed("wayback", url))
+
+    def test_each_refusal_names_the_rule_that_made_it(self) -> None:
+        """A retirement has to be explicable six months later, so the rule carries its own name.
+
+        The rules refuse 132 of 439 enabled sources, and "not on a recruiting path" and "a single job posting" are
+        different enough findings that one shared code made the 132 unreadable. `page_source_allowed` is this
+        answered as a yes or no, so the two cannot disagree.
+        """
+        cases = {
+            "https://ubuntu.com/internet-of-things/contact-us": REFUSAL_IN_A_NON_RECRUITING_SECTION,
+            "https://www.optiver.com/join-us/jobs/technology/london/graduate-software-engineer": REFUSAL_SINGLE_JOB_POSTING,
+            "https://vercel.com/passport": REFUSAL_OFF_THE_RECRUITING_PATH,
+        }
+        for url, rule in cases.items():
+            with self.subTest(url=url):
+                self.assertEqual(page_source_refusal("generic", url), rule)
+                self.assertFalse(page_source_allowed("generic", url))
+        self.assertEqual(
+            page_source_refusal("sitemap", "https://ramp.com/sitemap/vendors.xml"),
+            REFUSAL_NOT_A_RECRUITING_SITEMAP,
+        )
+        # A source the rules allow has no refusal, and a non-page adapter is never refused here.
+        self.assertIsNone(page_source_refusal("generic", "https://canonical.com/careers"))
+        self.assertIsNone(page_source_refusal("greenhouse", "https://boards.greenhouse.io/fixture"))
+
+    def test_a_page_that_lists_jobs_is_not_mistaken_for_one(self) -> None:
+        """Six digits and not four, and a slug under `jobs` must name a role before it is a posting.
+
+        The second test is what keeps a department index from being swept up with the postings beneath it:
+        `/join-us/jobs/technology` and `/jobs/search` sit under a posting parent and name no role.
+        """
+        for url in (
+            "https://canonical.com/careers",
+            "https://www.imc.com/us/careers/students-graduates",
+            "https://example.com/careers/emerging-talent-2026",
+            "https://example.com/careers/2027-internships",
+            "https://example.com/careers/class-of-2027",
+            "https://example.com/careers/university/programs",
+            # Under a posting parent, but a department index and a search page, not postings.
+            "https://www.optiver.com/join-us/jobs/technology",
+            "https://www.optiver.com/join-us/jobs/institutional-sales-and-trading",
+            "https://careers.withwaymo.com/jobs/search",
+            "https://example.com/jobs",
+        ):
+            with self.subTest(url=url):
+                self.assertFalse(single_job_page(url))
 
     def test_story_blog_news_and_benefit_sections_are_not_postings_even_on_recruiting_paths(self) -> None:
         for url in (
