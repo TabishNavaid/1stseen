@@ -321,7 +321,19 @@ Prepared and dry-run verified; not yet deployed.
 
 ### Deploy
 
-Log in once with `npx wrangler login` (or export `CLOUDFLARE_API_TOKEN`). Then, from the repository root:
+**Deploy from `~/Desktop/firstseen` on `main`, and from nowhere else.** `main` is what deploys. For a while it was
+not: production was deployed from the `firstseen-redesign` worktree while the redesign branch was ahead, so `main`
+did not represent what was live and a deploy from `main` would have regressed the site. The worktrees
+(`firstseen-redesign`, `firstseen-perf`) are for building and reviewing, never for shipping: a deploy command run in
+one of them builds that branch's tree, which is how a fifteen-commit-old build nearly went out. Before deploying,
+confirm the checkout and the branch, and that nothing is unpushed:
+
+```bash
+git -C ~/Desktop/firstseen rev-parse --abbrev-ref HEAD && git -C ~/Desktop/firstseen status -sb | head -1
+```
+
+Expect `main` and `## main...origin/main` with no ahead/behind. Then log in once with `npx wrangler login` (or export
+`CLOUDFLARE_API_TOKEN`), and from that repository root:
 
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key> FIRSTSEEN_AGENT_API_URL=https://<service>.run.app WEB_DOMAIN=1stseen.win npm run deploy:web

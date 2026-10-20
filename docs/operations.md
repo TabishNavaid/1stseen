@@ -97,6 +97,13 @@ reported as such, never silently passed):
 
 The Worker check is also how production CPU is read (below).
 
+## Which checkout deploys
+
+`~/Desktop/firstseen` on `main`. The other worktrees (`firstseen-redesign`, `firstseen-perf`) build and review; they
+never ship. Production was deployed from the redesign worktree for a while, so `main` did not represent what was live,
+and a deploy command run in the wrong worktree nearly shipped a fifteen-commit-old build. `docs/deployment.md` has the
+check to run before deploying.
+
 ## Rolling back the web app
 
 The web app is one Cloudflare Worker, `firstseen-web`. Every deploy is a version, and a rollback puts an earlier version
