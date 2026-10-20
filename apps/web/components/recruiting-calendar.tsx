@@ -188,7 +188,7 @@ export function RecruitingCalendar({
           <ul className="mt-3 space-y-2">
             {unforecastable.map((item) => (
               <li key={item.roleId} className="text-caption text-ink-muted">
-                <Link href={`/roles/${item.roleId}`} className="font-semibold text-ink hover:underline">{item.company} · {item.role}</Link>
+                <Link href={`/roles/${item.roleId}`} prefetch={false} className="font-semibold text-ink hover:underline">{item.company} · {item.role}</Link>
                 <span> · {item.reason}</span>
                 {item.lastObservedOn && <span> Last seen open {formatDate(item.lastObservedOn, { month: "short", day: "numeric", year: "numeric" })}.</span>}
               </li>

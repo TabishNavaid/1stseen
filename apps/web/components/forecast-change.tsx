@@ -24,7 +24,7 @@ export function ForecastChange({ change }: { change: ForecastChangeView }) {
     <article className="border-b border-line py-4 last:border-0">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <p className="text-xs font-semibold text-ink">
-          <Link href={`/roles/${change.roleId}`} className="focus-ring rounded-sm hover:underline">
+          <Link href={`/roles/${change.roleId}`} prefetch={false} className="focus-ring rounded-sm hover:underline">
             <span className="font-normal text-ink-muted">{change.company}</span> {change.program}
           </Link>
         </p>

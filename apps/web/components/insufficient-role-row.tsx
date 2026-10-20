@@ -20,7 +20,7 @@ export function InsufficientRoleRow({ item }: { item: DashboardListItem }) {
       <div className="min-w-0">
         <p className="text-micro font-semibold uppercase tracking-label text-ink-subtle">{item.company}</p>
         <h3 className="mt-1 line-clamp-2 text-base font-medium leading-snug text-ink sm:text-lg">
-          <Link href={`/roles/${item.id}`} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{item.role}</Link>
+          <Link href={`/roles/${item.id}`} prefetch={false} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{item.role}</Link>
         </h3>
         <p className="mt-1 truncate text-caption text-ink-subtle">{roleMeta(item)}</p>
       </div>

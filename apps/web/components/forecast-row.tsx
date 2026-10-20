@@ -22,6 +22,14 @@ import { cn } from "@/lib/utils";
  * The loud thing is the date, because it is the only fact on this page that nobody else has. Under it the window,
  * which a date is never shown without, and the confidence word on the same line rather than stacked beneath it: three
  * stacked lines in a narrow column is how the clutter comes back.
+ *
+ * The link to the program does not prefetch. A list renders one per row, and an RSC prefetch of a role page is a full
+ * uncached server render -- `guest-cache.ts` refuses anything carrying `_rsc`, because an RSC payload is not a
+ * document. Measured on 1stseen.win on 2026-10-20: a single visit to the list fired ten prefetches costing 13.5 s of
+ * server work, the slowest 3.4 s, to make instant the one row a reader actually clicks. A cached document on that
+ * same page answers in 77 ms, so the prefetching cost more than two orders of magnitude more than the page it was
+ * trying to help. Every other list of programs does the same (`insufficient-role-row`, `recruiting-timeline`,
+ * `forecast-change`, `recruiting-calendar`); a single deliberate link, like the drawer's, still prefetches.
  */
 export function ForecastRow({
   role,
@@ -57,7 +65,7 @@ export function ForecastRow({
           {role.status === "signal" && <span className="flex items-center gap-1 normal-case tracking-normal text-warning-ink"><Icon name="radio" size={11} />new signal</span>}
         </p>
         <h3 className="mt-1 line-clamp-2 text-base font-medium leading-snug text-ink sm:text-lg" title={role.role}>
-          <Link href={`/roles/${role.id}`} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{role.role}</Link>
+          <Link href={`/roles/${role.id}`} prefetch={false} className="focus-ring rounded-sm hover:underline max-sm:inline-flex max-sm:min-h-touch max-sm:items-center">{role.role}</Link>
         </h3>
         <p className="mt-1 truncate text-caption text-ink-subtle">{item ? roleMeta(item) : `${role.track} · ${locationLabel(role.location)}`}</p>
       </div>
