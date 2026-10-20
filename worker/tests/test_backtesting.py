@@ -148,7 +148,7 @@ class BacktestLeakageTests(unittest.TestCase):
                 "event",
                 "role",
                 date(2024, 1, 1),
-                datetime(2024, 1, 1),  # noqa: DTZ001
+                datetime(2024, 1, 1),
                 0.8,
             )
 
