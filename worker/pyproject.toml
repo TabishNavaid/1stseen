@@ -17,7 +17,12 @@ dependencies = [
 [project.optional-dependencies]
 browser = ["playwright>=1.48,<2"]
 api = ["uvicorn>=0.32,<1"]
-dev = ["ruff>=0.7,<1", "mypy>=1.13,<2"]
+# Exact versions, bumped deliberately. A range let ruff 0.17.1 turn main red on 2026-10-20 with no change to
+# the code: it began reporting a `# noqa: DTZ001` that had been dead since the initial commit, and nothing
+# chose that. A linter release is a decision about what this repository rejects, and a decision made where
+# nobody is looking is the failure this project keeps paying for. Losing new rules until someone picks them up
+# is the point of pinning, not its cost: raise these two numbers in their own change, with the gate green.
+dev = ["ruff==0.17.1", "mypy==1.20.2"]
 
 [project.scripts]
 firstseen = "firstseen.cli:main"
