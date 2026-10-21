@@ -16,6 +16,7 @@ import type {
 } from "@/lib/role-view";
 import { formatDay, utcDate as isoDate } from "@/lib/dates";
 import { displayCompany, displayPlace, displayTitle, tidyTitle, type RecordedTitle } from "@/lib/display-names";
+import { memoizedTitles, type RecordedTitlesReader } from "@/lib/recorded-titles";
 import { changeNotes, isFelt } from "@/lib/forecast-change-notes";
 import {
   DASHBOARD_PAGE_SIZE,
@@ -237,6 +238,18 @@ export async function loadRecordedTitles(reader: PublicReader, roleIds: string[]
     titles.set(roleId, [...(titles.get(roleId) ?? []), { title: String(row.alias_title), lastSeenAt: String(row.last_seen_at) }]);
   }
   return titles;
+}
+
+/**
+ * A recorded-titles reader that asks for each role once, however many times a render needs it.
+ *
+ * The landing page needed them twice: `loadJustOpened` reads them for the openings it shows, and `loadLandingData`
+ * reads them again for the preview role and the opening-soon rows. Two reads of `role_aliases` in one render, which
+ * re-read every role the two sets share. One of these passed through both call sites asks the database only for the
+ * roles it has not already seen. The memo is `lib/recorded-titles.ts`, which is testable on its own.
+ */
+export function recordedTitlesReader(reader: PublicReader): RecordedTitlesReader {
+  return memoizedTitles((roleIds) => loadRecordedTitles(reader, roleIds));
 }
 
 /**
@@ -506,7 +519,7 @@ function rowMatchesFilters(row: OpeningRow, filters: DashboardFilters, names: Ma
  */
 export async function loadJustOpened(
   reader: PublicReader = createPublicReader(),
-  { limit = JUST_OPENED_PAGE_SIZE, offset = 0, companyId = null, filters = null }: { limit?: number; offset?: number; companyId?: string | null; filters?: DashboardFilters | null } = {},
+  { limit = JUST_OPENED_PAGE_SIZE, offset = 0, companyId = null, filters = null, titles = null }: { limit?: number; offset?: number; companyId?: string | null; filters?: DashboardFilters | null; titles?: RecordedTitlesReader | null } = {},
 ): Promise<JustOpenedFeed> {
   const since = daysAgo(JUST_OPENED_DAYS);
   // The whole 45 days, paged: the feed's order depends on every opening in it, and its total is their count.
@@ -535,7 +548,10 @@ export async function loadJustOpened(
     ? { feed: matching, overflow: [] }
     : interleaveByCompany(matching, (row) => companyOf(row).id);
   const page = feed.slice(offset, offset + limit);
-  const recorded = await loadRecordedTitles(reader, page.map((row) => String(row.canonical_role_id)));
+  // The caller may pass a reader it also uses elsewhere in the same render, so a role is read once (see
+  // `recordedTitlesReader`). On its own page this is the only read either way.
+  const readTitles = titles ?? recordedTitlesReader(reader);
+  const recorded = await readTitles(page.map((row) => String(row.canonical_role_id)));
   const openings = page.flatMap((row): RealOpening[] => {
     const role = embeddedOne(row.canonical_roles) as (EmbeddedRoleIdentity & { early_career_type?: string | null; location_scope?: string | null }) | null;
     const company = role ? embeddedOne(role.companies) : null;

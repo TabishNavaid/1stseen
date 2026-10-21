@@ -4,7 +4,7 @@ import { defaultDashboardFilters, filterRpcArgs, programTypeLabel, type Dashboar
 import { createPublicReader, type PublicReader } from "@/lib/public-read";
 import type { ForecastBasis } from "@/lib/forecast-basis";
 import { displayCompany, displayTitle } from "@/lib/display-names";
-import { hasServiceRoleConfig, loadForecastBasis, loadJustOpened, loadRecordedTitles, type RealOpening } from "@/lib/real-data";
+import { hasServiceRoleConfig, loadForecastBasis, loadJustOpened, recordedTitlesReader, type RealOpening } from "@/lib/real-data";
 import { featuredOf, rhythmOf, type OpeningRhythm } from "@/lib/featured-program";
 import { fetchAllIn } from "@/lib/supabase/paging";
 import type { DatePrecision } from "@/lib/role-view";
@@ -171,6 +171,9 @@ async function openingRhythms(reader: PublicReader, roleIds: string[]): Promise<
 export async function loadLandingData(now: Date = new Date()): Promise<LandingData | null> {
   if (!hasServiceRoleConfig()) return null;
   const reader = createPublicReader();
+  // One recorded-titles reader for the whole render: the just-opened strip and the preview and opening-soon rows all
+  // go through it, so a role's aliases are read once however many of them name it.
+  const readTitles = recordedTitlesReader(reader);
   const today = now.toISOString().slice(0, 10);
   const withForecast: DashboardFilters = { ...defaultDashboardFilters, confidence: ["strong", "moderate", "limited"] };
 
@@ -182,7 +185,7 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
     // bounded: p_limit 12, from which at most OPENING_SOON_LIMIT current windows are shown.
     reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "window", 1, 12)),
     // The first JUST_OPENED_STRIP of the Just opened feed, in its order (no company takes more than two of six).
-    loadJustOpened(reader, { limit: JUST_OPENED_STRIP }),
+    loadJustOpened(reader, { limit: JUST_OPENED_STRIP, titles: readTitles }),
     // bounded: one row of totals, for the programs the status line states.
     reader.rpc("dashboard_role_summary", { p_now: now.toISOString(), p_user_id: null, ...filterRpcArgs(defaultDashboardFilters), p_per_company: 0 }),
     // bounded: limit 1, the newest observation, which is when collection last wrote anything.
@@ -200,7 +203,7 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
   const [basis, openings, recorded] = await Promise.all([
     basisIds.length ? loadForecastBasis(reader, basisIds) : Promise.resolve(new Map<string, ForecastBasis>()),
     previewRow ? openingsOf(reader, previewRow.role_id) : Promise.resolve([]),
-    loadRecordedTitles(reader, [...(previewRow ? [previewRow.role_id] : []), ...soonRows.map((row) => row.role_id)]),
+    readTitles([...(previewRow ? [previewRow.role_id] : []), ...soonRows.map((row) => row.role_id)]),
   ]);
 
   const preview: LandingPreview | null = previewRow
