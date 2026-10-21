@@ -5,8 +5,16 @@
  * when it truncates, so an unpaged read of a table that has outgrown the cap silently
  * drops rows. That is how the dashboard once read 1,000 of 3,451 roles.
  *
- * Paging stops only on an empty page, never on a short one: a server configured with
- * a cap below PAGE_SIZE returns short pages that are not the end.
+ * Paging stops on a page shorter than PAGE_SIZE. That is the end of the rows only while the server's cap is at least
+ * PAGE_SIZE: a project configured with `max_rows` below it would return short pages long before the end, and paging
+ * would stop early and silently, which is the failure this file exists to prevent. The cap is therefore no longer
+ * assumed here -- `npm run verify:supabase` asks the deployed PostgREST for a page of PAGE_SIZE + 1 rows and fails
+ * when fewer than PAGE_SIZE come back (`paging/row-cap`), so the assumption is enforced where it can be observed
+ * rather than worked around on every read.
+ *
+ * It used to stop only on an empty page, which needed no assumption but cost one extra request per paged read for no
+ * information: a read of 363 rows asked twice, and the landing page paid that four times per render. A page of
+ * exactly PAGE_SIZE is still ambiguous -- the cap and the data end at the same number -- so that case asks again.
  *
  * No `server-only` import, so the helpers can be tested directly.
  */
@@ -27,6 +35,9 @@ export type PagedQuery<T> = {
  * unordered or non-unique order can return one row twice and skip another between pages. Reaching MAX_ROWS throws
  * rather than returning a partial result that would read as complete. `tests/read-bounds.test.mjs` fails on any
  * PostgREST read that is neither paged here nor annotated with the hard cap that bounds it.
+ *
+ * A short page ends the read; a full one asks again. See the note at the top of this file for what that assumes and
+ * where it is enforced.
  */
 export async function fetchAll<T>(query: () => PagedQuery<T>, label: string, key: string | readonly string[]): Promise<T[]> {
   const keys = typeof key === "string" ? [key] : [...key];
@@ -39,8 +50,9 @@ export async function fetchAll<T>(query: () => PagedQuery<T>, label: string, key
     const { data, error } = await ordered.range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(`${label}_read_failed`);
     const page = data ?? [];
-    if (page.length === 0) return rows;
     rows.push(...page);
+    // Short of a full page is the end of the rows. A full page may be the server's cap, so it asks again.
+    if (page.length < PAGE_SIZE) return rows;
     from += page.length;
     if (from >= MAX_ROWS) throw new Error(`${label}_read_exceeded_${MAX_ROWS}_rows`);
   }

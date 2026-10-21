@@ -219,6 +219,57 @@ async function describeRestFailure(rest, error, status, statusText) {
   return parts.join("; ");
 }
 
+/**
+ * PostgREST's row cap must be at least the page size `fetchAll` asks for.
+ *
+ * Paging stops on a page shorter than PAGE_SIZE (apps/web/lib/supabase/paging.ts). That is the end of the rows only
+ * while the deployed cap is at least PAGE_SIZE; a project configured below it returns short pages long before the
+ * end, and every paged read would stop early and silently. The code no longer defends against that on every read, so
+ * it is checked here, against the deployed PostgREST, once.
+ *
+ * Asks for PAGE_SIZE + 1 rows of the largest table and counts what comes back. A project without more than PAGE_SIZE
+ * rows anywhere cannot answer the question, which is reported rather than passed.
+ */
+async function checkPagingRowCap(rest) {
+  const PAGE_SIZE = 1000;
+  const { count, error: countError } = await rest
+    .from("raw_job_observations")
+    .select("id", { count: "exact", head: true });
+  if (countError) {
+    record("FAIL", "paging/row-cap", `could not count public.raw_job_observations: ${countError.message ?? countError}`);
+    return;
+  }
+  if ((count ?? 0) <= PAGE_SIZE) {
+    record(
+      "INFO",
+      "paging/row-cap",
+      `not checkable: public.raw_job_observations holds ${count ?? 0} rows, and the cap shows only above ${PAGE_SIZE}`,
+    );
+    return;
+  }
+  const { data, error } = await rest
+    .from("raw_job_observations")
+    .select("id")
+    .order("id", { ascending: true })
+    .range(0, PAGE_SIZE);
+  if (error) {
+    record("FAIL", "paging/row-cap", `could not read a page of public.raw_job_observations: ${error.message ?? error}`);
+    return;
+  }
+  const returned = (data ?? []).length;
+  if (returned < PAGE_SIZE) {
+    record(
+      "FAIL",
+      "paging/row-cap",
+      `PostgREST returned ${returned} rows for a request of ${PAGE_SIZE + 1}, so db.max_rows is below the ${PAGE_SIZE} `
+        + "page size fetchAll reads: every paged read would stop at the first short page and silently drop the rest. "
+        + "Raise max_rows to at least the page size, or lower PAGE_SIZE below the cap.",
+    );
+    return;
+  }
+  record("PASS", "paging/row-cap", `PostgREST serves at least ${PAGE_SIZE} rows a page, which is what fetchAll assumes`);
+}
+
 async function checkRestSurface() {
   let rest;
   try {
@@ -676,6 +727,9 @@ async function main() {
     }
     if (rest) await checkNoFixtureRowsViaRest(rest);
   }
+
+  // The deployed row cap is a PostgREST fact, so it is checked whenever REST is reachable, SQL path or not.
+  if (rest) await checkPagingRowCap(rest);
 
   process.stdout.write(`\n${table()}\n`);
 

@@ -47,12 +47,32 @@ test("reads every row of a table larger than the PostgREST row cap", async () =>
   assert.equal(new Set(result.map((row) => row.id)).size, 2_345);
 });
 
-test("does not mistake a server cap below the page size for the end of the table", async () => {
-  // A project configured with max_rows = 250 returns short pages long before the end.
+test("a short page ends the read and a full one asks again, so one request answers a small table", async () => {
+  const small = cappedTable(rows(363), 1_000);
+  const read = await fetchAll(() => small.query(), "roles", "id");
+  assert.equal(read.length, 363);
+  assert.equal(new Set(read.map((row) => row.id)).size, 363, "every row, once");
+  assert.deepEqual(small.requests, [[0, PAGE_SIZE - 1]], "363 rows is one request, not two");
+
+  // A page of exactly PAGE_SIZE is the server's cap and the end of the rows at once, so it cannot be read as either.
+  const exact = cappedTable(rows(PAGE_SIZE), 1_000);
+  assert.equal((await fetchAll(() => exact.query(), "roles", "id")).length, PAGE_SIZE);
+  assert.equal(exact.requests.length, 2, "a full page is ambiguous and asks again");
+});
+
+test("a server cap below the page size would end a read early, which verify:supabase is what prevents", async () => {
+  /*
+   * This is the cost of stopping on a short page, written down rather than defended against on every read. A project
+   * whose `max_rows` is under PAGE_SIZE returns short pages long before the end, and this read stops at the first
+   * one. `scripts/verify-supabase.mjs` (`paging/row-cap`) asks the deployed PostgREST for PAGE_SIZE + 1 rows and
+   * fails when fewer than PAGE_SIZE come back, so a project that would break this cannot be declared ready.
+   *
+   * The test pins the consequence so nobody rediscovers it as a bug: if this ever reads 1,100 rows again, the
+   * paging has gone back to a request per read it does not need, and the check is the thing to delete instead.
+   */
   const table = cappedTable(rows(1_100), 250);
-  const result = await fetchAll(() => table.query(), "roles", "id");
   assert.equal(PAGE_SIZE > 250, true);
-  assert.equal(result.length, 1_100);
+  assert.equal((await fetchAll(() => table.query(), "roles", "id")).length, 250);
 });
 
 test("batches id lists and reads every matching row in each batch", async () => {
