@@ -108,6 +108,17 @@ them from the Cloudflare Cache API (`apps/web/cloudflare/guest-cache.ts`).
   or a collection run moves every guest page to a new key everywhere, with no purge API call.
   - The Worker reads the version at most every 10 seconds per isolate, and a stored page lives at most 5 minutes.
   - Agent audit tables do not advance the version, so a guest cannot empty the cache by asking questions.
+  - **Only relations a guest page can read advance it.** Three did not qualify and were bumping it anyway (migration
+    202608140062): `sources` and `source_fetches`, which `record_fetch` writes once per source on every run,
+    unchanged sources included, and `backtest_cases`. The last current-jobs run collected 370 sources, so those two
+    moved the version **740 times in one run** -- 740 global invalidations, against the 1 to 36 observations created
+    and 3 to 9 changed in the same run. A run takes about 42 minutes, so the version moved roughly every 3.4 seconds
+    throughout it, and the first visitor after each move paid an uncached render. The rule is checked in both
+    directions by `apps/web/tests/integration/guest-cache-version.test.mjs`, which reads
+    `lib/public-read-policy.ts` rather than restating it: a relation added to the policy without its trigger fails,
+    and a relation that bumps the version without being readable fails.
+  - `raw_job_observations.last_seen_at` is guest-readable deliberately -- the role page renders it as "last seen" --
+    so collection advancing it is a content change, not plumbing, and it does move the version.
 - **Nonces:** a rendered page carries its CSP nonce in 37 places. The stored copy records its nonce, and a hit swaps
   in the request's fresh one, so no nonce is ever shared between visitors.
 - **Switch:** `FIRSTSEEN_EDGE_CACHE=off` renders every request. It is used to measure the uncached path.
