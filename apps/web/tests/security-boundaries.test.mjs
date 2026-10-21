@@ -105,12 +105,7 @@ test("only a Supabase identity may scope an agent answer to a watchlist", async 
   assert.doesNotMatch(source, /parsed\.data\.user_id/);
 });
 
-test("the readiness route derives ownership from the session, never the request body", async () => {
-  // A body carrying someone else's id is refused for want of a session, rather than acted on for the id it names.
-  const withOwnerInBody = await post("/api/readiness", { role_id: REPLAY.role_id, user_id: FORGED_IDENTITY["x-firstseen-user-id"] });
-  assert.equal(withOwnerInBody.status, 401, withOwnerInBody.body);
-  assert.deepEqual(withOwnerInBody, await post("/api/readiness", { role_id: REPLAY.role_id }), "the body's user_id changed the answer");
-
+test("the readiness route takes ownership from the session and never from the request body", async () => {
   const source = await read("../app/api/readiness/route.ts");
   assert.match(source, /const auth = await authenticatedUser\(\);/);
   assert.match(source, /requestReadinessPlan\(auth\.userId, parsed\.data\.role_id\)/);
@@ -118,6 +113,23 @@ test("the readiness route derives ownership from the session, never the request 
   // The one place the worker is asked for a plan sends the id it was given, and only that id.
   const helper = await read("../lib/readiness-plan.ts");
   assert.match(helper, /body: JSON\.stringify\(\{ role_id: roleId, user_id: userId \}\)/);
+});
+
+test("a readiness request naming someone else's id in its body is refused for want of a session", async (t) => {
+  /*
+   * The request half of the boundary above, which only a build carrying NEXT_PUBLIC_SUPABASE_* can show: without it
+   * `authenticatedUser` answers 503 before it ever looks for a session (lib/supabase/authenticated.ts), so a route
+   * that *did* trust the body would answer exactly the same 503 and this would pass while proving nothing. CI builds
+   * without that configuration, so it is skipped there and stated, the way tests/account-routes.test.mjs does, rather
+   * than asserted against a response that cannot distinguish the two. The source assertions above run everywhere.
+   */
+  const withoutOwner = await post("/api/readiness", { role_id: REPLAY.role_id });
+  if (withoutOwner.status === 503) {
+    return t.skip("build has no NEXT_PUBLIC_SUPABASE_* configuration; the route answers 503 before the session check");
+  }
+  const withOwnerInBody = await post("/api/readiness", { role_id: REPLAY.role_id, user_id: FORGED_IDENTITY["x-firstseen-user-id"] });
+  assert.equal(withOwnerInBody.status, 401, withOwnerInBody.body);
+  assert.deepEqual(withOwnerInBody, withoutOwner, "the body's user_id changed the answer");
 });
 
 test("onboarding writes and plans only for the signed-in user", async () => {
