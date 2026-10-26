@@ -1,13 +1,19 @@
 /**
  * The design tokens in app/globals.css meet WCAG 2.1 AA, in both themes.
  *
- * Reads the hex color tokens straight from the stylesheet, so a token changed without checking its contrast
+ * Reads the color tokens straight from the stylesheet, so a token changed without checking its contrast
  * fails here. Text needs 4.5:1; UI component boundaries, focus indicators, evidence-class borders, calendar
  * marks, and confidence rings need 3:1 (WCAG 1.4.3 and 1.4.11).
  *
  * A themed token is written `light-dark(light, dark)`, so each rule below is checked twice, once per theme, and a
- * failure says which one it is. A token written as one hex is the same colour in both — the navigation surfaces are
+ * failure says which one it is. A token written as one value is the same colour in both — the navigation surfaces are
  * dark in either theme, and inverse text on a filled accent is white in either.
+ *
+ * A token is a hex or an `oklch(L C H)`, and the two mix inside one `light-dark()`. The neutrals the page is built
+ * out of are oklch so a step between two of them is a step in lightness and nothing else; the rest are the hexes they
+ * were sampled as. `srgbHex` below converts, and it was checked against the browser's own rasterisation of all
+ * fourteen oklch values used here: thirteen match exactly and one lands a single 8-bit step away at a rounding
+ * boundary, which is far too small to move a ratio across a threshold.
  */
 
 import assert from "node:assert/strict";
@@ -17,12 +23,39 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
-const DECLARATION = /--color-([a-z-]+):\s*(?:(#[0-9a-f]{6})|light-dark\(\s*(#[0-9a-f]{6})\s*,\s*(#[0-9a-f]{6})\s*\))\s*;/gi;
+const VALUE = "(#[0-9a-f]{6}|oklch\\([\\d.]+ [\\d.]+ [\\d.]+\\))";
+const DECLARATION = new RegExp(`--color-([a-z-]+):\\s*(?:${VALUE}|light-dark\\(\\s*${VALUE}\\s*,\\s*${VALUE}\\s*\\))\\s*;`, "gi");
+
+/** oklch(L C H) as the sRGB hex a browser paints, through oklab and linear sRGB, clamped and rounded to 8 bits. */
+function srgbHex(L, C, H) {
+  const hue = (H * Math.PI) / 180;
+  const a = C * Math.cos(hue);
+  const b = C * Math.sin(hue);
+  const long = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const medium = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const short = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  const linear = [
+    4.0767416621 * long - 3.3077115913 * medium + 0.2309699292 * short,
+    -1.2684380046 * long + 2.6097574011 * medium - 0.3413193965 * short,
+    -0.0041960863 * long - 0.7034186147 * medium + 1.7076147010 * short,
+  ];
+  return `#${linear.map((channel) => {
+    const encoded = channel <= 0.0031308 ? 12.92 * channel : 1.055 * Math.max(channel, 0) ** (1 / 2.4) - 0.055;
+    return Math.round(Math.min(1, Math.max(0, encoded)) * 255).toString(16).padStart(2, "0");
+  }).join("")}`;
+}
+
+/** A token's value as a hex, whichever of the two notations it is written in. */
+function hexOf(value) {
+  if (value.startsWith("#")) return value.toLowerCase();
+  const [lightness, chroma, hue] = value.match(/[\d.]+/g).map(Number);
+  return srgbHex(lightness, chroma, hue);
+}
 
 /** Every color token as this theme resolves it. */
 function palette(theme) {
   return Object.fromEntries(
-    [...css.matchAll(DECLARATION)].map(([, name, single, light, dark]) => [name, (single ?? (theme === "dark" ? dark : light)).toLowerCase()]),
+    [...css.matchAll(DECLARATION)].map(([, name, single, light, dark]) => [name, hexOf(single ?? (theme === "dark" ? dark : light))]),
   );
 }
 
@@ -171,7 +204,7 @@ test("the bands the landing page changes colour with keep every ink on them legi
 test("the warm accent is legible: its text on its own surface and the page, ink on its fill, and its line on a panel", () => {
   expectContrast([["warm-ink", "warm-soft"], ["warm-ink", "surface"], ["warm-ink", "canvas"]], 4.5);
   expectContrast([["warm-line", "surface"], ["warm-line", "warm-soft"]], 3);
-  // The fill carries ink on paper. On a dark page it carries none — it is an underline, a pinging dot, a glow — so
+  // The fill carries ink on paper. On a dark page it carries none — it is an underline, a pinging dot — so
   // what it owes there is 1.4.11: a graphic that holds against the page it is drawn on.
   expectContrast([["ink", "warm"]], 4.5, ["light"]);
   expectContrast([["warm", "canvas"], ["warm", "surface"]], 3, ["dark"]);

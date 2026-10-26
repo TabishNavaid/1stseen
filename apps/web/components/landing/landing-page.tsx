@@ -3,16 +3,15 @@ import Link from "next/link";
 import { CountUp } from "@/components/count-up";
 import { HandMark } from "@/components/brand/hand-mark";
 import { Doodle } from "@/components/doodle";
-import { NewSticker, openedJustNow } from "@/components/brand/marks";
+import { JustOpenedList } from "@/components/landing/just-opened-list";
 import { LandingMotion } from "@/components/landing/landing-motion";
-import { OpeningSoonCard } from "@/components/landing/opening-soon-card";
+import { OpeningSoonRows } from "@/components/landing/opening-soon-rows";
 import { RolePreviewCard } from "@/components/landing/role-preview-card";
 import { StatusLine } from "@/components/landing/status-line";
 import { ReturningGuestNote } from "@/components/onboarding/returning-guest-note";
 import { Icon } from "@/components/ui/icon";
-import { formatShortDay, todayIso } from "@/lib/dates";
+import { todayIso } from "@/lib/dates";
 import type { LandingData } from "@/lib/landing-data";
-import type { RealOpening } from "@/lib/real-data";
 import { sitePage } from "@/lib/site-links";
 import { cn } from "@/lib/utils";
 
@@ -73,21 +72,6 @@ function daysUntil(windowStart: string, now: Date): number {
   return Math.round((Date.parse(`${windowStart}T12:00:00Z`) - now.getTime()) / 86_400_000);
 }
 
-function OpenedCard({ opening, hidden = false, now }: { opening: RealOpening; hidden?: boolean; now: Date }) {
-  return (
-    <li className="card lift relative w-64 shrink-0 p-4" aria-hidden={hidden || undefined}>
-      {!hidden && openedJustNow(opening.openedOn, now) && <NewSticker />}
-      <p className="text-micro font-semibold uppercase tracking-label text-warm-ink">Opened {formatShortDay(opening.openedOn)}</p>
-      <p className="mt-2 truncate text-caption font-semibold text-ink-muted">{opening.company}</p>
-      <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug text-ink">
-        {hidden ? opening.role : (
-          <Link href={`/roles/${opening.roleId}`} className="focus-ring rounded-sm after:absolute after:inset-0 after:rounded-card after:content-['']">{opening.role}</Link>
-        )}
-      </p>
-    </li>
-  );
-}
-
 /**
  * The front door for a first-time visitor: what the product knows, on one program; what opened in the last days; how it
  * works; the windows coming up; the questions people ask; and one way in. Nothing is shown that the data cannot back:
@@ -108,15 +92,13 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
       <LandingMotion />
       <StatusLine status={data?.status ?? null} now={now} />
       <main id="landing-content">
-        <section aria-labelledby="hero-title" className="relative overflow-hidden">
-          <span className="glow glow-accent -left-40 -top-32 size-[38rem]" aria-hidden="true" />
-          <span className="glow glow-warm -right-24 top-24 size-[28rem]" aria-hidden="true" />
-          <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-10 md:px-6 md:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:gap-16 lg:pb-24">
+        <section aria-labelledby="hero-title">
+          <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-16 pt-12 md:px-6 md:pt-16 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)] lg:gap-16 lg:pb-24">
             <div>
               <h1 id="hero-title" className="rise heading-display text-[2.6rem] leading-[1.05] text-ink sm:text-6xl">
                 Know when internships open, <span className="relative whitespace-nowrap text-accent-ink">before<span className="absolute inset-x-0 -bottom-1 h-2 rounded-full bg-warm/60" aria-hidden="true" /></span> everyone else.
               </h1>
-              <p className="rise mt-5 max-w-xl text-lg leading-8 text-ink-muted" style={{ animationDelay: "90ms" }}>
+              <p className="rise mt-6 max-w-measure text-lg leading-8 text-ink-muted" style={{ animationDelay: "90ms" }}>
                 1stSeen learns when each program opens every year and shows you the window it is likely to open in next.
               </p>
               <div className="rise mt-8 flex flex-col gap-3 sm:flex-row sm:items-center" style={{ animationDelay: "180ms" }}>
@@ -131,13 +113,13 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
               <ReturningGuestNote />
             </div>
 
-            {preview && <div className="fade-in relative" style={{ animationDelay: "160ms" }}><RolePreviewCard preview={preview} today={todayIso(now)} /></div>}
+            {preview && <div className="fade-in" style={{ animationDelay: "160ms" }}><RolePreviewCard preview={preview} today={todayIso(now)} /></div>}
           </div>
         </section>
 
         {opened.openings.length > 0 && (
           <section aria-labelledby="opened-title" className="mx-auto max-w-6xl px-4 pb-16 md:px-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-4 pb-8">
               <h2 id="opened-title" className="flex items-center gap-2 text-lg font-semibold text-ink">
                 <span className="relative flex size-2.5" aria-hidden="true"><span className="absolute inline-flex size-full animate-ping rounded-full bg-warm opacity-60" /><span className="relative inline-flex size-2.5 rounded-full bg-warm-line" /></span>
                 Just opened
@@ -146,23 +128,16 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
                 See all <CountUp value={opened.total} /><Icon name="arrow-right" size={14} />
               </Link>
             </div>
-            {/* The track holds the programs twice so the drift can loop; the copy is hidden from assistive technology,
-                and a keyboard or a pointer stops the drift (globals.css). */}
-            <div className="drift-strip edge-fade -mx-4 mt-3 overflow-x-auto px-4 pb-2 md:mx-0 md:overflow-hidden md:px-0">
-              <ul className="drift-track flex w-max gap-3" aria-label="Programs that just opened">
-                {opened.openings.map((opening) => <OpenedCard key={opening.id} opening={opening} now={now} />)}
-                {opened.openings.map((opening) => <OpenedCard key={`${opening.id}-again`} opening={opening} hidden now={now} />)}
-              </ul>
-            </div>
+            <JustOpenedList openings={opened.openings} now={now} />
           </section>
         )}
 
         <section id="how" aria-labelledby="how-title" data-reveal className="border-y border-line bg-surface">
-          <div className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
             <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
               <div>
                 <h2 id="how-title" className="heading-display text-3xl leading-tight sm:text-4xl">How it works</h2>
-                <p className="mt-4 max-w-sm text-base leading-7 text-ink-muted">
+                <p className="mt-8 max-w-measure text-base leading-7 text-ink-muted">
                   Three steps between a program going up on a company&rsquo;s site and you knowing it is about to.
                 </p>
                 {/* Reading the pages, one year at a time: the work the three steps beside this describe. */}
@@ -170,7 +145,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
               </div>
               <ol className="m-0 grid list-none gap-4 p-0">
                 {HOW.map((step, index) => (
-                  <li key={step.title} className={cn("rounded-card p-5 sm:p-6", step.block)}>
+                  <li key={step.title} className={cn("rounded-card p-6", step.block)}>
                     <p className="hand text-3xl leading-none text-warm-ink" aria-hidden="true">{index + 1}.</p>
                     <h3 className="heading-display mt-2 text-xl leading-snug text-ink">{step.title}</h3>
                     <p className="mt-2 text-sm leading-6 text-ink-muted">{step.body}</p>
@@ -185,19 +160,17 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
         </section>
 
         {soon.length > 0 && (
-          <section data-reveal aria-labelledby="soon-title" className="mx-auto max-w-6xl px-4 py-16 md:px-6 md:py-20">
+          <section data-reveal aria-labelledby="soon-title" className="mx-auto max-w-6xl px-4 py-24 md:px-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h2 id="soon-title" className="heading-display text-3xl leading-tight sm:text-4xl">{soonHeading}</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">The next windows, soonest first, one program per company.</p>
+                <p className="mt-8 max-w-measure text-sm leading-6 text-ink-muted">Every bar is drawn on one scale, so reading down the column shows which window comes first and how much wider one is than another.</p>
               </div>
               <Link href="/roles" className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-sm">
                 Browse every program<Icon name="arrow-right" size={14} />
               </Link>
             </div>
-            <ul className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {soon.map((role) => <OpeningSoonCard key={role.roleId} role={role} today={todayIso(now)} />)}
-            </ul>
+            <OpeningSoonRows roles={soon} today={todayIso(now)} />
           </section>
         )}
 
@@ -207,7 +180,7 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
         </div>
 
         <section data-reveal aria-labelledby="questions-title" className="border-t border-line bg-surface">
-          <div className="mx-auto max-w-3xl px-4 py-16 md:px-6 md:py-20">
+          <div className="mx-auto max-w-3xl px-4 py-24 md:px-6">
             <h2 id="questions-title" className="heading-display text-3xl leading-tight sm:text-4xl">Questions</h2>
             <div className="mt-8 divide-y divide-line border-y border-line">
               {QUESTIONS.map((item) => (
@@ -216,22 +189,20 @@ export function LandingPage({ data, header, now = new Date() }: { data: LandingD
                     {item.question}
                     <Icon name="chevron-down" size={18} className="shrink-0 text-ink-subtle transition-transform group-open:rotate-180" />
                   </summary>
-                  <p className="pb-4 pr-8 text-sm leading-7 text-ink-muted">{item.answer}</p>
+                  <p className="max-w-measure pb-4 pr-8 text-sm leading-7 text-ink-muted">{item.answer}</p>
                 </details>
               ))}
             </div>
           </div>
         </section>
 
-        <section data-reveal aria-labelledby="start-title" className="relative overflow-hidden px-4 py-20 md:px-6 md:py-24">
-          <span className="glow glow-accent left-1/2 top-0 size-[34rem] -translate-x-1/2" aria-hidden="true" />
-          <span className="glow glow-warm right-10 bottom-0 size-[22rem]" aria-hidden="true" />
-          <div className="relative mx-auto flex max-w-2xl flex-col items-center text-center">
+        <section data-reveal aria-labelledby="start-title" className="px-4 py-24 md:px-6">
+          <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
             {/* Off at a run: the page ends where watching starts. */}
             <Doodle name="sprinting" size="hero" className="mb-6 max-sm:h-40" />
             <h2 id="start-title" className="heading-display text-3xl leading-tight sm:text-4xl">Start watching the programs you care about</h2>
-            <p className="mt-3 max-w-lg text-base leading-7 text-ink-muted">Pick a few, and their likely dates and prep plan are waiting the next time you open 1stSeen.</p>
-            <Link href="/welcome" className="press focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-7 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">
+            <p className="mt-8 max-w-measure text-base leading-7 text-ink-muted">Pick a few, and their likely dates and prep plan are waiting the next time you open 1stSeen.</p>
+            <Link href="/welcome" className="press focus-ring mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-chip bg-accent px-6 text-base font-semibold text-ink-inverse shadow-card hover:bg-accent-hover">
               Get started<Icon name="arrow-right" size={17} />
             </Link>
           </div>

@@ -4,6 +4,8 @@ import { formatDay } from "./dates.ts";
 import { forecastBasis, type ForecastBasis } from "./forecast-basis.ts";
 import { noForecastExplanation } from "./forecast-gap.ts";
 import type { RoleView } from "@/lib/role-view";
+import type { LandingData, LandingForecastWindow } from "@/lib/landing-data";
+import type { RealOpening } from "@/lib/real-data";
 
 /**
  * A fixture date, as a distance in days from the day it is rendered on.
@@ -425,3 +427,64 @@ export const fixtureListFacts: Record<string, FixtureListFacts> = {
     outlook: null, exactEvents: 0, boundedEvents: 0, observedEvents: 0,
   },
 };
+
+/**
+ * The landing page in demo mode.
+ *
+ * Without service-role configuration `loadLandingData` returns null, so the two sections that carry the product's
+ * actual claim — what just opened, and the windows coming up — rendered in no demo screen and no rendered-HTML
+ * test. They are the sections most worth looking at, and nothing could look at them.
+ *
+ * Dates are offsets from the day the page is rendered on, the same as every other fixture here
+ * (`apps/web/tests/fixture-dates.test.mjs`), and every source is a reserved `.example` address.
+ */
+export function fixtureLandingData(now: Date): LandingData {
+  const { day, stamp } = fixtureClock(now);
+  const opening = (id: string, roleId: string, company: string, role: string, programType: string, place: string, openedIn: number): RealOpening => ({
+    id, roleId, company, role, programType, place,
+    openedOn: day(openedIn),
+    observedAt: stamp(openedIn, "09:20:00Z"),
+    applyUrl: `https://careers.${company.toLowerCase()}.example/apply`,
+  });
+  const window = (startsIn: number, expectedIn: number, endsIn: number, confidence: number, cycles: number, own: number): LandingForecastWindow => ({
+    windowStart: day(startsIn), windowEnd: day(endsIn), expectedOpening: day(expectedIn),
+    confidence, cycles, basis: forecastBasis(own, 1 - own),
+  });
+  return {
+    preview: {
+      roleId: "northstar-swe-intern",
+      company: "Northstar",
+      role: "Software Engineering Intern",
+      programType: "Internship",
+      openingsRecorded: 4,
+      openings: [
+        { id: "p-2025", openedOn: day(-337), windowStart: null, precision: "exact", sourceUrl: "https://jobs.northstar.example/swe-intern", archive: false },
+        { id: "p-2024", openedOn: day(-706), windowStart: null, precision: "exact", sourceUrl: "https://jobs.northstar.example/swe-intern", archive: false },
+        { id: "p-2023", openedOn: day(-1067), windowStart: day(-1074), precision: "bounded", sourceUrl: "https://web.archive.example/northstar", archive: true },
+        { id: "p-2022", openedOn: day(-1432), windowStart: null, precision: "observed_by", sourceUrl: "https://web.archive.example/northstar", archive: true },
+      ],
+      forecast: window(10, 24, 38, 71, 4, 0.74),
+    },
+    openingSoon: [
+      { roleId: "beacon-quant-newgrad", company: "Beacon", role: "Quantitative Researcher, New Grad", programType: "New grad", forecast: window(-4, 14, 30, 63, 3, 0.88) },
+      { roleId: "northstar-swe-intern", company: "Northstar", role: "Software Engineering Intern", programType: "Internship", forecast: window(10, 24, 38, 71, 4, 0.74) },
+      { roleId: "meridian-apm", company: "Meridian", role: "Associate Product Manager", programType: "New grad", forecast: window(21, 44, 66, 58, 2, 0.31) },
+      { roleId: "harbor-mech-intern", company: "Harbor", role: "Mechanical Engineering Intern", programType: "Internship", forecast: window(96, 110, 124, 54, 2, 0.18) },
+      { roleId: "atlas-data-science", company: "Atlas", role: "Data Science Intern", programType: "Internship", forecast: window(-30, -6, 8, 77, 5, 0.42) },
+    ],
+    justOpened: {
+      openings: [
+        opening("o-1", "beacon-quant-newgrad", "Beacon", "Quantitative Researcher, New Grad", "New grad", "Chicago, IL", 0),
+        opening("o-2", "lumen-analyst", "Lumen", "Strategy Analyst, New Grad", "New grad", "Boston, MA", -1),
+        opening("o-3", "pioneer-product-intern", "Pioneer", "Product Management Intern", "Internship", "Remote, US", -2),
+        opening("o-4", "meridian-apm", "Meridian", "Associate Product Manager", "New grad", "New York, NY", -4),
+        opening("o-5", "atlas-data-science", "Atlas", "Data Science Intern", "Internship", "Remote, US", -6),
+        opening("o-6", "harbor-mech-intern", "Harbor", "Mechanical Engineering Intern", "Internship", "Seattle, WA", -9),
+        opening("o-7", "cedar-design-intern", "Cedar", "Product Design Intern", "Internship", "Remote, US", -12),
+        opening("o-8", "northstar-swe-intern", "Northstar", "Software Engineering Intern", "Internship", "United States", -15),
+      ],
+      total: 314,
+    },
+    status: { updatedAt: stamp(0, "06:00:00Z"), programs: 542, openingsThisMonth: 37 },
+  };
+}

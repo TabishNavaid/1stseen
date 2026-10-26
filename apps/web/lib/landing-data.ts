@@ -62,8 +62,8 @@ export type LandingData = {
  */
 export const STATUS_STALE_HOURS = 48;
 
-/** How many just-opened programs the landing strip shows. */
-export const JUST_OPENED_STRIP = 8;
+/** How many just-opened programs the landing list shows. */
+export const JUST_OPENED_ROWS = 8;
 
 type PageRow = {
   role_id: string;
@@ -184,8 +184,8 @@ export async function loadLandingData(now: Date = new Date()): Promise<LandingDa
     reader.rpc("dashboard_role_page", pageArgs({ ...defaultDashboardFilters, precision: "exact_or_bounded" }, now, "evidence", 3, 1)),
     // bounded: p_limit 12, from which at most OPENING_SOON_LIMIT current windows are shown.
     reader.rpc("dashboard_role_page", pageArgs(withForecast, now, "window", 1, 12)),
-    // The first JUST_OPENED_STRIP of the Just opened feed, in its order (no company takes more than two of six).
-    loadJustOpened(reader, { limit: JUST_OPENED_STRIP, titles: readTitles }),
+    // The first JUST_OPENED_ROWS of the Just opened feed, in its order (no company takes more than two of six).
+    loadJustOpened(reader, { limit: JUST_OPENED_ROWS, titles: readTitles }),
     // bounded: one row of totals, for the programs the status line states.
     reader.rpc("dashboard_role_summary", { p_now: now.toISOString(), p_user_id: null, ...filterRpcArgs(defaultDashboardFilters), p_per_company: 0 }),
     // bounded: limit 1, the newest observation, which is when collection last wrote anything.

@@ -27,23 +27,30 @@
 }
 
 @theme {
+  /*
+   * Surfaces, text, and lines: the neutrals the whole page is built out of, written in oklch so a step between two
+   * of them is a step in lightness and nothing else. The light theme is paper, barely warm. The dark theme is a
+   * near-black carrying a trace of evergreen rather than the brown-black it used to be, and its surfaces step up
+   * from the page where the light ones step down.
+   */
+
   /* Surfaces */
-  --color-canvas: light-dark(#f3f1eb, #1d1610);
-  --color-surface: light-dark(#fffefa, #281f17);
-  --color-surface-sunken: light-dark(#f4f4f0, #16100b);
-  --color-surface-hover: light-dark(#f6f6f1, #34281f);
+  --color-canvas: light-dark(oklch(0.98 0.008 85), oklch(0.17 0.012 160));
+  --color-surface: light-dark(oklch(1 0 0), oklch(0.21 0.014 160));
+  --color-surface-sunken: light-dark(#f4f4f0, oklch(0.14 0.011 160));
+  --color-surface-hover: light-dark(#f6f6f1, oklch(0.25 0.014 160));
   --color-surface-selected: light-dark(#eaf1ec, #18342b);
   --color-scrim: light-dark(rgb(16 33 27 / 0.32), rgb(3 7 5 / 0.62));
 
   /* Text */
-  --color-ink: light-dark(#18221f, #f7eee0);
-  --color-ink-muted: light-dark(#52605a, #c6b9af);
-  --color-ink-subtle: light-dark(#5f6b65, #b1a194);
+  --color-ink: light-dark(oklch(0.21 0.015 150), oklch(0.94 0.008 85));
+  --color-ink-muted: light-dark(oklch(0.48 0.012 150), oklch(0.72 0.010 85));
+  --color-ink-subtle: light-dark(#5f6b65, oklch(0.68 0.010 85));
   --color-ink-inverse: #ffffff;
 
   /* Lines */
-  --color-line: light-dark(#d9ddd7, #3f3329);
-  --color-line-strong: light-dark(#7c8781, #887d73);
+  --color-line: light-dark(oklch(0.90 0.010 85), oklch(0.28 0.014 160));
+  --color-line-strong: light-dark(#7c8781, oklch(0.58 0.012 160));
 
   /* Brand and interaction */
   --color-accent: light-dark(#183f35, #05755b);
@@ -56,8 +63,8 @@
    * The warm accent: highlights and celebration moments, never an evidence class or a status.
    * warm is a fill that only ever sits behind ink; warm-line marks a boundary; warm-ink is text.
    *
-   * On a dark page nothing sits on the fill — it is the underline under a word, a pinging dot, a glow — so there it
-   * stays the coral itself and only has to hold against the page. The words that were coral are warm-ink either way.
+   * On a dark page nothing sits on the fill — it is the underline under a word, a pinging dot — so there it stays the
+   * coral itself and only has to hold against the page. The words that were coral are warm-ink either way.
    */
   --color-warm: light-dark(#f28b6b, #e28061);
   --color-warm-soft: light-dark(#fdebe3, #3c1d13);
@@ -159,7 +166,7 @@
   --color-confidence-strong: light-dark(#246d59, #349c7e);
   --color-confidence-moderate: light-dark(#9a6120, #b7803a);
   --color-confidence-limited: light-dark(#8a4a3b, #cc726b);
-  --color-confidence-track: light-dark(#e1e5df, #352c24);
+  --color-confidence-track: light-dark(#e1e5df, oklch(0.30 0.012 160));
 
   /* Type scale: Tailwind's xs (12px) and up stay; two smaller steps for dense evidence tables */
   --text-micro: 0.625rem;
@@ -168,6 +175,12 @@
   --text-caption--line-height: 1.25rem;
   --tracking-label: 0.12em;
   --tracking-title: -0.025em;
+
+  /*
+   * Measure: the width a line of body copy is allowed to run to. 68 characters is the top of the comfortable range;
+   * past it the eye loses the start of the next line. Headings and tabular rows are not body copy and do not use it.
+   */
+  --container-measure: 68ch;
 
   /* Spacing: Tailwind's 0.25rem scale stays; these name layout decisions */
   --spacing-control: 2.25rem;
@@ -519,9 +532,8 @@
 }
 
 /*
- * The landing page's motion. Each is one short move that happens once, on arrival, except the Just opened strip, which
- * drifts until a pointer or the keyboard enters it. Every one of them is switched off under prefers-reduced-motion at
- * the end of this file; nothing here is needed to read the page.
+ * The landing page's motion. Each is one short move that happens once, on arrival. Every one of them is switched off
+ * under prefers-reduced-motion at the end of this file; nothing here is needed to read the page.
  */
 @keyframes rise {
   from { opacity: 0; transform: translateY(12px); }
@@ -536,10 +548,6 @@
   70% { opacity: 1; transform: translateY(2px) scale(1.06); }
   100% { opacity: 1; transform: none; }
 }
-@keyframes drift {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
 
 /** Hero text and buttons entering: the caller staggers them with an animation-delay. */
 @utility rise {
@@ -553,20 +561,6 @@
 /** One opening arriving on the hero timeline. */
 @utility drop-in {
   animation: drop-in 560ms cubic-bezier(0.2, 0.75, 0.3, 1.35) both;
-}
-
-/**
- * The Just opened strip: its track holds the programs twice, so the drift can loop seamlessly, and the copy is hidden
- * from assistive technology. It stops while a pointer is over the strip or the keyboard is inside it.
- */
-@utility drift-track {
-  animation: drift 64s linear infinite;
-  .drift-strip:hover &, .drift-strip:focus-within & { animation-play-state: paused; }
-}
-
-/** Softened edges, so a strip that drifts does not end in a hard cut. */
-@utility edge-fade {
-  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
 }
 
 /**
@@ -587,35 +581,6 @@
 @utility press {
   transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease;
   &:active { transform: translateY(1px) scale(0.995); }
-}
-
-/**
- * Soft colour behind a section: a decorative, blurred radial wash, drawn from the two light tints rather than from the
- * inks. The deep accent behind a cream page only ever made grey haze, neither present nor absent; these are light
- * enough to leave every contrast ratio on the page alone and saturated enough to be seen.
- */
-@utility glow {
-  position: absolute;
-  pointer-events: none;
-  z-index: 0;
-  border-radius: 9999px;
-  filter: blur(60px);
-}
-
-@utility glow-accent {
-  background: radial-gradient(
-    closest-side,
-    color-mix(in oklab, var(--color-focus) 32%, transparent),
-    color-mix(in oklab, var(--color-focus) 0%, transparent) 76%
-  );
-}
-
-@utility glow-warm {
-  background: radial-gradient(
-    closest-side,
-    color-mix(in oklab, var(--color-warm) 56%, transparent),
-    color-mix(in oklab, var(--color-warm) 0%, transparent) 76%
-  );
 }
 
 /*
@@ -700,7 +665,6 @@
   /* The stamp is simply already on the page. */
   .stamp-in { animation: none; transform: rotate(-4deg); }
   /* The strip would otherwise jump to the end of its loop. */
-  .drift-track { animation: none; }
   .press:active { transform: none; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

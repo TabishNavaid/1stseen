@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from "react";
 import { BirdMark } from "@/components/brand/bird-mark";
+import { JustOpenedList } from "@/components/landing/just-opened-list";
+import { OpeningSoonRows } from "@/components/landing/opening-soon-rows";
 import { ProfileActivitySummary } from "@/components/profile-activity";
 import { ProfileCard } from "@/components/profile-card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Dialog, Popover, Tooltip } from "@/components/ui/overlay";
 import { Chip, EmptyState, LoadingRegion, Skeleton } from "@/components/ui/status";
 import { DateRangeField, Tabs } from "@/components/ui/tabs";
+import { todayIso } from "@/lib/dates";
+import type { LandingData } from "@/lib/landing-data";
 
 // Interface examples only. None of this is recruiting data, and the page renders only in development.
 const EXAMPLE_OPTIONS = [
@@ -31,7 +35,13 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function DesignSystemGallery() {
+/**
+ * The landing page's two list sections are here because the landing page itself reads only real data: without a
+ * database configured it draws neither of them, so before this they rendered on no screen and in no test. They are
+ * the one place in this gallery that is a composition rather than a primitive, and they are here for the same reason
+ * as everything else on this page — so a change to them can be looked at.
+ */
+export function DesignSystemGallery({ landing, now }: { landing: LandingData; now: Date }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [chips, setChips] = useState(["Internship", "Software engineering", "Next 90 days"]);
 
@@ -184,6 +194,14 @@ export function DesignSystemGallery() {
           }}
           memberSince="2026-04-02T00:00:00.000Z"
         />
+      </Section>
+
+      <Section title="Just opened, as the landing page lists it">
+        <JustOpenedList openings={landing.justOpened.openings} now={now} />
+      </Section>
+
+      <Section title="Opening soon, every window on one scale">
+        <OpeningSoonRows roles={landing.openingSoon} today={todayIso(now)} />
       </Section>
 
       <Section title="Evidence classes and date kinds">

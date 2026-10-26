@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DesignSystemGallery } from "@/components/design-system-gallery";
+import { fixtureLandingData } from "@/lib/demo-data";
 import { hasServiceRoleConfig } from "@/lib/real-data";
 
 export const metadata: Metadata = {
@@ -18,5 +19,7 @@ export const dynamic = "force-dynamic";
  */
 export default function DesignSystemPage() {
   if (process.env.FIRSTSEEN_DEMO_MODE !== "true" || hasServiceRoleConfig()) notFound();
-  return <DesignSystemGallery />;
+  // The one place the clock is read for this page, and the fixture dates are offsets from it, so nothing here rots.
+  const now = new Date();
+  return <DesignSystemGallery landing={fixtureLandingData(now)} now={now} />;
 }

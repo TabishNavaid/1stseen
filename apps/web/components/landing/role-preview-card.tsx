@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Bird } from "@/components/brand/bird";
 import { CompanyMark } from "@/components/brand/company-mark";
-import { ConfidenceWord } from "@/components/confidence-word";
+import { ConfidenceMeter } from "@/components/confidence-meter";
 import { LikelyWindow } from "@/components/likely-window";
 import { OpeningTimeline } from "@/components/landing/opening-timeline";
 import { Icon } from "@/components/ui/icon";
@@ -21,7 +21,7 @@ import type { LandingPreview } from "@/lib/landing-data";
 export function RolePreviewCard({ preview, today }: { preview: LandingPreview; today: string }) {
   const { forecast } = preview;
   return (
-    <article aria-labelledby="preview-role" className="card relative p-5 sm:p-6">
+    <article aria-labelledby="preview-role" className="card relative p-6">
       {/*
         The bird perched on the corner of the card, which is the whole product in one gesture: something is watching
         this program so the reader does not have to. It is decoration and is left out on a phone, where the card has
@@ -32,13 +32,13 @@ export function RolePreviewCard({ preview, today }: { preview: LandingPreview; t
         <CompanyMark company={preview.company} priority />
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink-muted">{preview.company} <span className="font-normal text-ink-subtle">· {preview.programType}</span></p>
-          <h2 id="preview-role" className="mt-0.5 text-lg font-semibold leading-snug tracking-title text-ink">
+          <h2 id="preview-role" className="mt-1 text-lg font-semibold leading-snug tracking-title text-ink">
             <Link href={`/roles/${preview.roleId}`} className="focus-ring rounded-sm hover:underline">{preview.role}</Link>
           </h2>
         </div>
       </div>
 
-      <div className="mt-5" data-beat="record">
+      <div className="mt-6" data-beat="record">
         <OpeningTimeline openings={preview.openings} forecast={forecast} />
       </div>
 
@@ -47,19 +47,19 @@ export function RolePreviewCard({ preview, today }: { preview: LandingPreview; t
       )}
 
       {forecast && (
-        <div className="mt-5 border-t border-line pt-5" data-beat="date">
+        <div className="mt-6 border-t border-line pt-6" data-beat="date">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
             <LikelyWindow
               outlook={{ expected: forecast.expectedOpening, start: forecast.windowStart, end: forecast.windowEnd }}
               today={today}
               size="lg"
             />
-            <ConfidenceWord value={forecast.confidence} />
+            <ConfidenceMeter value={forecast.confidence} />
           </div>
         </div>
       )}
 
-      <div className="mt-5 flex flex-wrap items-center justify-end gap-3">
+      <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
         <Link href={`/roles/${preview.roleId}`} className="link-accent focus-ring inline-flex min-h-touch items-center gap-1 text-sm">
           See this program<Icon name="arrow-right" size={14} />
         </Link>

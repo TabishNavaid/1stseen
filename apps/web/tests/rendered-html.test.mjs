@@ -454,11 +454,11 @@ test("a landing page moves, but only with motion that can be switched off", asyn
   // Every animated thing on the page carries one of these, and every one of them is off under reduced motion.
   for (const utility of ["rise", "press"]) assert.ok(html.includes(utility), utility);
   const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
-  for (const utility of ["rise", "fade-in", "drop-in", "drift-track", "press"]) {
+  for (const utility of ["rise", "fade-in", "drop-in", "press"]) {
     assert.match(css, new RegExp(`@utility ${utility} \\{`), utility);
   }
   const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-  for (const selector of [".rise", ".fade-in", ".drop-in", ".drift-track", ".press:active"]) {
+  for (const selector of [".rise", ".fade-in", ".drop-in", ".press:active"]) {
     assert.ok(reduced.includes(selector), `${selector} is switched off under reduced motion`);
   }
   assert.match(css, /@view-transition \{ navigation: auto; \}/);
